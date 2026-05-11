@@ -17,7 +17,9 @@
       "Bash(jobs -l)",
       "Bash(git commit -m ' *)",
       "Read(//private/tmp/**)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(pkill -f \"main.py\")"
     ]
   }
 }

@@ -78,6 +78,7 @@ class MainWindow(QMainWindow):
         # Instantiate all pages
         from gui.pages.dashboard_page   import DashboardPage
         from gui.pages.data_page        import DataPage
+        from gui.pages.camera_page      import CameraPage
         from gui.pages.labeling_page    import LabelingPage
         from gui.pages.training_page    import TrainingPage
         from gui.pages.models_page      import ModelsPage
@@ -87,6 +88,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard_page  = DashboardPage()
         self.data_page       = DataPage()
+        self.camera_page     = CameraPage()
         self.labeling_page   = LabelingPage()
         self.training_page   = TrainingPage()
         self.models_page     = ModelsPage()
@@ -97,7 +99,7 @@ class MainWindow(QMainWindow):
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
             self.training_page, self.models_page, self.inference_page,
-            self.export_page, self.settings_page,
+            self.export_page, self.settings_page, self.camera_page,
         ]:
             self.stack.addWidget(page)
 
@@ -216,8 +218,9 @@ class MainWindow(QMainWindow):
             ("Klassifikation – Hilfe",  5),
             ("Export – Hilfe",          6),
             ("Einstellungen – Hilfe",   7),
-            ("Tastenkürzel",            9),
-            ("Fehlerbehebung",          10),
+            ("Kamera – Hilfe",          10),
+            ("Tastenkürzel",            11),
+            ("Fehlerbehebung",          12),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
@@ -325,6 +328,7 @@ class MainWindow(QMainWindow):
         # Propagate to all pages
         self.dashboard_page.set_project(project)
         self.data_page.set_project(project)
+        self.camera_page.set_project(project)
         self.labeling_page.set_project(project, self.audit)
         self.training_page.set_project(project, self.audit)
         self.models_page.set_project(project)
