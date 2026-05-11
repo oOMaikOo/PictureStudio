@@ -11,7 +11,13 @@
       "Bash(echo \"exit: $?\")",
       "Bash(xargs ls)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(jobs -l)",
+      "Bash(git commit -m ' *)",
+      "Read(//private/tmp/**)",
+      "Bash(git rm *)"
     ]
   }
 }

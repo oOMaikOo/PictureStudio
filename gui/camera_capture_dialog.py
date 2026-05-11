@@ -327,8 +327,8 @@ class CameraCaptureDialog(QDialog):
         ep_row = QHBoxLayout()
         ep_row.addWidget(QLabel("Epochen:"))
         self._ae_epochs = QSpinBox()
-        self._ae_epochs.setRange(5, 100)
-        self._ae_epochs.setValue(20)
+        self._ae_epochs.setRange(5, 200)
+        self._ae_epochs.setValue(40)
         ep_row.addWidget(self._ae_epochs)
         tl.addLayout(ep_row)
 
