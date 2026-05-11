@@ -1,0 +1,106 @@
+"""
+Persistent user settings via QSettings (INI file).
+"""
+from PySide6.QtCore import QSettings
+
+
+class AppSettings:
+    """Wrapper around QSettings providing typed accessors."""
+
+    _ORG = "ImageLabelingStudio"
+    _APP = "ILS"
+
+    def __init__(self):
+        self._s = QSettings(self._ORG, self._APP)
+
+    # ---- appearance ----
+    def get_theme(self) -> str:
+        return self._s.value("appearance/theme", "dark")
+
+    def set_theme(self, theme: str) -> None:
+        self._s.setValue("appearance/theme", theme)
+
+    def get_font_size(self) -> int:
+        return int(self._s.value("appearance/font_size", 9))
+
+    def set_font_size(self, size: int) -> None:
+        self._s.setValue("appearance/font_size", size)
+
+    # ---- project ----
+    def get_autosave_enabled(self) -> bool:
+        return self._s.value("project/autosave_enabled", True, type=bool)
+
+    def set_autosave_enabled(self, val: bool) -> None:
+        self._s.setValue("project/autosave_enabled", val)
+
+    def get_autosave_interval(self) -> int:
+        return int(self._s.value("project/autosave_interval", 300))
+
+    def set_autosave_interval(self, seconds: int) -> None:
+        self._s.setValue("project/autosave_interval", seconds)
+
+    def get_backup_enabled(self) -> bool:
+        return self._s.value("project/backup_enabled", True, type=bool)
+
+    def set_backup_enabled(self, val: bool) -> None:
+        self._s.setValue("project/backup_enabled", val)
+
+    def get_recent_projects(self) -> list:
+        return self._s.value("project/recent", []) or []
+
+    def add_recent_project(self, path: str) -> None:
+        recents = self.get_recent_projects()
+        if path in recents:
+            recents.remove(path)
+        recents.insert(0, path)
+        self._s.setValue("project/recent", recents[:10])
+
+    # ---- labeling ----
+    def get_thumbnail_size(self) -> int:
+        return int(self._s.value("labeling/thumbnail_size", 120))
+
+    def set_thumbnail_size(self, size: int) -> None:
+        self._s.setValue("labeling/thumbnail_size", size)
+
+    def get_show_roi_labels(self) -> bool:
+        return self._s.value("labeling/show_roi_labels", True, type=bool)
+
+    def set_show_roi_labels(self, val: bool) -> None:
+        self._s.setValue("labeling/show_roi_labels", val)
+
+    # ---- training ----
+    def get_default_device(self) -> str:
+        return self._s.value("training/device", "auto")
+
+    def set_default_device(self, device: str) -> None:
+        self._s.setValue("training/device", device)
+
+    # ---- inference ----
+    def get_low_confidence_threshold(self) -> float:
+        return float(self._s.value("inference/low_confidence_threshold", 0.70))
+
+    def set_low_confidence_threshold(self, val: float) -> None:
+        self._s.setValue("inference/low_confidence_threshold", val)
+
+    def get_show_top_k(self) -> int:
+        return int(self._s.value("inference/show_top_k", 3))
+
+    def set_show_top_k(self, val: int) -> None:
+        self._s.setValue("inference/show_top_k", val)
+
+    # ---- ssh profiles ----
+    def get_ssh_profiles(self) -> list:
+        return self._s.value("ssh/profiles", []) or []
+
+    def save_ssh_profiles(self, profiles: list) -> None:
+        self._s.setValue("ssh/profiles", profiles)
+
+    # ---- window state ----
+    def get_window_geometry(self):
+        return self._s.value("window/geometry")
+
+    def save_window_geometry(self, geometry) -> None:
+        self._s.setValue("window/geometry", geometry)
+
+    def sync(self) -> None:
+        self._s.sync()

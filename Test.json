@@ -1,0 +1,72 @@
+{
+  "format_version": "2.0",
+  "config": {
+    "name": "Test",
+    "description": "",
+    "created_at": "2026-05-06T23:09:20.566352",
+    "modified_at": "2026-05-11T13:40:47.859985",
+    "image_dir": "/Users/coder/Trainingsbilder/",
+    "version": "2.0",
+    "author": "",
+    "tags": [],
+    "multi_label": false
+  },
+  "images": [
+    "/Users/coder/Trainingsbilder/1-2 01.jpg",
+    "/Users/coder/Trainingsbilder/10-11 01.jpg",
+    "/Users/coder/Trainingsbilder/11-12 01.jpg",
+    "/Users/coder/Trainingsbilder/12-1 01.jpg",
+    "/Users/coder/Trainingsbilder/2-3 01.jpg",
+    "/Users/coder/Trainingsbilder/3-4 01.jpg",
+    "/Users/coder/Trainingsbilder/4-5 01.jpg",
+    "/Users/coder/Trainingsbilder/5-6P 01.jpg",
+    "/Users/coder/Trainingsbilder/6-7 01.jpg",
+    "/Users/coder/Trainingsbilder/6P-6 01.jpg",
+    "/Users/coder/Trainingsbilder/7-7P 01.jpg",
+    "/Users/coder/Trainingsbilder/7P-8 01.jpg",
+    "/Users/coder/Trainingsbilder/8-9 01.jpg",
+    "/Users/coder/Trainingsbilder/9-10 01.jpg"
+  ],
+  "labels": {},
+  "image_labels": {},
+  "image_multi_labels": {},
+  "rois": {
+    "/Users/coder/Trainingsbilder/1-2 01.jpg": []
+  },
+  "training_runs": [],
+  "current_model_path": "",
+  "training_config": {
+    "model_type": "resnet18",
+    "image_size": 224,
+    "batch_size": 16,
+    "epochs": 20,
+    "learning_rate": 0.001,
+    "optimizer": "adam",
+    "seed": 42,
+    "train_split": 0.7,
+    "val_split": 0.2,
+    "test_split": 0.1,
+    "use_pretrained": true,
+    "augmentation": {
+      "rotation": true,
+      "flip": true,
+      "brightness": true,
+      "contrast": true,
+      "scale": false
+    }
+  },
+  "ssh_config": {
+    "host": "",
+    "username": "",
+    "port": 22,
+    "key_path": "",
+    "password": "",
+    "remote_path": "/tmp/image_labeling_project",
+    "python_env": "python3"
+  },
+  "inference_results": [],
+  "dataset_splits": {},
+  "roi_templates": [],
+  "active_learning_queue": [],
+  "image_label_flags": {}
+}

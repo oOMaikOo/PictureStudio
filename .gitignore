@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Runtime project & audit data (user-generated, not source)
+audit.jsonl
+*.bak
+camera_captures/
+
+# Trained autoencoder models saved from the camera dialog
+*.pth
+
+# IDE
+.idea/
+.vscode/
+*.swp
