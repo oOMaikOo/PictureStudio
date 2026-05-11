@@ -20,6 +20,10 @@ audit.jsonl
 *.bak
 camera_captures/
 
+# Example / scratch project files at repo root (contain absolute paths)
+Test.json
+test_cam.json
+
 # Trained autoencoder models saved from the camera dialog
 *.pth
 
