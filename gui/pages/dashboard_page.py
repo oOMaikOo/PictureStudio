@@ -15,28 +15,29 @@ from PySide6.QtGui import QFont, QColor
 class StatCard(QFrame):
     """Single statistics card widget."""
 
-    def __init__(self, title: str, value: str = "–", color: str = "#3498DB", parent=None):
+    def __init__(self, title: str, value: str = "–", color: str = "#388BFD", parent=None):
         super().__init__(parent)
         self.setFrameStyle(QFrame.StyledPanel)
         self.setStyleSheet(
-            f"StatCard {{ background: #16213e; border-radius: 8px; "
-            f"border: 2px solid {color}; }}"
+            f"StatCard {{ background: #161B22; border-radius: 10px; "
+            f"border: 1px solid #30363D; border-top: 3px solid {color}; }}"
         )
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(4)
 
         self._value_label = QLabel(value)
         self._value_label.setAlignment(Qt.AlignCenter)
         font = QFont()
-        font.setPointSize(24)
+        font.setPointSize(26)
         font.setBold(True)
         self._value_label.setFont(font)
-        self._value_label.setStyleSheet(f"color: {color};")
+        self._value_label.setStyleSheet(f"color: {color}; background: transparent; border: none;")
         layout.addWidget(self._value_label)
 
         title_label = QLabel(title)
         title_label.setAlignment(Qt.AlignCenter)
-        title_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        title_label.setStyleSheet("color: #8B949E; font-size: 11px; background: transparent; border: none;")
         layout.addWidget(title_label)
 
     def set_value(self, value: str) -> None:
@@ -67,18 +68,23 @@ class DashboardPage(QWidget):
 
         # Title
         title = QLabel("Projekt-Dashboard")
-        title.setStyleSheet("font-size: 22px; font-weight: bold; color: #3498DB;")
+        title.setStyleSheet("font-size: 22px; font-weight: bold; color: #388BFD;")
         layout.addWidget(title)
 
         # No-project hint
         self._no_project_widget = QWidget()
         np_layout = QHBoxLayout(self._no_project_widget)
         np_layout.addStretch()
-        new_btn = QPushButton("Neues Projekt erstellen")
-        new_btn.setStyleSheet("padding:10px 20px; font-size:13px; background:#2ECC71; color:white;")
+        _btn_ss = (
+            "QPushButton {{ background:{bg}; color:white; border:none; border-radius:6px;"
+            " padding:10px 24px; font-size:13px; font-weight:bold; }}"
+            "QPushButton:hover {{ background:{hov}; }}"
+        )
+        new_btn = QPushButton("+ Neues Projekt")
+        new_btn.setStyleSheet(_btn_ss.format(bg="#1F6FEB", hov="#388BFD"))
         new_btn.clicked.connect(self.new_project_requested)
-        open_btn = QPushButton("Projekt öffnen")
-        open_btn.setStyleSheet("padding:10px 20px; font-size:13px; background:#3498DB; color:white;")
+        open_btn = QPushButton("Projekt öffnen…")
+        open_btn.setStyleSheet(_btn_ss.format(bg="#21262D", hov="#30363D"))
         open_btn.clicked.connect(self.open_project_requested)
         np_layout.addWidget(new_btn)
         np_layout.addWidget(open_btn)
@@ -91,12 +97,12 @@ class DashboardPage(QWidget):
         cards_grid.setSpacing(12)
 
         self._cards = {
-            "total_images":    StatCard("Bilder gesamt",       "–", "#3498DB"),
-            "labeled_images":  StatCard("Gelabelt",             "–", "#2ECC71"),
-            "unlabeled_images":StatCard("Ungelabelt",           "–", "#E74C3C"),
-            "total_rois":      StatCard("ROIs",                 "–", "#9B59B6"),
-            "total_labels":    StatCard("Klassen",              "–", "#F39C12"),
-            "training_runs":   StatCard("Trainingsläufe",       "–", "#1ABC9C"),
+            "total_images":    StatCard("Bilder gesamt",  "–", "#388BFD"),
+            "labeled_images":  StatCard("Gelabelt",        "–", "#3FB950"),
+            "unlabeled_images":StatCard("Ungelabelt",      "–", "#F85149"),
+            "total_rois":      StatCard("ROIs",            "–", "#BC8CFF"),
+            "total_labels":    StatCard("Klassen",         "–", "#D29922"),
+            "training_runs":   StatCard("Trainingsläufe",  "–", "#39C5CF"),
         }
         positions = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
         for (r, c), card in zip(positions, self._cards.values()):
@@ -116,7 +122,7 @@ class DashboardPage(QWidget):
         ]):
             last_layout.addWidget(QLabel(label + ":"), row, 0)
             val_lbl = QLabel("–")
-            val_lbl.setStyleSheet("color: #2ECC71; font-weight: bold;")
+            val_lbl.setStyleSheet("color: #3FB950; font-weight: bold;")
             last_layout.addWidget(val_lbl, row, 1)
             self._last_labels[key] = val_lbl
         layout.addWidget(last_group)
@@ -206,4 +212,4 @@ class DashboardPage(QWidget):
                 warns.append(f"⚠ Klasse '{lbl}' hat nur {cnt} Bilder (Mindestens {MIN_IMAGES_PER_CLASS} empfohlen).")
 
         self._warn_label.setText("\n".join(warns) if warns else "✓ Keine Warnungen.")
-        self._warn_label.setStyleSheet("color: #F39C12;" if warns else "color: #2ECC71;")
+        self._warn_label.setStyleSheet("color: #D29922;" if warns else "color: #3FB950;")

@@ -28,6 +28,7 @@ class ProjectConfig:
     author: str = ""
     tags: List[str] = field(default_factory=list)
     multi_label: bool = False
+    project_type: str = "image"   # "image" | "video"
 
 
 class Project:

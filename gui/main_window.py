@@ -7,11 +7,11 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QStackedWidget,
-    QStatusBar, QFileDialog, QMessageBox, QInputDialog,
+    QStatusBar, QFileDialog, QMessageBox,
     QApplication,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QTimer
-from PySide6.QtGui import QAction, QPalette, QColor, QFont, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
 
 from utils.config import APP_NAME, APP_VERSION
 from utils.logging_utils import get_logger
@@ -62,13 +62,13 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
 
         self.sidebar = Sidebar()
+        self.sidebar.set_locked(True)   # locked until a project is loaded
         self.sidebar.page_requested.connect(self._switch_page)
         self.sidebar.help_requested.connect(lambda: self._show_help())
         self.sidebar.tour_requested.connect(self._start_tour)
         root.addWidget(self.sidebar)
 
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet("QStackedWidget { border-left: 1px solid #333; }")
         root.addWidget(self.stack)
 
         # Guided tour (created after stack so it floats above everything)
@@ -305,21 +305,27 @@ class MainWindow(QMainWindow):
     def _new_project(self) -> None:
         if not self._confirm_save():
             return
-        name, ok = QInputDialog.getText(self, "Neues Projekt", "Projektname:")
-        if not ok or not name.strip():
+        from gui.new_project_dialog import NewProjectDialog
+        dlg = NewProjectDialog(self)
+        if dlg.exec() != NewProjectDialog.Accepted:
             return
+        name = dlg.project_name
+        project_type = dlg.project_type
+        desc = dlg.description
         path, _ = QFileDialog.getSaveFileName(
-            self, "Projekt speichern", f"{name.strip()}.json", "Projektdatei (*.json)"
+            self, "Projekt speichern", f"{name}.json", "Projektdatei (*.json)"
         )
         if not path:
             return
         from core.project import Project
         project = Project()
-        project.config.name = name.strip()
+        project.config.name = name
+        project.config.description = desc
+        project.config.project_type = project_type
         project.config.created_at = datetime.now().isoformat()
         project.save(path)
         self._load_project(project)
-        log.info("Neues Projekt: %s", path)
+        log.info("Neues Projekt (%s): %s", project_type, path)
 
     def _open_project(self) -> None:
         if not self._confirm_save():
@@ -341,6 +347,10 @@ class MainWindow(QMainWindow):
         from core.audit import AuditTrail
         self.audit = AuditTrail(project.get_project_dir(), project.config.name)
         self.audit.log_project_saved(project.project_path)
+
+        # Unlock sidebar and configure for project type
+        self.sidebar.set_project_type(getattr(project.config, "project_type", "image"))
+        self.sidebar.set_locked(False)
 
         # Propagate to all pages
         self.dashboard_page.set_project(project)
@@ -580,24 +590,14 @@ class MainWindow(QMainWindow):
     def _apply_theme(self, theme: str) -> None:
         app = QApplication.instance()
         if theme == "dark":
-            palette = QPalette()
-            palette.setColor(QPalette.Window,          QColor(30, 30, 46))
-            palette.setColor(QPalette.WindowText,      QColor(220, 220, 220))
-            palette.setColor(QPalette.Base,            QColor(22, 22, 35))
-            palette.setColor(QPalette.AlternateBase,   QColor(40, 40, 58))
-            palette.setColor(QPalette.ToolTipBase,     QColor(22, 22, 35))
-            palette.setColor(QPalette.ToolTipText,     QColor(220, 220, 220))
-            palette.setColor(QPalette.Text,            QColor(220, 220, 220))
-            palette.setColor(QPalette.Button,          QColor(45, 45, 65))
-            palette.setColor(QPalette.ButtonText,      QColor(220, 220, 220))
-            palette.setColor(QPalette.BrightText,      QColor(255, 100, 100))
-            palette.setColor(QPalette.Link,            QColor(42, 130, 218))
-            palette.setColor(QPalette.Highlight,       QColor(21, 101, 192))
-            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-            app.setPalette(palette)
-            self.sidebar.setStyleSheet("background: #1C1C2E; border-right: 1px solid #333;")
+            from gui.theme import apply_dark_theme
+            apply_dark_theme(app)
+            self.sidebar.setStyleSheet(
+                "QWidget#Sidebar { background: #161B22; border-right: 1px solid #30363D; }"
+            )
         else:
             app.setPalette(app.style().standardPalette())
+            app.setStyleSheet("")
             self.sidebar.setStyleSheet("")
 
     # ------------------------------------------------------------------ recent projects
