@@ -6,6 +6,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from core.camera import apply_timestamp
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QCheckBox, QGroupBox, QSizePolicy,
@@ -154,16 +155,7 @@ class CameraPage(QWidget):
 
     @staticmethod
     def _apply_timestamp(frame: np.ndarray) -> np.ndarray:
-        import datetime
-        frame = frame.copy()
-        text = datetime.datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
-        font, scale, thickness = cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2
-        (tw, th), baseline = cv2.getTextSize(text, font, scale, thickness)
-        h = frame.shape[0]
-        x, y = 12, h - 12 - baseline
-        cv2.putText(frame, text, (x + 1, y + 1), font, scale, (0, 0, 0), thickness + 1)
-        cv2.putText(frame, text, (x, y), font, scale, (255, 255, 255), thickness)
-        return frame
+        return apply_timestamp(frame)
 
     def _show_frame(self, frame: np.ndarray) -> None:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -186,7 +178,8 @@ class CameraPage(QWidget):
         dlg.exec()
 
         if was_running:
-            self._start_btn.setChecked(True)
+            # Kurze Pause damit der Dialog-Thread die Kamera vollständig freigibt
+            QTimer.singleShot(600, lambda: self._start_btn.setChecked(True))
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 

@@ -4,12 +4,21 @@ Convolutional autoencoder for unsupervised frame-level anomaly detection.
 Train exclusively on normal-process frames; reconstruction error spikes when
 the model sees something it has never learned to reconstruct → anomaly.
 """
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 _IMG = 128  # all frames resized to _IMG × _IMG before encode/decode
+
+
+def _best_device() -> torch.device:
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
 
 class _ConvAutoencoder(nn.Module):
@@ -54,7 +63,7 @@ class AnomalyDetector:
 
     def __init__(self):
         self._model = _ConvAutoencoder()
-        self._device = torch.device("cpu")
+        self._device = _best_device()
         self._trained = False
         self._threshold: float = 0.02
         self._train_frames: list[np.ndarray] = []  # stored as numpy float32 C×H×W
@@ -74,7 +83,6 @@ class AnomalyDetector:
     # ------------------------------------------------------------------ preprocessing
 
     def _preprocess(self, frame: np.ndarray) -> torch.Tensor:
-        import cv2
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb = cv2.resize(rgb, (_IMG, _IMG), interpolation=cv2.INTER_AREA)
         return torch.from_numpy(rgb).permute(2, 0, 1).float().div(255.0)
@@ -130,6 +138,7 @@ class AnomalyDetector:
 
         arr = np.array(errors)
         self._threshold = float(arr.mean() + 2.5 * arr.std())
+        self._model.eval()   # einmalig setzen, nicht bei jedem score()-Aufruf
         self._trained = True
         return self._threshold
 
@@ -139,7 +148,6 @@ class AnomalyDetector:
         """Return per-frame reconstruction MSE (0 if not trained yet)."""
         if not self._trained:
             return 0.0
-        self._model.eval()
         t = self._preprocess(frame).unsqueeze(0).to(self._device)
         with torch.no_grad():
             out = self._model(t)
@@ -170,7 +178,11 @@ class AnomalyDetector:
         torch.save({"model": self._model.state_dict(), "threshold": self._threshold}, path)
 
     def load(self, path: str) -> None:
-        ckpt = torch.load(path, map_location=self._device)
+        # Immer erst auf CPU laden, dann auf Zielgerät verschieben —
+        # vermeidet Cross-Device-Fehler bei load_state_dict.
+        ckpt = torch.load(path, map_location="cpu", weights_only=True)
         self._model.load_state_dict(ckpt["model"])
+        self._model.to(self._device)
+        self._model.eval()
         self._threshold = float(ckpt["threshold"])
         self._trained = True

@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QEvent, QRect, QPoint
 from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPainter, QPen, QColor
 
-from core.camera import list_usb_cameras, frame_to_qimage, CameraFrameThread
+from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread
 from utils.logging_utils import get_logger
 
 log = get_logger()
@@ -532,8 +532,7 @@ class CameraCaptureDialog(QDialog):
         # ── Anomaly scoring (every 3rd frame to reduce CPU load) ──────────────
         if self._ae_enabled_cb.isChecked() and self._detector and self._detector.trained:
             self._ae_score_counter += 1
-            if self._ae_score_counter >= 3:
-                self._ae_score_counter = 0
+            if self._ae_score_counter % 3 == 0:
                 score, is_anomaly = self._detector.is_anomaly(analysis_frame)
                 # Score smoothing: alarm only after N consecutive anomaly frames
                 if is_anomaly:
@@ -572,7 +571,7 @@ class CameraCaptureDialog(QDialog):
 
     def _update_score_display(self, score: float, is_anomaly: bool) -> None:
         thr = self._detector.threshold
-        pct = min(100, int(score / thr * 100)) if thr > 0 else 0
+        pct = int(score / thr * 100) if thr > 0 else 0
         label_text = f"Score: {score:.5f}  ({pct}% des Schwellwerts)"
 
         if is_anomaly:
@@ -602,18 +601,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== TIMESTAMP
 
     def _apply_timestamp(self, frame: np.ndarray) -> np.ndarray:
-        from datetime import datetime as _dt
-        out = frame.copy()
-        text = _dt.now().strftime("%Y-%m-%d  %H:%M:%S")
-        h, w = out.shape[:2]
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = max(0.5, w / 1280)
-        thickness = max(1, int(scale * 1.5))
-        _, baseline = cv2.getTextSize(text, font, scale, thickness)
-        x, y = 10, h - 10 - baseline
-        cv2.putText(out, text, (x + 1, y + 1), font, scale, (0, 0, 0), thickness + 1, cv2.LINE_AA)
-        cv2.putText(out, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
-        return out
+        return apply_timestamp(frame)
 
     # ================================================================== CAPTURE
 
@@ -858,7 +846,7 @@ class CameraCaptureDialog(QDialog):
 
     def _draw_roi_overlay(self, frame: np.ndarray) -> np.ndarray:
         """Draw the ROI rectangle (and live drag preview) onto a display copy."""
-        out = frame if frame.flags['WRITEABLE'] else frame.copy()
+        out = frame.copy()
         h, w = out.shape[:2]
 
         # Committed ROI

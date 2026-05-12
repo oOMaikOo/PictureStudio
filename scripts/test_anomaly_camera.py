@@ -53,12 +53,18 @@ def open_camera(index: int) -> cv2.VideoCapture:
     if not cap.isOpened():
         print(f"{RED}Fehler: Kamera {index} konnte nicht geöffnet werden.{RESET}")
         sys.exit(1)
-    # Warm-up: erste Frames verwerfen
-    for _ in range(5):
-        cap.read()
-    ret, frame = cap.read()
-    if not ret:
-        print(f"{RED}Fehler: Kein Frame von Kamera {index}.{RESET}")
+    try:
+        # Warm-up: erste Frames verwerfen
+        for _ in range(5):
+            cap.read()
+        ret, frame = cap.read()
+        if not ret:
+            print(f"{RED}Fehler: Kein Frame von Kamera {index}.{RESET}")
+            cap.release()
+            sys.exit(1)
+    except Exception as exc:
+        cap.release()
+        print(f"{RED}Fehler beim Kamera-Warm-up: {exc}{RESET}")
         sys.exit(1)
     h, w = frame.shape[:2]
     print(f"{GREEN}✓ Kamera {index} geöffnet: {w}×{h} px{RESET}")
