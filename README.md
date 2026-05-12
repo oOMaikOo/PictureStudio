@@ -1,6 +1,6 @@
-# Image Labeling Studio
+# Picture Studio
 
-Eine produktionsreife Desktop-Anwendung zur Bildannotation, ROI-Definition, CNN-Modelltraining und Batch-Inferenz — entwickelt mit **PySide6** und **PyTorch**.
+Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung und Batch-Inferenz — entwickelt mit **PySide6** und **PyTorch**.
 
 ---
 
@@ -8,20 +8,18 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, ROI-Definition, CNN-
 
 | Bereich | Funktionen |
 |---|---|
-| **Projektverwaltung** | Versionierte JSON-Projekte, atomares Speichern, automatische Backups, Projekt-Dashboard, Bildvalidierung & Pfadkorrektur |
-| **Kameraaufnahme** | USB- & IP/RTSP-Kamera Live-Vorschau, Einzel- & Burst-Aufnahme, optionaler Zeitstempel (Vorschau + dauerhaft in PNG eingebrannt) |
-| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder, trainiert auf Normalframes; Live-Rekonstruktionsfehler-Scoring, konfigurierbarer Schwellwert, Alarm-Banner, automatisches Speichern von Anomalie-Frames |
-| **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; Label-Schnellzuweisung (1–9); Begrenzungsprüfung; ROI-Vorlagen |
-| **Labeling** | Label-Hierarchien (Multi-Label), Statistiken, Label-Filter, Review-Modus, Änderungsprotokoll via Audit-Trail |
-| **Datensatzanalyse** | Format-/Größenstatistiken, Erkennung fehlender Dateien, MD5-Duplikaterkennung, Klassenungleichgewichts-Warnungen; COCO / YOLO / CSV-Export |
-| **Training** | ResNet18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, GPU/CPU/MPS-Auswahl, Training von Checkpoint fortsetzen |
-| **SSH-Ferntraining** | Verbindungsprofile, Live-Log-Streaming, conda/venv-Unterstützung |
-| **Modellbibliothek** | Versioniertes Modell-Registry, ONNX-Export, Accuracy/F1-Vergleich, Archivieren/Löschen |
-| **Metriken & Berichte** | Accuracy, F1, gewichteter F1, ROC/AUC (binär), Top-K-Accuracy, HTML-Trainingsbericht, Excel-Trainingsbericht |
-| **Inferenz** | Batch-Inferenz mit Top-3-Anzeige, Konfidenz-Farbkodierung, Niedrig-Konfidenz-Tab, Label-/Konfidenz-Filter |
-| **Excel-Export** | Benutzerdefiniertes Spalten-Mapping (aktivieren/deaktivieren + umbenennen), Anhängen/Überschreiben-Modus, formatierte Kopfzeilen, rote Markierung unsicherer Vorhersagen |
-| **UX** | 8-seitige Sidebar-Navigation, Dunkel-/Hell-Theme, QSettings-Persistenz, Lazy-Thumbnail-Laden, Absturzberichte |
-| **Tests** | Unit-Tests (Projekt, Datensatz, Metriken, ROI, Export, Anomalie-Erkennung) + Integrationstests (Train → Infer Pipeline) |
+| **Projektverwaltung** | Zwei Projekttypen (Bild / Video), versionierte JSON-Projekte, atomares Speichern, automatische Backups, Projekt-Dashboard, Bildvalidierung & Pfadkorrektur |
+| **Datenverwaltung** | Ordner-Import, Videoimport mit Frame-Extraktion, Drag & Drop, Kameraaufnahme (USB/IP/RTSP), MD5-Duplikaterkennung |
+| **Labeling** | Schnellzuweisung 1–9, Multi-Label-Modus, Label-Hierarchien, Undo/Redo, Audit-Trail, Pixel-Segmentierungsmasken (5 Klassen) |
+| **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; ROI-Vorlagen; Batch-Übertragung auf alle Bilder |
+| **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), SSH-Ferntraining |
+| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder auf Normalframes; Live-Scoring, Heatmap, Bounding Box, konfigurierbarer Schwellwert, Schwellwert-Kalibrierungsdialog |
+| **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17), TorchScript-Export, Accuracy/F1-Vergleich, Run-History, Archivieren/Löschen |
+| **Inferenz** | Batch-Inferenz, Top-K-Anzeige, Test-Time Augmentation (TTA), Ensemble-Inferenz, Semi-automatisches Labeling, Konfidenz-Farbkodierung |
+| **Metriken & Berichte** | Accuracy, F1, gewichteter F1, ROC/AUC, Top-K, HTML- und Excel-Trainingsbericht, Konfusionsmatrix |
+| **REST-API** | `POST /api/classify` (Pfad oder Base64-Bild), `GET /api/status`, `GET /api/labels` — für externe Integration |
+| **Export** | COCO JSON, YOLO TXT, CSV-Annotationen; Excel-Inferenzergebnisse (konfigurierbare Spalten) |
+| **UX** | Modernes Dark-Theme (GitHub-Dark Palette), Sidebar-Navigation (gesperrt bis Projekt geladen), geführte Tour, F1-Hilfe, QSettings-Persistenz |
 
 ---
 
@@ -38,18 +36,335 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, ROI-Definition, CNN-
 git clone <repo-url>
 cd Picture
 
-# Virtuelle Umgebung erstellen
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
 
-# Abhängigkeiten installieren
 pip install -r requirements.txt
 
-# Anwendung starten
 python main.py
 ```
 
-> **macOS-Hinweis:** PyTorch nutzt auf Apple Silicon automatisch das MPS-Backend. Im Gerät-Dropdown auf der Trainingsseite *auto* oder *mps* wählen.
+> **macOS Apple Silicon:** PyTorch nutzt automatisch das MPS-Backend. Im Gerät-Dropdown `auto` oder `mps` wählen.
+
+---
+
+## Schritt-für-Schritt-Anleitung
+
+---
+
+### Anleitung A — Bildklassifikation
+
+> Ziel: Bilder in Klassen einteilen, ein CNN trainieren und neue Bilder damit bewerten.
+
+---
+
+#### Schritt 1 — Bildprojekt anlegen
+
+1. Menü **Datei → Neues Projekt** (`Strg+N`)
+2. Im Dialog: Projektname eingeben, Typ **📸 Bildklassifikation** wählen
+3. Speicherort wählen → Projekt wird als `.json` angelegt
+4. Die Sidebar schaltet sich frei, das Dashboard öffnet sich
+
+---
+
+#### Schritt 2 — Bilder importieren
+
+**Option A: Ordner importieren**
+- Seite **Daten** → `Bilder laden…` → Ordner wählen
+- Alle `.jpg`, `.png`, `.bmp`, `.tiff` im Ordner werden hinzugefügt
+
+**Option B: Kamera aufnehmen**
+- Menü **Datei → Kamera aufnehmen…** (`Strg+K`)
+- Kamera verbinden → Einzelbilder oder Burst aufnehmen → `In Projekt übernehmen`
+
+**Option C: Drag & Drop**
+- Bilder oder Ordner direkt ins Anwendungsfenster ziehen
+
+---
+
+#### Schritt 3 — Klassen (Labels) definieren
+
+1. Menü **Projekt → Labels verwalten…** (`Strg+L`)
+2. `+` klicken → Name eingeben (z. B. `gut`, `defekt`, `unsicher`)
+3. Farbe zuweisen
+4. Wiederholen für alle Klassen → Dialog schließen
+
+> **Empfehlung:** Mindestens 50 Bilder pro Klasse für sinnvolle Ergebnisse. Ideal: 200+.
+
+---
+
+#### Schritt 4 — Bilder labeln
+
+1. Seite **Labeling** öffnen
+2. Bild in der Thumbnail-Liste anklicken
+3. **Schnellzuweisung:** Taste `1`–`9` drückt das entsprechende Label direkt zu
+4. **Alternativ:** Label-Dropdown oben rechts verwenden
+5. Navigation: `N` = nächstes Bild, `P` = vorheriges Bild
+
+**Optional — ROI zeichnen** (wenn nur bestimmte Bildbereiche relevant sind):
+- Toolbar: `R` = Rechteck, `E` = Ellipse, `G` = Polygon
+- Bereich im Bild ziehen → ROI erscheint
+- ROI in der Liste auswählen → Label zuweisen → `ROI-Label zuweisen`
+- `ROIs dieses Bildes → alle Bilder` überträgt ROI-Positionen auf alle anderen Bilder
+
+**Optional — Segmentierungsmaske** (für Pixelgenaue Annotation):
+- Im mittleren Bereich auf Tab **🎨 Segmentierungsmaske** wechseln
+- Linksklick = malen, Rechtsklick = löschen, Scroll = Zoom
+- Klasse und Pinselgröße über die Toolbar wählen → `Maske speichern`
+
+---
+
+#### Schritt 5 — Datensatz prüfen
+
+1. Seite **Daten** → `Dataset analysieren`
+2. Auf Warnungen achten:
+   - **Klassenungleichgewicht** → auf der Trainingsseite `Klassenausgleich (WeightedSampler)` aktivieren
+   - **Fehlende Dateien** → Dateien wiederherstellen oder `Bildpfade korrigieren`
+   - **Duplikate** → MD5-Duplikate manuell entfernen
+
+---
+
+#### Schritt 6 — Modell trainieren
+
+1. Seite **Training** öffnen
+2. **Architektur wählen:**
+   | Modell | Empfehlung |
+   |---|---|
+   | ResNet-18 | Guter Ausgangspunkt, schnell |
+   | MobileNetV2 | Für CPU-Deployment |
+   | EfficientNet-B0 | Beste Genauigkeit |
+   | SimpleCNN | Sehr schnell, kein Pretrained |
+3. **Hyperparameter:**
+   - Epochen: `20–50`
+   - Lernrate: `0.001`
+   - Batch-Größe: `32` (GPU) / `8–16` (CPU)
+   - Gerät: `auto` (wählt GPU > MPS > CPU)
+   - Early Stopping: `5` (stoppt automatisch bei Plateaus)
+4. `Training starten` klicken
+5. Kurven (Loss, Accuracy) und Konfusionsmatrix aktualisieren sich live
+6. Das **beste Checkpoint** wird automatisch gespeichert
+
+**Optional — SSH-Ferntraining auf GPU-Server:**
+- Einstellungen → SSH-Profil anlegen (Host, User, Key-Pfad)
+- Trainingsseite → SSH-Ferntraining aktivieren → Profil wählen → `Verbindung testen`
+- Grünes Signal → `Training starten` läuft auf dem Server, Log streamt live
+
+---
+
+#### Schritt 7 — Trainingsergebnis prüfen
+
+1. Nach dem Training öffnet sich automatisch die Ergebnisanzeige
+2. **Wichtige Metriken:**
+   - **Accuracy** — Anteil korrekt klassifizierter Bilder
+   - **F1 (Macro)** — aussagekräftiger bei ungleichen Klassen
+   - **Konfusionsmatrix** — zeigt wo das Modell verwechselt
+3. Seite **Modelle** → Tab **📊 Run-History** zeigt alle Trainingsläufe im Vergleich
+4. `Als Best markieren` setzt das Modell als Standard für Inferenz
+5. **Berichte erstellen:** `HTML-Bericht erstellen…` oder `Excel-Bericht erstellen…`
+
+---
+
+#### Schritt 8 — Neue Bilder bewerten (Inferenz)
+
+1. Seite **Klassifikation** öffnen
+2. `Modell laden (.pth)` → Modelldatei wählen **oder** auf Seite **Modelle** → `In Inferenz laden`
+3. `Ordner…` → Ordner mit neuen (unbekannten) Bildern wählen
+4. **Optionen:**
+   - **TTA (Test-Time Augmentation):** Spinner auf `3–5` erhöhen für stabilere Vorhersagen bei schwierigen Bildern
+   - **Ensemble:** Mehrere Modelle laden (`+ Modell hinzufügen`), Vorhersagen werden gemittelt
+5. `Alle Bilder klassifizieren` klicken
+6. **Farbkodierung:** Grün >90% | Gelb 70–90% | Rot <70% Konfidenz
+7. Tab **Niedrige Konfidenz** zeigt alle unsicheren Vorhersagen
+8. **Automatisch labeln:** Mindest-Konfidenz einstellen → `Auf Projekt anwenden` übernimmt Hochkonfidenz-Ergebnisse als Labels
+
+---
+
+#### Schritt 9 — Ergebnisse exportieren
+
+**Als Excel:**
+1. Seite **Export** → `Ergebnisse aus letzter Inferenz laden`
+2. Zieldatei wählen (neu erstellen oder anhängen)
+3. Spalten konfigurieren (ein-/ausschalten, umbenennen)
+4. `Excel exportieren`
+
+**Als ONNX (für Deployment in anderen Systemen):**
+1. Seite **Modelle** → Modell auswählen
+2. `Als ONNX exportieren` → `.onnx`-Datei wird gespeichert (Opset 17)
+3. Alternativ: `Als TorchScript exportieren` für reine PyTorch-Umgebungen
+
+---
+
+### Anleitung B — Videoanalyse & Anomalieerkennung
+
+> Ziel: Einen Prozess per Kamera oder Video überwachen und grobe Abweichungen vom Normalzustand automatisch erkennen.
+
+---
+
+#### Schritt 1 — Videoprojekt anlegen
+
+1. Menü **Datei → Neues Projekt** (`Strg+N`)
+2. Im Dialog: Projektname eingeben, Typ **🎬 Videoanalyse & Anomalie** wählen
+3. Speicherort wählen
+4. Die Sidebar zeigt die Videoseiten: Dashboard, Daten, Live & Anomalie, Modelle, Export, Einstellungen
+
+---
+
+#### Schritt 2 — Normalzustand aufnehmen
+
+**Option A: Video importieren (vorhandenes Material)**
+1. Seite **Daten** → `Video importieren…`
+2. Videodatei wählen (MP4, AVI, MOV, MKV, WebM, M4V)
+3. Frame-Intervall einstellen (z. B. alle 5 Frames = ca. 6 Bilder/Sekunde bei 30 fps)
+4. `Frames extrahieren` → Frames werden ins Projekt-Verzeichnis gespeichert
+5. Die extrahierten Frames erscheinen automatisch im Projekt
+
+**Option B: Live-Kamera aufnehmen**
+1. Seite **Live & Anomalie** öffnen
+2. Kamera-Index wählen (0 = erste USB-Kamera), `▶ Kamera starten`
+3. `⚙ Aufnahme & Anomalie-Erkennung…` öffnen
+4. Normalprozess vor die Kamera bringen
+5. `Normalframes aufnehmen` → mindestens **100 Frames** sammeln (200–300 für stabilere Ergebnisse)
+6. Kamera dabei nicht bewegen, Beleuchtung konstant halten
+
+> **Wichtig:** Der Autoencoder lernt ausschließlich den Normalzustand. Es werden **keine Beispiele von Anomalien** benötigt.
+
+---
+
+#### Schritt 3 — Anomaliemodell trainieren
+
+1. Im Kamera/Aufnahme-Dialog: `→ Trainieren` klicken
+2. Standard: 40 Epochen — für grobe Abweichungen reicht das
+3. Nach dem Training wird der **Schwellwert automatisch berechnet** (µ + 2,5 × σ der Trainings-Rekonstruktionsfehler)
+4. Warten bis Training abgeschlossen (Fortschrittsbalken)
+
+---
+
+#### Schritt 4 — Schwellwert kalibrieren
+
+1. `📊 Schwellwert kalibrieren…` klicken
+2. Das Histogramm zeigt die Score-Verteilung der gesammelten Frames
+3. **Vorschläge:** µ+1σ (sensitiv) bis µ+3σ (nur grobe Abweichungen)
+4. Für die Überwachung grober Abweichungen: **µ+2σ oder µ+2,5σ** als Startwert
+5. `Anwenden` setzt den gewählten Schwellwert
+
+> **Faustregel:** Ist der Fehlalarm-Anteil zu hoch → Schwellwert erhöhen. Werden echte Abweichungen übersehen → Schwellwert senken.
+
+---
+
+#### Schritt 5 — Live-Überwachung aktivieren
+
+1. Im Aufnahme-Dialog: `→ Live-Scoring` aktivieren
+2. **Anzeige im Live-Bild:**
+   - **Grüner Rahmen + normaler Score** = Prozess im Normalbereich
+   - **Roter Rahmen + Alarmband** = Abweichung erkannt
+   - **Heatmap** zeigt welche Bildregion auffällig ist
+   - **Bounding Box** markiert den Bereich mit der größten Abweichung
+3. Optional: `Anomalie-Frames automatisch speichern` zur Dokumentation aktivieren
+
+---
+
+#### Schritt 6 — Modell speichern & wiederverwenden
+
+1. Im Aufnahme-Dialog: `Modell speichern` → `.pth`-Datei wählen
+2. Beim nächsten Start: `Modell laden` → sofort einsatzbereit ohne Neutraining
+3. **Für Deployment:** `ONNX exportieren` oder `TorchScript exportieren`
+   - ONNX kann in ONNX Runtime, OpenCV DNN oder TensorRT geladen werden
+
+---
+
+#### Schritt 7 — Typische Einsatzszenarien
+
+| Anwendung | Empfohlene Konfiguration |
+|---|---|
+| Montagelinie (Teileinspektion) | 200 Normalframes, µ+2σ, Kamera fest montiert |
+| Füllstandskontrolle | 100 Normalframes, µ+1,5σ, Kontraststarke Beleuchtung |
+| Oberflächenprüfung | 300+ Normalframes, µ+2,5σ, diffuses Licht |
+| Positionskontrolle | 150 Normalframes, µ+2σ, ROI auf relevante Zone setzen |
+
+---
+
+## Tastenkürzel
+
+### Global
+| Taste | Aktion |
+|---|---|
+| `Strg+N` | Neues Projekt |
+| `Strg+O` | Projekt öffnen |
+| `Strg+S` | Projekt speichern |
+| `Strg+K` | Kamera-Dialog öffnen |
+| `Strg+L` | Labels verwalten |
+| `F1` | Hilfe zur aktuellen Seite |
+
+### Labeling-Seite
+| Taste | Aktion |
+|---|---|
+| `1`–`9` | Label schnell zuweisen |
+| `N` / `P` | Nächstes / Vorheriges Bild |
+| `R` | Rechteck-ROI |
+| `E` | Ellipse-ROI |
+| `G` | Polygon-ROI |
+| `Esc` | Zeichnen abbrechen |
+| `Entf` | Ausgewählte ROI löschen |
+| `Strg+C / V` | ROI kopieren / einfügen |
+| `Pfeiltasten` | ROI um 2 px verschieben |
+
+---
+
+## Unterstützte Architekturen
+
+| ID | Modell | Empfehlung |
+|---|---|---|
+| `resnet18` | ResNet-18 | Schnell, guter Ausgangspunkt |
+| `resnet50` | ResNet-50 | Höhere Kapazität |
+| `mobilenet_v2` | MobileNetV2 | Effizient, gut für CPU-Deployment |
+| `efficientnet_b0` | EfficientNet-B0 | Bestes Genauigkeits-/Größe-Verhältnis |
+| `simple_cnn` | Eigenes 4-Block-CNN | Keine vortrainierten Gewichte; schnell für Tests |
+
+---
+
+## Trainingsoptionen
+
+| Option | Standard | Beschreibung |
+|---|---|---|
+| Gerät | `auto` | Wählt automatisch GPU (CUDA) > MPS > CPU |
+| Scheduler | `reduce_on_plateau` | Passt Lernrate bei Plateau an |
+| Early Stopping | `5` | Stopp nach N Epochen ohne Verbesserung |
+| Mixed Precision | aus | AMP via `torch.cuda.amp` (nur CUDA) |
+| Klassenausgleich | aus | WeightedRandomSampler bei ungleichen Klassen |
+| TTA-Passes | `1` | Test-Time Augmentation (Inferenz) |
+
+---
+
+## REST-API
+
+Der integrierte REST-Server läuft auf `http://localhost:5000` (konfigurierbar in Einstellungen).
+
+| Endpunkt | Methode | Beschreibung |
+|---|---|---|
+| `/api/status` | GET | Projektstatus und geladenes Modell |
+| `/api/labels` | GET | Liste aller definierten Klassen |
+| `/api/classify` | POST | Bild klassifizieren (JSON: `path` oder `image_b64`) |
+
+**Beispiel-Request:**
+```bash
+curl -X POST http://localhost:5000/api/classify \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/pfad/zum/bild.jpg", "top_k": 3}'
+```
+
+**Beispiel-Response:**
+```json
+{
+  "predicted_label": "gut",
+  "confidence": 0.9412,
+  "top_k": [
+    {"label": "gut",    "prob": 0.9412},
+    {"label": "unsicher","prob": 0.0421},
+    {"label": "defekt", "prob": 0.0167}
+  ],
+  "low_confidence": false
+}
+```
 
 ---
 
@@ -57,164 +372,82 @@ python main.py
 
 ```
 Picture/
-├── main.py                        # Einstiegspunkt
+├── main.py
 ├── requirements.txt
 │
 ├── core/
-│   ├── project.py                 # Zentrales Datenmodell (Labels, Bilder, ROIs)
-│   ├── dataset.py                 # Analyse, Split, COCO/YOLO/CSV-Export
-│   ├── training.py                # TrainingWorker (QThread) + EarlyStopping
-│   ├── inference.py               # Inferencer: Einzelbild & Ordner-Batch
-│   ├── metrics.py                 # Accuracy, F1, ROC/AUC, Top-K
-│   ├── export.py                  # Excel-Export (Ergebnisse + Trainingsbericht)
-│   ├── model_manager.py           # Modell-Registry + ONNX-Export
-│   ├── camera.py                  # USB/IP-Kamera-Thread + Frame-Hilfsfunktionen
-│   ├── anomaly_detector.py        # Conv-Autoencoder: auf Normalframes trainieren, Live-Frames bewerten
-│   ├── audit.py                   # JSONL-Audit-Trail
-│   └── report.py                  # HTML-Trainingsbericht-Generator
+│   ├── project.py          # Zentrales Datenmodell (ProjectConfig, Labels, Bilder, ROIs)
+│   ├── dataset.py          # Analyse, Split, COCO/YOLO/CSV-Export
+│   ├── training.py         # TrainingWorker + WeightedSampler + Dataset-Snapshot
+│   ├── inference.py        # Inferencer: TTA, Batch, Ordner
+│   ├── metrics.py          # Accuracy, F1, ROC/AUC, Top-K
+│   ├── export.py           # Excel-Export (Ergebnisse + Trainingsbericht)
+│   ├── model_manager.py    # Registry, ONNX- & TorchScript-Export
+│   ├── anomaly_detector.py # Conv-Autoencoder: Training, Scoring, Bounding Box, ONNX/TS-Export
+│   ├── remote_ssh.py       # SSHManager, build_training_bundle()
+│   ├── remote_training.py  # RemoteTrainingThread (SSH-Ferntraining)
+│   ├── camera.py           # USB/IP-Kamera-Thread
+│   ├── audit.py            # JSONL-Audit-Trail
+│   └── report.py           # HTML-Trainingsbericht
 │
 ├── models/
-│   └── classifier.py              # Modell-Factory + SimpleCNN + Checkpoint-I/O
+│   └── classifier.py       # Modell-Factory, SimpleCNN, Checkpoint-I/O
+│
+├── api/
+│   └── rest_server.py      # REST-API (stdlib http.server, kein Framework)
 │
 ├── gui/
-│   ├── main_window.py             # MainWindow mit Sidebar + QStackedWidget
-│   ├── sidebar.py                 # Navigations-Sidebar (8 Seiten)
-│   ├── camera_capture_dialog.py   # Kamera Live-Vorschau + Aufnahme-Dialog
-│   ├── help_dialog.py             # Integrierter Hilfe-Browser
-│   ├── guide_tour.py              # Schrittweise geführte Tour als Overlay
+│   ├── main_window.py
+│   ├── sidebar.py          # Navigationssidebar (gesperrt bis Projekt geladen, Bild/Video)
+│   ├── theme.py            # Globales Dark-Theme (Palette + QSS)
+│   ├── new_project_dialog.py  # Projekttyp-Auswahl bei Projekterstellung
+│   ├── camera_capture_dialog.py
+│   ├── video_import_dialog.py
+│   ├── calibration_dialog.py
 │   ├── pages/
-│   │   ├── dashboard_page.py      # Projektstatistik-Übersicht
-│   │   ├── data_page.py           # Datensatzanalyse + Export
-│   │   ├── labeling_page.py       # Thumbnail-Liste + ROI-Editor
-│   │   ├── training_page.py       # Trainingskonfiguration + Fortschrittskurven
-│   │   ├── models_page.py         # Modellbibliothek-Tabelle
-│   │   ├── inference_page.py      # Batch-Inferenz + Niedrig-Konfidenz-Tab
-│   │   ├── export_page.py         # Benutzerdefinierter Excel-Export
-│   │   └── settings_page.py       # Theme, Autosave, SSH-Profile
+│   │   ├── dashboard_page.py
+│   │   ├── data_page.py
+│   │   ├── labeling_page.py  # ROI-Editor + Segmentierungsmasken-Tab
+│   │   ├── training_page.py
+│   │   ├── models_page.py    # Modellbibliothek + Run-History
+│   │   ├── inference_page.py # TTA, Ensemble, Semi-Auto-Labeling
+│   │   ├── export_page.py
+│   │   ├── camera_page.py
+│   │   └── settings_page.py
 │   └── widgets/
-│       ├── roi_editor.py          # QGraphicsView ROI-Editor (Rect/Ellipse/Polygon)
-│       ├── thumbnail_list.py      # Lazy-Loading QListWidget
-│       └── charts.py              # Trainingskurven + Konfusionsmatrix
+│       ├── roi_editor.py
+│       ├── mask_editor.py    # Pixel-Segmentierungsmasken-Editor
+│       └── thumbnail_list.py
 │
-├── utils/
-│   ├── config.py                  # App-Konstanten, Standardwerte
-│   ├── logging_utils.py           # Datei- und Konsolen-Logging
-│   ├── reproducibility.py         # Seed-Setzung, Software-Versionierung
-│   └── settings.py                # QSettings-Wrapper (AppSettings)
+├── scripts/
+│   └── remote_train.py     # Standalone-Skript für SSH-Ferntraining
 │
 └── tests/
-    ├── conftest.py                # pytest-Fixtures (sample_project, sample_images)
-    ├── test_project.py            # Unit: Labels, Bilder, ROIs, Speichern/Laden, Backup
-    ├── test_dataset.py            # Unit: Analyse, Splits, Duplikate, Exporte
-    ├── test_metrics.py            # Unit: Accuracy, F1, ROC/AUC, Top-K
-    ├── test_roi.py                # Unit: ROI CRUD, Serialisierung, Vorlagen
-    ├── test_export.py             # Unit: Excel-Spalten-Mapping, Anhängen-Modus
-    ├── test_anomaly_detector.py   # Unit: Sammlung, Training, Scoring, Persistenz
-    └── test_integration.py        # Integration: Train → Checkpoint → Infer
+    ├── conftest.py
+    ├── test_project.py
+    ├── test_dataset.py
+    ├── test_metrics.py
+    ├── test_roi.py
+    ├── test_export.py
+    ├── test_anomaly_detector.py
+    └── test_integration.py
 ```
 
 ---
 
-## Schnellstart
+## Fehlerbehebung
 
-1. **Neues Projekt** — `Datei → Neues Projekt` (`Strg+N`), Namen vergeben.
-2. **Bilder laden** — Seite **Daten** → *Bilder laden*, Ordner wählen — **oder** Seite **Labeling** → *Ordner laden…* — **oder** direkt von der Kamera aufnehmen mit `Datei → Kamera aufnehmen…` (`Strg+K`).
-3. **Labels definieren** — Auf der Seite **Labeling** Labels anlegen (Name + Farbe).
-4. **Bilder labeln** — Bild in der Thumbnail-Liste anklicken, `1–9` für Schnellzuweisung drücken oder das Label-Dropdown nutzen.
-5. **ROIs zeichnen** — ROI-Toolbar verwenden (`R` = Rechteck, `E` = Ellipse, `G` = Polygon). Löschen mit **Entf**, Kopieren/Einfügen mit **Strg+C / Strg+V**.
-6. **Datensatz analysieren** — Seite **Daten** → *Analyse starten*: fehlende Dateien, Duplikate, Klassenungleichgewicht prüfen.
-7. **Training** — Seite **Training** → Architektur, Epochen, Lernrate konfigurieren → *Training starten*.
-8. **Metriken prüfen** — Trainingskurven und Konfusionsmatrix aktualisieren sich live. Nach dem Training HTML- oder Excel-Bericht exportieren.
-9. **Neue Bilder klassifizieren** — Seite **Klassifikation** → Modell wählen → *Klassifizieren*.
-10. **Ergebnisse exportieren** — Seite **Export** → Spalten zuordnen → *Excel exportieren*.
-
----
-
-## Kameraaufnahme
-
-Öffnen über `Datei → Kamera aufnehmen…` (`Strg+K`).
-
-| Funktion | Beschreibung |
+| Problem | Lösung |
 |---|---|
-| **USB-Kamera** | Automatisch erkannt; aus Dropdown wählen, *Verbinden* klicken |
-| **IP- / RTSP-Kamera** | Stream-URL eingeben (rtsp://, http://); unterstützt MJPEG und RTSP |
-| **Einzelaufnahme** | *Bild aufnehmen* klicken oder `Leertaste` drücken |
-| **Burst-Aufnahme** | Anzahl + Intervall einstellen → *Burst starten* |
-| **Zeitstempel-Overlay** | Datum/Uhrzeit im Live-Bild anzeigen (Toggle, beeinflusst gespeicherte Datei nicht) |
-| **Zeitstempel einbrennen** | Datum/Uhrzeit dauerhaft in die gespeicherte PNG rendern (`JJJJ-MM-TT HH:MM:SS`, unten links) |
-| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder; auf Normalframes trainieren, jeden Frame live bewerten, Alarm bei Rekonstruktionsfehler-Spitze |
-
-Aufgenommene Bilder erscheinen in der Liste im Dialog; *In Projekt übernehmen* klicken um sie hinzuzufügen.
-
-> **Voraussetzung:** `pip install opencv-python` — PyTorch ist für das Training bereits erforderlich.
-
-### Ablauf Anomalie-Erkennung
-
-```
-1. Kamera verbinden → normalen Prozess ablaufen lassen
-2. "Normalframes aufnehmen" → 100–300 Frames sammeln
-3. "Training starten" → Autoencoder trainiert ausschließlich auf Normalframes
-   Schwellwert = Mittelwert + 2,5 × Std-Abw. der Trainings-Rekonstruktionsfehler (automatisch gesetzt)
-4. Checkbox "Aktiv" → Live-Scoring beginnt (jeder 3. Frame, CPU-schonend)
-   Grüne Score-Anzeige + normaler Rahmen  →  normaler Frame
-   Roter Banner + roter Rahmen            →  Anomalie erkannt
-5. Optional: "Anomalie-Frames automatisch speichern" zur Dokumentation
-6. Trainiertes Modell als .pth speichern/laden für Wiederverwendung
-```
-
----
-
-## ROI-Editor Tastenkürzel
-
-| Taste | Aktion |
-|---|---|
-| `R` | Rechteck-Modus |
-| `E` | Ellipse-Modus |
-| `G` | Polygon-Modus |
-| `Esc` | Zeichnen abbrechen |
-| `Entf` | Ausgewählte ROI löschen |
-| `Strg+C` | ROI kopieren |
-| `Strg+V` | ROI einfügen |
-| `Pfeiltasten` | ROI um 2 px verschieben |
-| `1`–`9` | Label schnell zuweisen |
-| `N` / `P` | Nächstes / Vorheriges Bild (Labeling-Seite) |
-
----
-
-## Unterstützte Architekturen
-
-| ID | Modell | Hinweise |
-|---|---|---|
-| `resnet18` | ResNet-18 | Schnell, guter Ausgangspunkt |
-| `resnet50` | ResNet-50 | Höhere Kapazität |
-| `mobilenet_v2` | MobileNetV2 | Effizient, gut für CPU |
-| `efficientnet_b0` | EfficientNet-B0 | Starkes Genauigkeits-/Größe-Verhältnis |
-| `simple_cnn` | Eigenes 4-Block-CNN | Keine vortrainierten Gewichte; schnell für CPU-Tests |
-
-Alle Transfer-Learning-Modelle verwenden standardmäßig ImageNet-Vortrainingsgewichte (bei sehr spezifischen Datensätzen *Pretrained* deaktivieren).
-
----
-
-## Trainingsoptionen
-
-| Option | Beschreibung |
-|---|---|
-| **Gerät** | `auto` / `cpu` / `cuda` / `mps` |
-| **Scheduler** | `none`, `reduce_on_plateau`, `cosine`, `step` |
-| **Early-Stopping-Geduld** | Stopp nach N Epochen ohne Verbesserung der Validation (`0` = deaktiviert) |
-| **Mixed Precision** | AMP über `torch.cuda.amp.GradScaler` (nur CUDA) |
-| **Checkpoint fortsetzen** | Training von einer gespeicherten `.pth`-Datei fortführen |
-| **Augmentierung** | Zufälliges horizontales Spiegeln + Farb-Jitter |
-
----
-
-## Datensatz-Exportformate
-
-| Format | Datei(en) | Verwendung |
-|---|---|---|
-| **COCO JSON** | `annotations.json` | Object-Detection-Frameworks |
-| **YOLO TXT** | `<bild>.txt` pro Bild + `classes.txt` | Ultralytics / Darknet |
-| **CSV** | `annotations.csv` | Tabellenkalkulation / eigene Tools |
+| Anwendung startet nicht | `pip install PySide6`; Linux: `apt install libxcb-cursor0` |
+| Training sehr langsam | Gerät `cuda` oder `mps` wählen; Bildgröße auf 128 px, Batch auf 16 reduzieren |
+| `ImportError: openpyxl` | `pip install openpyxl` |
+| `ImportError: paramiko` | `pip install paramiko` (nur SSH-Ferntraining) |
+| Diagramme fehlen | `pip install matplotlib` |
+| Kamera nicht erkannt | `pip install opencv-python`; andere Apps schließen die Kamera blockieren |
+| Viele Fehlalarme (Anomalie) | Schwellwert erhöhen (`📊 Schwellwert kalibrieren`), Beleuchtung stabilisieren |
+| Projektdatei beschädigt | `.bak`-Backup im Projektverzeichnis in `.json` umbenennen |
+| Thumbnails laden langsam | Thumbnail-Größe in Einstellungen reduzieren (z. B. 60 px) |
 
 ---
 
@@ -222,101 +455,18 @@ Alle Transfer-Learning-Modelle verwenden standardmäßig ImageNet-Vortrainingsge
 
 ```bash
 # Alle Tests
-pytest tests/ -v
+.venv/bin/python -m pytest tests/ -v
 
-# Nur Unit-Tests
-pytest tests/test_project.py tests/test_dataset.py tests/test_metrics.py tests/test_roi.py tests/test_export.py tests/test_anomaly_detector.py -v
+# Nur Unit-Tests (schnell, keine GPU nötig)
+.venv/bin/python -m pytest tests/ -v --ignore=tests/test_integration.py
 
-# Integrationstests (erfordern torch + Pillow)
-pytest tests/test_integration.py -v
+# Integrationstests (~10–30 s, trainiert ein kleines Modell)
+.venv/bin/python -m pytest tests/test_integration.py -v
 
 # Mit Coverage
 pip install pytest-cov
-pytest tests/ --cov=core --cov=models --cov-report=term-missing
+.venv/bin/python -m pytest tests/ --cov=core --cov=models --cov-report=term-missing
 ```
-
-> Integrationstests trainieren ein kleines Modell auf 12 synthetischen Bildern — Laufzeit auf CPU ca. 10–30 Sekunden.
-
----
-
-## Einstellungen
-
-Dauerhafte Einstellungen werden über `QSettings` gespeichert (plattformnativ: `~/Library/Preferences` unter macOS, Registry unter Windows).
-
-| Einstellung | Standard | Beschreibung |
-|---|---|---|
-| Theme | `dark` | `dark` oder `light` |
-| Schriftgröße | `9` | 7–16 pt |
-| Autosave-Intervall | `300 s` | 30–3600 s |
-| Backup vor Speichern | `ein` | Erstellt timestamped `.json`-Backup |
-| Thumbnail-Größe | `100 px` | 60–240 px |
-| Niedrig-Konfidenz-Schwellwert | `0,70` | Vorhersagen darunter werden markiert |
-| Top-K-Anzeige | `3` | 1–5 angezeigte Top-Vorhersagen |
-| SSH-Profile | — | Host, Benutzer, Key-Pfad pro Profil |
-
----
-
-## Projektdatei-Format
-
-Projekte werden als UTF-8-JSON (`*.json`) gespeichert. Atomares Schreiben via temporäre Datei + `os.replace()` verhindert Dateikorruption bei Absturz.
-
-```json
-{
-  "config": { "name": "...", "version": "2.0", "created_at": "..." },
-  "labels": [{ "name": "gut", "color": "#2ECC71" }],
-  "images": ["pfad/zum/bild.jpg"],
-  "image_labels": { "pfad/zum/bild.jpg": "gut" },
-  "rois": {
-    "pfad/zum/bild.jpg": [
-      { "id": "r1", "type": "rect", "x": 10, "y": 10, "w": 50, "h": 50, "label": "gut", "color": "#2ECC71" }
-    ]
-  },
-  "training_config": { ... },
-  "inference_results": [ ... ]
-}
-```
-
----
-
-## Audit-Trail
-
-Jede Label-Änderung, ROI-Hinzufügung/-Löschung und jeder Trainingsstart wird in `<projektname>_audit.jsonl` im Projektverzeichnis angehängt. Jede Zeile ist ein JSON-Objekt:
-
-```json
-{"timestamp": "2025-01-01T12:00:00", "action": "image_labeled", "entity": "bild.jpg", "details": {"label": "gut"}}
-```
-
----
-
-## Fehlerbehebung
-
-**Anwendung startet nicht**
-- PySide6 installieren: `pip install PySide6`
-- Unter Linux Qt-Plattform-Plugins installieren: `apt install libxcb-cursor0`
-
-**Training sehr langsam**
-- Im Gerät-Dropdown `cuda` oder `mps` wählen.
-- Für CPU-Tests: Bildgröße auf 128 px und Batch-Größe auf 16 reduzieren.
-
-**`ImportError: No module named 'openpyxl'`**
-- `pip install openpyxl` — für Excel-Export erforderlich.
-
-**`ImportError: No module named 'paramiko'`**
-- `pip install paramiko` — nur für SSH-Ferntraining benötigt.
-
-**Diagramme erscheinen nicht**
-- `pip install matplotlib` — die Anwendung fällt sonst auf ASCII-Sparklines zurück.
-
-**Thumbnails laden langsam**
-- Thumbnail-Größe in den Einstellungen reduzieren (z. B. 60 px).
-
-**Projektdatei beschädigt**
-- Das aktuellste `.bak`-Backup liegt neben der Projektdatei. In `.json` umbenennen um es wiederherzustellen.
-
-**Kamera wird nicht erkannt**
-- `pip install opencv-python` installieren.
-- Andere Anwendungen schließen, die die Kamera blockieren könnten.
-- Bei IP-Kameras: Stream-URL im Browser prüfen.
 
 ---
 

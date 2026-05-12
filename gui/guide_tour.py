@@ -16,302 +16,388 @@ from PySide6.QtGui import QFont, QColor
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
     0: [  # Dashboard
-        ("Willkommen auf dem Dashboard",
-         "Das Dashboard zeigt dir den Projektstand auf einen Blick:\n"
-         "Anzahl Bilder, gelabelte Bilder, Klassen und letzte Trainingsmetriken.\n\n"
-         "Öffne zunächst ein bestehendes Projekt oder erstelle ein neues.",
+        ("Willkommen bei Picture Studio",
+         "Das Dashboard zeigt den Projektstand auf einen Blick:\n"
+         "Bilder, Labels, Klassen und letzte Trainingsmetriken.\n\n"
+         "Die Navigationsleiste links ist gesperrt — erst ein\n"
+         "Projekt öffnen oder neu anlegen um sie freizuschalten.",
          None),
         ("Neues Projekt anlegen",
-         "Klicke 'Neues Projekt erstellen' um zu starten.\n"
-         "Du vergibst einen Namen und wählst den Speicherort.\n"
-         "Das Projekt wird als .json-Datei gespeichert.",
-         "Neues Projekt erstellen"),
+         "Klicke '+ Neues Projekt' oder Strg+N.\n\n"
+         "Im Dialog wählst du:\n"
+         "• Projektname und Beschreibung\n"
+         "• Projekttyp: 📸 Bildklassifikation\n"
+         "  oder 🎬 Videoanalyse & Anomalie\n\n"
+         "Der Typ bestimmt welche Seiten in der\n"
+         "Sidebar angezeigt werden.",
+         "Neues Projekt"),
         ("Vorhandenes Projekt öffnen",
-         "Klicke 'Projekt öffnen' um eine bestehende Projektdatei zu laden.\n"
-         "Zuletzt geöffnete Projekte findest du unter:\n"
-         "Menü → Datei → Zuletzt geöffnet",
+         "Klicke 'Projekt öffnen…' oder Strg+O um eine\n"
+         "bestehende Projektdatei (.json) zu laden.\n\n"
+         "Zuletzt geöffnete Projekte:\n"
+         "Menü → Datei → Zuletzt geöffnet\n\n"
+         "Nach dem Laden ist die Sidebar freigeschaltet\n"
+         "und zeigt die passenden Seiten für den Projekttyp.",
          "Projekt öffnen"),
-        ("Bilder direkt von der Kamera aufnehmen",
-         "Menü Datei → Kamera aufnehmen… (Strg+K)\n"
-         "Verbinde eine USB- oder IP-Kamera und nimm Einzelbilder\n"
-         "oder Burst-Serien direkt ins Projekt auf.\n\n"
-         "Zeitstempel: Systemzeit und -datum lassen sich ins\n"
-         "Live-Bild einblenden und/oder dauerhaft einbrennen.",
+        ("Dashboard-Statistiken",
+         "Die Karten zeigen auf einen Blick:\n"
+         "• Bilder gesamt / gelabelt / ungelabelt\n"
+         "• ROIs und Klassen\n"
+         "• Anzahl Trainingsläufe\n\n"
+         "Darunter: Klassenverteilung mit Balkendiagramm\n"
+         "und Warnungen bei Ungleichgewicht oder\n"
+         "zu wenig Bildern pro Klasse.",
          None),
     ],
     1: [  # Daten
         ("Daten-Seite",
-         "Hier lädst du Bilder, analysierst den Datensatz und\n"
-         "exportierst Annotationen in verschiedene Formate.\n\n"
-         "Beginne mit dem Laden deiner Bilder.",
+         "Hier importierst du Bilder oder Videos,\n"
+         "analysierst den Datensatz und exportierst\n"
+         "Annotationen in verschiedene Formate.",
          None),
         ("Bilder laden",
-         "Klicke 'Bilder laden…' und wähle einen Ordner.\n"
-         "Alle .jpg, .png, .bmp und .tiff Dateien werden\n"
-         "dem Projekt automatisch hinzugefügt.",
+         "Klicke 'Bilder laden…' → Ordner wählen.\n"
+         "Alle .jpg, .png, .bmp, .tiff im Ordner\n"
+         "werden automatisch hinzugefügt.\n\n"
+         "Alternativ: Bilder direkt ins Fenster ziehen\n"
+         "(Drag & Drop funktioniert überall in der App).",
          "Bilder laden"),
+        ("Video importieren",
+         "Klicke 'Video importieren…' um ein Video\n"
+         "(MP4, AVI, MOV, MKV, WebM) zu importieren.\n\n"
+         "Frame-Intervall einstellen:\n"
+         "• Alle 1 Frame = volle Framerate\n"
+         "• Alle 5 Frames = ca. 6 Bilder/s bei 30 fps\n\n"
+         "Die extrahierten Frames werden als PNG\n"
+         "ins Projektverzeichnis gespeichert.",
+         "Video importieren"),
         ("Datensatz analysieren",
          "Klicke 'Dataset analysieren' um zu prüfen:\n"
          "• Fehlende Dateien\n"
          "• MD5-Duplikate (identische Bilder)\n"
          "• Klassenungleichgewicht\n"
-         "• Bildformat- und Größenstatistiken",
+         "• Bildformat- und Größenstatistiken\n\n"
+         "Bei starkem Ungleichgewicht: auf der\n"
+         "Trainingsseite Klassenausgleich aktivieren.",
          "Dataset analysieren"),
-        ("Fehlende Dateien prüfen",
-         "Prüft ob alle Bilddateien noch vorhanden sind.\n"
-         "Verschobene Dateien können mit\n"
-         "'Bildpfade korrigieren…' aktualisiert werden.",
-         "Fehlende Dateien"),
         ("Annotationen exportieren",
-         "Exportiere Annotationen als:\n"
+         "Exportiere Annotationen (ROIs + Labels) als:\n"
          "• COCO JSON → Object-Detection-Frameworks\n"
-         "• YOLO TXT → Ultralytics/Darknet\n"
+         "• YOLO TXT → Ultralytics / Darknet\n"
          "• CSV → eigene Tools / Tabellenkalkulation",
          "COCO"),
     ],
-    2: [  # Labeling
+    2: [  # Labeling (nur Bildprojekte)
         ("Labeling-Seite",
-         "Hier annotierst du Bilder mit Labels und\n"
-         "zeichnest ROIs (Regions of Interest).\n\n"
-         "Links: Bildliste  |  Mitte: Editor  |  Rechts: ROI-Details",
+         "Weise Bildern Klassen zu und zeichne ROIs\n"
+         "(Regions of Interest) für die Klassifikation.\n\n"
+         "Links: Thumbnail-Liste  |  Mitte: Editor\n"
+         "Rechts: ROI-Details und Label-Zuweisung",
          None),
-        ("Bilder laden",
-         "Klicke 'Ordner laden…' um Bilder direkt\n"
-         "in den Editor zu laden.\n"
-         "Alternativ: Bilder zuerst auf der Daten-Seite hinzufügen.",
+        ("Bilder laden & Label definieren",
+         "Bilder zuerst auf der Daten-Seite laden\n"
+         "oder hier 'Ordner laden…' klicken.\n\n"
+         "Labels definieren:\n"
+         "Menü → Projekt → Labels verwalten… (Strg+L)\n"
+         "• Namen und Farbe pro Klasse festlegen\n"
+         "• Mindestens 2 Klassen für Training nötig",
          "Ordner laden"),
-        ("Bild auswählen & labeln",
-         "Klicke in der Bildliste auf ein Bild.\n"
-         "Drücke 1–9 für schnelle Label-Zuweisung,\n"
-         "oder nutze das Label-Dropdown oben rechts.\n"
-         "Navigation: N = nächstes, P = vorheriges Bild",
+        ("Bild auswählen & schnell labeln",
+         "Bild in der Thumbnail-Liste anklicken.\n\n"
+         "Schnellzuweisung: Taste 1–9 drücken\n"
+         "(Reihenfolge entspricht der Label-Liste)\n\n"
+         "Alternativ: Label-Dropdown oben rechts\n\n"
+         "Navigation:\n"
+         "N = nächstes Bild  |  P = vorheriges Bild",
          None),
-        ("ROI zeichnen – Rechteck",
-         "Klicke 'Rechteck' in der Toolbar oder drücke R.\n"
-         "Im Bild ziehen um ein Rechteck zu zeichnen.\n"
-         "Weitere Modi: E = Ellipse, G = Polygon\n"
-         "Abbrechen: Esc | Löschen: Entf",
+        ("ROI zeichnen",
+         "Werkzeug in der Toolbar wählen:\n"
+         "• R = Rechteck (häufigste Wahl)\n"
+         "• E = Ellipse\n"
+         "• G = Polygon (für unregelmäßige Formen)\n\n"
+         "Im Bild ziehen um ROI zu zeichnen.\n"
+         "Esc = Abbrechen  |  Entf = Löschen\n"
+         "Strg+C / Strg+V = Kopieren / Einfügen",
          "Rechteck"),
         ("ROI-Label zuweisen",
-         "Wähle eine ROI aus der Liste rechts.\n"
-         "Setze das Label im Dropdown darunter.\n"
-         "Klicke 'ROI-Label zuweisen' um es zu speichern.\n"
-         "Schneller: ROI auswählen + Taste 1–9",
+         "ROI in der rechten Liste auswählen.\n"
+         "Label im Dropdown darunter wählen.\n"
+         "'ROI-Label zuweisen' klicken.\n\n"
+         "Schneller: ROI auswählen + Taste 1–9\n\n"
+         "'ROIs dieses Bildes → alle Bilder' überträgt\n"
+         "die gleichen ROI-Positionen auf alle Bilder.",
          "ROI-Label zuweisen"),
-        ("ROIs auf alle Bilder übertragen",
-         "Hast du ROIs für ein typisches Bild gezeichnet?\n"
-         "Klicke 'ROIs dieses Bildes → alle Bilder' um\n"
-         "dieselben ROI-Positionen auf alle Bilder anzuwenden.",
-         "ROIs dieses Bildes"),
+        ("Segmentierungsmaske malen",
+         "Für pixelgenaue Annotation:\n"
+         "Tab '🎨 Segmentierungsmaske' im mittleren\n"
+         "Bereich wählen.\n\n"
+         "Linksklick = malen  |  Rechtsklick = löschen\n"
+         "Scroll = Zoom  |  Klasse und Pinselgröße\n"
+         "über die obere Toolbar wählen.\n\n"
+         "'Maske speichern' speichert als PNG\n"
+         "neben der Bilddatei.",
+         "Maske speichern"),
     ],
-    3: [  # Training
+    3: [  # Training (nur Bildprojekte)
         ("Training-Seite",
-         "Trainiere ein CNN-Modell mit deinen annotierten Bildern.\n"
-         "Links: Konfiguration  |  Rechts: Fortschritt & Kurven\n\n"
-         "Stelle sicher, dass du Bilder gelabelt hast.",
+         "Trainiere ein CNN-Modell auf deinen\n"
+         "annotierten Bildern.\n\n"
+         "Links: Konfiguration\n"
+         "Rechts: Live-Kurven & Metriken\n\n"
+         "Voraussetzung: Bilder müssen gelabelt sein.",
          None),
         ("Architektur wählen",
-         "Wähle im Architektur-Dropdown:\n"
-         "• ResNet-18: schnell, guter Ausgangspunkt\n"
-         "• MobileNetV2: effizient für CPU\n"
-         "• EfficientNet-B0: beste Genauigkeit\n"
-         "• SimpleCNN: schnell für erste Tests ohne GPU",
+         "Im Architektur-Dropdown:\n"
+         "• ResNet-18 — schnell, guter Startpunkt\n"
+         "• MobileNetV2 — effizient, gut für CPU\n"
+         "• EfficientNet-B0 — beste Genauigkeit\n"
+         "• SimpleCNN — kein GPU nötig, für Tests\n\n"
+         "Alle außer SimpleCNN nutzen vortrainierte\n"
+         "ImageNet-Gewichte (Transfer Learning).",
          None),
         ("Hyperparameter einstellen",
          "Empfohlene Startwerte:\n"
-         "• Epochen: 20–30\n"
+         "• Epochen: 20–50\n"
          "• Lernrate: 0.001\n"
-         "• Batch-Größe: 32 (GPU) / 8 (CPU)\n"
-         "• Gerät: 'auto' wählt automatisch GPU/MPS/CPU\n"
-         "• Early Stopping: 5 (stoppt wenn keine Verbesserung)",
+         "• Batch-Größe: 32 (GPU) / 8–16 (CPU)\n"
+         "• Gerät: 'auto' wählt GPU > MPS > CPU\n"
+         "• Early Stopping: 5 Epochen\n"
+         "• Klassenausgleich: bei ungleichen Klassen\n"
+         "  (WeightedRandomSampler) aktivieren",
          None),
         ("Training starten",
-         "Klicke 'Training starten' um zu beginnen.\n"
-         "Trainingskurven und Metriken aktualisieren sich live.\n"
-         "Das beste Modell wird automatisch gespeichert.\n"
-         "Abbruch jederzeit mit 'Training stoppen'.",
+         "Klicke 'Training starten'.\n"
+         "Kurven (Loss, Accuracy) aktualisieren live.\n"
+         "Das beste Checkpoint wird automatisch\n"
+         "gespeichert. Jederzeit abbrechen mit\n"
+         "'Training stoppen'.\n\n"
+         "Nach dem Training:\n"
+         "• HTML- oder Excel-Bericht erstellen\n"
+         "• Modell auf der Modelle-Seite verwalten",
          "Training starten"),
-        ("Berichte exportieren",
-         "Nach dem Training Bericht erstellen:\n"
-         "• 'HTML-Bericht erstellen…' → vollständiger Report\n"
-         "• 'Excel-Bericht erstellen…' → für Dokumentation\n"
-         "Enthält: Metriken, Kurven, Konfusionsmatrix",
-         "HTML-Bericht"),
-        ("SSH-Ferntraining",
-         "Für Training auf einem externen GPU-Server:\n"
-         "1. SSH-Profil in Einstellungen anlegen\n"
+        ("SSH-Ferntraining auf GPU-Server",
+         "Training auf einem externen Server:\n"
+         "1. Einstellungen → SSH-Profil anlegen\n"
+         "   (Host, Benutzer, SSH-Key-Pfad)\n"
          "2. SSH-Ferntraining-Checkbox aktivieren\n"
          "3. Profil wählen → 'Verbindung testen'\n"
-         "Grünes Signal = bereit. Dann Training starten.",
+         "4. Grünes Signal → Training starten\n\n"
+         "Der Log streamt live. Das Checkpoint\n"
+         "wird automatisch heruntergeladen.",
          "Verbindung testen"),
     ],
     4: [  # Modelle
         ("Modellbibliothek",
-         "Hier findest du alle trainierten Modelle des Projekts.\n"
-         "Vergleiche Modelle, lade sie für Inferenz\n"
-         "oder exportiere als ONNX.",
+         "Alle trainierten Modelle des Projekts\n"
+         "auf einen Blick.\n\n"
+         "Tab 📦 Modellbibliothek — aktuelle Modelle\n"
+         "Tab 📊 Run-History — alle Trainingsläufe\n"
+         "im zeitlichen Verlauf vergleichen",
          None),
-        ("Modell für Klassifikation laden",
-         "Wähle ein Modell in der Tabelle.\n"
-         "Klicke 'In Inferenz laden' um es auf der\n"
-         "Klassifikations-Seite zu verwenden.\n"
-         "Tipp: F1-Score ist bei ungleichen Klassen\n"
+        ("Modell laden & als Best markieren",
+         "Modell in der Tabelle auswählen.\n\n"
+         "'In Inferenz laden' → Modell auf der\n"
+         "Klassifikations-Seite verwenden.\n\n"
+         "'Als Best markieren' → Modell als\n"
+         "Standard für das Projekt setzen.\n\n"
+         "Tipp: F1-Score bei ungleichen Klassen\n"
          "aussagekräftiger als Accuracy.",
          "In Inferenz laden"),
-        ("ONNX exportieren",
-         "ONNX ermöglicht Einsatz in anderen Frameworks:\n"
-         "TensorRT, OpenCV DNN, ONNX Runtime.\n"
-         "Wähle ein Modell → 'Als ONNX exportieren'.",
+        ("ONNX & TorchScript exportieren",
+         "Modell für andere Systeme exportieren:\n\n"
+         "'Als ONNX exportieren' → .onnx (Opset 17)\n"
+         "Einsatz in: ONNX Runtime, OpenCV DNN,\n"
+         "TensorRT, Python, C++, C#\n\n"
+         "'Als TorchScript exportieren' → .pt\n"
+         "Einsatz in: PyTorch C++ API, mobile Apps",
          "Als ONNX exportieren"),
         ("Modelle vergleichen",
-         "Wähle mehrere Modelle (Strg+Klick) und\n"
-         "klicke 'Ausgewählte vergleichen' für eine\n"
-         "Gegenüberstellung aller Metriken.",
+         "Mehrere Modelle auswählen (Strg+Klick)\n"
+         "→ 'Ausgewählte vergleichen'\n\n"
+         "Zeigt Accuracy, F1, Architektur\n"
+         "und Best-Markierung im Überblick.\n\n"
+         "Run-History-Tab: alle Läufe nach Datum\n"
+         "sortiert mit Gerät, Epochen, Train-Acc.",
          "Ausgewählte vergleichen"),
     ],
-    5: [  # Klassifikation
+    5: [  # Klassifikation (nur Bildprojekte)
         ("Klassifikations-Seite",
-         "Klassifiziere neue Bilder mit einem trainierten Modell.\n"
-         "Ergebnis: Top-3 Vorhersagen mit Konfidenz-Farbkodierung.\n\n"
-         "Zuerst ein Modell laden.",
+         "Neue (unbekannte) Bilder mit einem\n"
+         "trainierten Modell bewerten.\n\n"
+         "Ergebnis: Top-K Vorhersagen mit\n"
+         "Konfidenz-Farbkodierung.\n\n"
+         "Modell zuerst laden.",
          None),
         ("Modell laden",
-         "Klicke 'Modell laden (.pth)' und wähle\n"
-         "eine Modelldatei aus dem Dateisystem.\n"
-         "Alternativ: Direkt von der Modelle-Seite laden\n"
-         "via 'In Inferenz laden'.",
+         "'Modell laden (.pth)' → Datei wählen\n\n"
+         "Oder direkt von der Modelle-Seite:\n"
+         "Modell auswählen → 'In Inferenz laden'\n\n"
+         "Ensemble — mehrere Modelle kombinieren:\n"
+         "'+ Modell hinzufügen' → alle geladenen\n"
+         "Modelle werden gemittelt (stabilere\n"
+         "Vorhersagen bei schwierigen Bildern).",
          "Modell laden"),
-        ("Bildordner wählen",
-         "Klicke 'Ordner…' und wähle den Ordner\n"
-         "mit den zu klassifizierenden Bildern.\n"
-         "Einzelne Bilder: 'Einzelbild klassifizieren'",
-         "Ordner…"),
-        ("Alle Bilder klassifizieren",
-         "Klicke 'Alle Bilder klassifizieren'.\n"
-         "Konfidenz-Farbkodierung:\n"
-         "Grün >90% | Gelb 70–90% | Rot <70%\n"
-         "Unsichere Vorhersagen → Niedrig-Konfidenz-Tab",
+        ("Ordner klassifizieren",
+         "1. 'Ordner…' → Ordner mit neuen Bildern\n"
+         "2. TTA (Test-Time Augmentation):\n"
+         "   Spinner auf 3–5 → mehrere augmentierte\n"
+         "   Versionen je Bild, Durchschnitt gebildet\n"
+         "   → genauere Ergebnisse bei Grenzfällen\n"
+         "3. 'Alle Bilder klassifizieren'\n\n"
+         "Farben: Grün >90% | Gelb 70–90% | Rot <70%",
          "Alle Bilder klassifizieren"),
-        ("Ergebnisse filtern & exportieren",
-         "Filtere nach Label oder Konfidenz.\n"
-         "Niedrig-Konfidenz-Tab: alle Bilder unter Schwellwert.\n"
-         "Für Excel-Export: zur Export-Seite wechseln.",
-         "Filter anwenden"),
+        ("Unsichere Vorhersagen prüfen",
+         "Tab 'Niedrige Konfidenz' zeigt alle Bilder\n"
+         "unter dem eingestellten Schwellwert.\n\n"
+         "Diese Bilder eignen sich für:\n"
+         "• Manuelle Überprüfung\n"
+         "• Nachtrainieren (Active Learning)\n"
+         "• Hinzufügen zur Trainingsdatenbank",
+         None),
+        ("Automatisch labeln",
+         "Hochkonfidente Ergebnisse direkt als\n"
+         "Projekt-Labels übernehmen:\n\n"
+         "1. Mindest-Konfidenz einstellen (z. B. 0.90)\n"
+         "2. 'Auf Projekt anwenden' klicken\n"
+         "3. Bilder mit Konfidenz ≥ Schwellwert\n"
+         "   bekommen automatisch ein Label\n\n"
+         "Danach: Labeling-Seite zur Kontrolle öffnen.",
+         "Auf Projekt anwenden"),
     ],
     6: [  # Export
         ("Excel-Export",
-         "Exportiere Klassifikationsergebnisse\n"
-         "in eine formatierte Excel-Datei.\n"
+         "Klassifikationsergebnisse in eine\n"
+         "formatierte Excel-Datei exportieren.\n"
          "Spalten sind frei konfigurierbar.",
          None),
-        ("Ergebnisse laden",
-         "Klicke 'Ergebnisse aus letzter Inferenz laden'\n"
-         "um die aktuellen Klassifikationsergebnisse\n"
-         "aus dem Projekt zu übernehmen.",
-         "Ergebnisse aus letzter"),
-        ("Zieldatei wählen",
+        ("Ergebnisse laden & Datei wählen",
+         "'Ergebnisse aus letzter Inferenz laden'\n"
+         "übernimmt die aktuellen Ergebnisse.\n\n"
+         "Dann Zieldatei wählen:\n"
          "'Datei wählen…' → vorhandene Excel-Datei\n"
-         "'Neue Datei erstellen' → neue Excel-Datei\n"
-         "Modus 'Anhängen': fügt Zeilen hinzu\n"
-         "Modus 'Überschreiben': erstellt neu",
-         "Datei wählen"),
+         "'Neue Datei erstellen' → neue Excel-Datei\n\n"
+         "Modus:\n"
+         "• Anhängen: fügt Zeilen unten an\n"
+         "• Überschreiben: erstellt neue Datei",
+         "Ergebnisse aus letzter"),
         ("Spalten konfigurieren & exportieren",
-         "Spalten in der Tabelle:\n"
-         "• Checkbox: Spalte ein/ausschalten\n"
-         "• Doppelklick: Spalte umbenennen\n\n"
-         "Dann 'Excel exportieren' klicken.",
+         "In der Spalten-Tabelle:\n"
+         "• Checkbox: Spalte ein-/ausschalten\n"
+         "• Doppelklick auf Name: umbenennen\n\n"
+         "Verfügbare Spalten z. B.:\n"
+         "Dateiname, Vorhersage, Konfidenz,\n"
+         "Top-2/3, Zeitstempel, Modellpfad\n\n"
+         "→ 'Excel exportieren' klicken.",
          "Excel exportieren"),
     ],
     7: [  # Einstellungen
         ("Einstellungen",
          "Alle Einstellungen werden automatisch\n"
-         "gespeichert und beim nächsten Start\n"
-         "wiederhergestellt.",
+         "gespeichert (QSettings) und beim\n"
+         "nächsten Start wiederhergestellt.",
          None),
         ("Theme & Darstellung",
-         "Wähle 'Dunkel' oder 'Hell'.\n"
+         "Theme: Dunkel (Standard) oder Hell\n"
          "Schriftgröße: 7–16 pt\n"
-         "Thumbnail-Größe: beeinflusst Ladezeit\n"
-         "im Labeling-Editor",
+         "Thumbnail-Größe: kleinere Werte\n"
+         "beschleunigen das Laden im Editor",
          None),
-        ("Autosave konfigurieren",
-         "Autosave-Intervall: Standard 5 Minuten.\n"
-         "Deaktivieren → manuell Strg+S nutzen.\n"
-         "Backup: erstellt .bak Datei bei jedem Speichern.",
+        ("Autosave & Backup",
+         "Autosave-Intervall: Standard 5 Minuten\n"
+         "Deaktivieren → manuell Strg+S nutzen.\n\n"
+         "Backup aktivieren: erstellt bei jedem\n"
+         "Speichern eine Sicherungskopie (.bak)\n"
+         "im Projektverzeichnis.",
+         None),
+        ("REST-API konfigurieren",
+         "Der integrierte REST-Server läuft auf\n"
+         "http://localhost:5000 (konfigurierbar).\n\n"
+         "Endpunkte:\n"
+         "GET  /api/status  → Projektstatus\n"
+         "GET  /api/labels  → Klassemliste\n"
+         "POST /api/classify → Bild bewerten\n\n"
+         "Modell auf der Klassifikations-Seite\n"
+         "laden, dann ist die API aktiv.",
          None),
         ("SSH-Profile anlegen",
-         "Klicke 'Profil hinzufügen' für einen\n"
-         "neuen SSH-Eintrag:\n"
-         "• Name, Host, Benutzername\n"
-         "• Key-Pfad (empfohlen) oder Passwort\n"
-         "• Port (Standard: 22)",
+         "'Profil hinzufügen' für SSH-Ferntraining:\n"
+         "• Name (frei wählbar)\n"
+         "• Host / IP-Adresse\n"
+         "• Benutzername\n"
+         "• SSH-Key-Pfad (empfohlen)\n"
+         "• Port (Standard: 22)\n\n"
+         "Profil auf der Trainingsseite auswählen.",
          "Profil hinzufügen"),
-        ("Einstellungen speichern",
-         "Klicke 'Einstellungen speichern' um alle\n"
-         "Änderungen dauerhaft zu übernehmen.",
-         "Einstellungen speichern"),
     ],
-    8: [  # Kamera (Live-Stream-Seite, Stack-Index 8)
-        ("Live-Kamera-Seite",
-         "Diese Seite zeigt den Live-Stream deiner Kamera\n"
-         "direkt in der Anwendung — ohne Dialog.\n\n"
-         "Ideal für schnelle Kontrolle des Kamerabilds\n"
-         "und als Sprungbrett zur Aufnahme & Anomalie-Erkennung.",
+    8: [  # Live & Anomalie (Videoprojekte, Stack-Index 8)
+        ("Live & Anomalie – Überblick",
+         "Diese Seite ist der Kern des Videoprojekts:\n"
+         "Live-Kamerabild + Anomalieerkennung\n"
+         "in einem Workflow.\n\n"
+         "Ablauf:\n"
+         "1. Kamera verbinden\n"
+         "2. Normalframes aufnehmen\n"
+         "3. Autoencoder trainieren\n"
+         "4. Live-Scoring aktivieren",
          None),
-        ("Kamera starten",
-         "Wähle den Kamera-Index (Standard: 0 für die\n"
-         "erste angeschlossene Kamera).\n\n"
-         "Klicke '▶ Kamera starten' — der Live-Stream\n"
-         "erscheint sofort im Vorschaubereich.\n"
-         "Kamera wechseln: erst stoppen, Index ändern, neu starten.",
+        ("Kamera verbinden",
+         "Kamera-Index wählen:\n"
+         "• 0 = erste USB-Kamera\n"
+         "• 1, 2 … = weitere Kameras\n\n"
+         "Klicke '▶ Kamera starten'.\n"
+         "Der Live-Stream erscheint im Vorschaubereich.\n\n"
+         "Kamera wechseln: erst stoppen,\n"
+         "dann Index ändern und neu starten.",
          "Kamera starten"),
-        ("Zeitstempel einblenden",
-         "Aktiviere 'Zeitstempel einblenden' um\n"
-         "Systemdatum und -uhrzeit live ins Bild\n"
-         "einzublenden (weißer Text, schwarzer Schatten).\n\n"
-         "Der Stempel erscheint nur in der Vorschau —\n"
-         "ob er auch gespeichert wird, steuerst du\n"
-         "im Aufnahme-Dialog.",
-         "Zeitstempel einblenden"),
-        ("Aufnahme & Anomalie-Erkennung öffnen",
-         "Klicke '⚙ Aufnahme & Anomalie-Erkennung…'\n"
-         "um den vollständigen Kamera-Dialog zu öffnen.\n\n"
-         "Dort stehen zur Verfügung:\n"
-         "• Einzelbilder & Burst-Serien aufnehmen\n"
-         "• Zeitstempel dauerhaft einbrennen\n"
-         "• Anomalie-Erkennung trainieren & nutzen",
+        ("Normalframes aufnehmen",
+         "Normalprozess vor die Kamera bringen.\n\n"
+         "'⚙ Aufnahme & Anomalie-Erkennung…' öffnen.\n\n"
+         "'Normalframes aufnehmen' starten:\n"
+         "• Mindestens 100 Frames (besser: 200–300)\n"
+         "• Kamera NICHT bewegen während Aufnahme\n"
+         "• Beleuchtung konstant halten\n\n"
+         "Kein Beispiel einer Anomalie nötig —\n"
+         "nur normale Frames!",
          "Aufnahme"),
-        ("Anomalie-Erkennung – Überblick",
-         "Die Anomalie-Erkennung arbeitet unüberwacht:\n"
-         "Du trainierst nur auf normalen Frames —\n"
-         "kein Beispielbild einer Anomalie nötig.\n\n"
-         "Schritt 1 · Normalframes sammeln\n"
-         "  Kamera auf den Normalprozess richten,\n"
-         "  'Aufnahme starten' drücken (mind. 80 Frames).\n\n"
-         "Schritt 2 · Autoencoder trainieren\n"
-         "  '→ Trainieren' drücken (Standard: 40 Epochen).\n"
-         "  Der Schwellwert wird automatisch berechnet.",
+        ("Autoencoder trainieren",
+         "'→ Trainieren' klicken (Standard: 40 Epochen).\n\n"
+         "Der Autoencoder lernt den Normalzustand.\n"
+         "Schwellwert wird automatisch berechnet:\n"
+         "Mittelwert + 2,5 × Standardabweichung\n"
+         "der Trainings-Rekonstruktionsfehler.\n\n"
+         "Nach dem Training: Schwellwert kalibrieren\n"
+         "mit '📊 Schwellwert kalibrieren…'.",
          None),
-        ("Anomalie-Erkennung – Live-Scoring",
-         "Schritt 3 · Live-Scoring aktivieren\n"
-         "  '→ Live-Scoring' einschalten.\n\n"
-         "  Grüner Rahmen = normal\n"
-         "  Roter Rahmen + Alarmband = Anomalie erkannt\n\n"
-         "Schwellwert anpassen:\n"
-         "  Bei zu vielen Fehlalarmen → Wert erhöhen.\n"
-         "  Bei übersehenen Anomalien → Wert senken.\n\n"
-         "Anomalie-Frames werden auf Wunsch automatisch\n"
-         "gespeichert und dem Projekt hinzugefügt.",
+        ("Schwellwert kalibrieren",
+         "'📊 Schwellwert kalibrieren…' öffnet ein\n"
+         "Histogramm der Score-Verteilung.\n\n"
+         "Vorschläge:\n"
+         "• µ+1σ → sehr sensitiv (wenige Abweichungen)\n"
+         "• µ+2σ → ausgewogen (Empfehlung)\n"
+         "• µ+3σ → nur grobe Abweichungen\n\n"
+         "Für Fertigungsüberwachung: mit µ+2σ\n"
+         "starten und bei Bedarf anpassen.",
          None),
-        ("Kamera verlassen",
-         "Die Kamera pausiert automatisch wenn du\n"
-         "zu einer anderen Seite wechselst.\n\n"
-         "Zurückkehren: Menü Ansicht → Kamera\n"
-         "oder Shortcut Strg+K (öffnet den Dialog).\n\n"
-         "Modell speichern:\n"
-         "Trainierte Autoencoder-Modelle können im\n"
-         "Dialog als .pth-Datei gespeichert und\n"
-         "bei der nächsten Sitzung wieder geladen werden.",
+        ("Live-Scoring aktivieren",
+         "'→ Live-Scoring' einschalten.\n\n"
+         "Anzeige im Live-Bild:\n"
+         "✅ Grüner Rahmen = Normalzustand\n"
+         "🔴 Roter Rahmen + Alarm = Abweichung\n\n"
+         "Heatmap zeigt WELCHER Bereich abweicht.\n"
+         "Bounding Box markiert die auffälligste Zone.\n\n"
+         "Optional: 'Anomalie-Frames automatisch\n"
+         "speichern' zur Dokumentation aktivieren.",
+         None),
+        ("Modell sichern & exportieren",
+         "Trainiertes Modell sichern:\n"
+         "'Modell speichern' → .pth-Datei\n"
+         "'Modell laden' → bei nächster Sitzung\n"
+         "sofort einsatzbereit ohne Neutraining.\n\n"
+         "Für Deployment in anderen Systemen:\n"
+         "'ONNX exportieren' → .onnx\n"
+         "'TorchScript exportieren' → .pt\n\n"
+         "ONNX läuft in ONNX Runtime, OpenCV,\n"
+         "TensorRT und vielen anderen Frameworks.",
          None),
     ],
 }
