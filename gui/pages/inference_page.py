@@ -41,7 +41,8 @@ class InferenceThread(QThread):
 
 
 class InferencePage(QWidget):
-    al_queue_updated = Signal()   # emitted when images are added to AL queue
+    al_queue_updated = Signal()      # emitted when images are added to AL queue
+    labels_applied   = Signal(int)   # emitted after semi-auto labeling; carries count
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -186,6 +187,39 @@ class InferencePage(QWidget):
         self._al_status.setWordWrap(True)
         av.addWidget(self._al_status)
         v.addWidget(al_box)
+
+        # Semi-automatic labeling
+        sl_box = QGroupBox("Automatisch labeln")
+        sv = QVBoxLayout(sl_box)
+        sl_info = QLabel(
+            "Überträgt Vorhersagen mit hoher Konfidenz als Labels\n"
+            "direkt ins Projekt (nur noch nicht gelabelte Bilder)."
+        )
+        sl_info.setWordWrap(True)
+        sl_info.setStyleSheet("color:#aaa;font-size:10px;")
+        sv.addWidget(sl_info)
+        sl_conf_row = QHBoxLayout()
+        sl_conf_row.addWidget(QLabel("Min. Konfidenz:"))
+        self._sl_conf_spin = QDoubleSpinBox()
+        self._sl_conf_spin.setRange(0.5, 1.0)
+        self._sl_conf_spin.setValue(0.90)
+        self._sl_conf_spin.setSingleStep(0.05)
+        self._sl_conf_spin.setDecimals(2)
+        sl_conf_row.addWidget(self._sl_conf_spin)
+        sv.addLayout(sl_conf_row)
+        self._sl_overwrite_cb = QCheckBox("Bereits gelabelte Bilder überschreiben")
+        sv.addWidget(self._sl_overwrite_cb)
+        self._sl_btn = QPushButton("Labels übernehmen")
+        self._sl_btn.setStyleSheet(
+            "background:#1565C0;color:white;font-weight:bold;padding:5px;"
+        )
+        self._sl_btn.clicked.connect(self._apply_label_suggestions)
+        sv.addWidget(self._sl_btn)
+        self._sl_status = QLabel("")
+        self._sl_status.setStyleSheet("color:#5DADE2;font-size:10px;")
+        self._sl_status.setWordWrap(True)
+        sv.addWidget(self._sl_status)
+        v.addWidget(sl_box)
 
         # Export
         eg = QGroupBox("Export")
@@ -451,6 +485,54 @@ class InferencePage(QWidget):
         self._al_status.setText("  ".join(parts))
         if added > 0:
             self.al_queue_updated.emit()
+
+    def _apply_label_suggestions(self) -> None:
+        if not self.project:
+            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            return
+        if not self._all_results:
+            self._sl_status.setText("Bitte zuerst Bilder klassifizieren.")
+            return
+
+        min_conf = self._sl_conf_spin.value()
+        overwrite = self._sl_overwrite_cb.isChecked()
+        project_labels = set(self.project.labels.keys())
+
+        applied = skipped_label = skipped_conf = skipped_exists = 0
+        for r in self._all_results:
+            if r.get("error"):
+                continue
+            conf = r.get("confidence", 0.0)
+            if conf < min_conf:
+                skipped_conf += 1
+                continue
+            pred = r.get("predicted_label", "")
+            if pred not in project_labels:
+                skipped_label += 1
+                continue
+            path = r.get("path", "")
+            if not os.path.isfile(path):
+                continue
+            already_labeled = bool(self.project.image_labels.get(path))
+            if already_labeled and not overwrite:
+                skipped_exists += 1
+                continue
+            self.project.image_labels[path] = pred
+            applied += 1
+
+        if applied > 0:
+            self.project.save()
+
+        parts = [f"{applied} Labels übernommen"]
+        if skipped_conf:
+            parts.append(f"{skipped_conf} unter Schwelle")
+        if skipped_exists:
+            parts.append(f"{skipped_exists} bereits gelabelt")
+        if skipped_label:
+            parts.append(f"{skipped_label} unbekannte Labels")
+        self._sl_status.setText("  |  ".join(parts))
+        if applied > 0:
+            self.labels_applied.emit(applied)
 
     def _show_gradcam(self) -> None:
         row = self.table.currentRow()

@@ -190,6 +190,13 @@ class TrainingPage(QWidget):
         self.use_rois_cb.setChecked(True)
         form.addRow("", self.use_rois_cb)
 
+        self.class_balance_cb = QCheckBox("Klassenausgleich (WeightedSampler)")
+        self.class_balance_cb.setToolTip(
+            "Gleicht ungleichmäßige Klassenverteilungen aus, indem unterrepräsentierte "
+            "Klassen häufiger gesampelt werden."
+        )
+        form.addRow("", self.class_balance_cb)
+
         self.save_dir_label = QLabel("(Projekt öffnen)")
         self.save_dir_label.setWordWrap(True)
         form.addRow("Speicherort:", self.save_dir_label)
@@ -387,6 +394,7 @@ class TrainingPage(QWidget):
             "val_split": self.val_split.value(),
             "test_split": max(0.0, 1.0 - self.train_split.value() - self.val_split.value()),
             "use_rois": self.use_rois_cb.isChecked(),
+            "class_balance": self.class_balance_cb.isChecked(),
             "augmentation": {
                 "flip": self.aug_flip.isChecked(),
                 "rotation": self.aug_rotation.isChecked(),

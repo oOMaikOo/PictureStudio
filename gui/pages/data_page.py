@@ -70,6 +70,12 @@ class DataPage(QWidget):
         cam_btn.clicked.connect(self._open_camera_dialog)
         cv.addWidget(cam_btn)
 
+        video_btn = QPushButton("Video importieren…")
+        video_btn.setStyleSheet("background:#D35400;color:white;padding:8px;font-weight:bold;")
+        video_btn.setToolTip("Frames aus MP4/AVI/MOV extrahieren und zum Projekt hinzufügen")
+        video_btn.clicked.connect(self._import_video)
+        cv.addWidget(video_btn)
+
         analyze_btn = QPushButton("Dataset analysieren")
         analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
         analyze_btn.clicked.connect(self._run_analysis)
@@ -132,6 +138,31 @@ class DataPage(QWidget):
         self._warn_text.clear()
 
     # ------------------------------------------------------------------ image loading
+
+    def _import_video(self) -> None:
+        if not self._check_project():
+            return
+        out_dir = os.path.join(
+            os.path.dirname(self.project.project_path or ""),
+            "video_frames"
+        ) if self.project.project_path else os.path.expanduser("~")
+
+        from gui.video_import_dialog import VideoImportDialog
+        dlg = VideoImportDialog(default_out_dir=out_dir, parent=self)
+        if dlg.exec() and dlg.extracted_paths:
+            added = 0
+            for path in dlg.extracted_paths:
+                if self.project.add_image(path):
+                    added += 1
+            if added and dlg.extracted_paths:
+                self.project.config.image_dir = os.path.dirname(dlg.extracted_paths[0])
+            QMessageBox.information(
+                self, "Video importiert",
+                f"{added} Frames zum Projekt hinzugefügt."
+                + (f"\n{len(dlg.extracted_paths) - added} bereits vorhanden."
+                   if added < len(dlg.extracted_paths) else "")
+            )
+            self.images_loaded.emit(added)
 
     def _open_camera_dialog(self) -> None:
         if not self._check_project():

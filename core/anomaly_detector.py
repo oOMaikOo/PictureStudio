@@ -193,6 +193,20 @@ class AnomalyDetector:
         heatmap_full = cv2.resize(heatmap, (w, h), interpolation=cv2.INTER_LINEAR)
         overlay = cv2.addWeighted(frame, 0.55, heatmap_full, 0.45, 0)
 
+        # Bounding box around the hottest anomaly region (top 15% of pixels)
+        if peak > 0:
+            thresh = float(np.percentile(diff, 85))
+            mask = ((diff > thresh) * 255).astype(np.uint8)
+            mask_full = cv2.resize(mask, (w, h), interpolation=cv2.INTER_NEAREST)
+            contours, _ = cv2.findContours(mask_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                bx, by, bw, bh = cv2.boundingRect(max(contours, key=cv2.contourArea))
+                color = (0, 0, 255) if score > self._threshold else (0, 200, 255)
+                cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), color, 2)
+                label = "ANOMALIE" if score > self._threshold else "Hotspot"
+                cv2.putText(overlay, label, (bx, max(by - 6, 12)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1, cv2.LINE_AA)
+
         return score, rec_bgr, overlay
 
     # ------------------------------------------------------------------ threshold

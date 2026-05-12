@@ -121,6 +121,7 @@ class MainWindow(QMainWindow):
 
         # Active Learning: inference → labeling queue → retrain
         self.inference_page.al_queue_updated.connect(self._on_al_queue_updated)
+        self.inference_page.labels_applied.connect(self._on_labels_applied)
         self.labeling_page.al_retrain_requested.connect(
             lambda: self._switch_page(3)  # 3 = Training page
         )
@@ -281,6 +282,17 @@ class MainWindow(QMainWindow):
         self._status_label.setText(
             f"AL-Queue aktualisiert — {n} Bilder warten auf Labeling. "
             "Wechsle zum Labeling-Reiter."
+        )
+
+    def _on_labels_applied(self, count: int) -> None:
+        """Refresh labeling page after semi-automatic labeling."""
+        if hasattr(self.labeling_page, "_refresh_thumb_list"):
+            self.labeling_page._refresh_thumb_list()
+        if hasattr(self.labeling_page, "_update_stats"):
+            self.labeling_page._update_stats()
+        self._status_label.setText(
+            f"✓ {count} Label(s) automatisch übernommen. "
+            "Wechsle zum Labeling-Reiter zur Kontrolle."
         )
 
     # ------------------------------------------------------------------ project actions

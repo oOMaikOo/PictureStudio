@@ -229,7 +229,20 @@ class TrainingWorker:
         )
 
         batch_size = self.cfg.get("batch_size", 16)
-        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+
+        # Weighted sampler for class imbalance (single-label only)
+        if self.cfg.get("class_balance", False) and not is_ml and hasattr(train_ds, "samples"):
+            from torch.utils.data import WeightedRandomSampler
+            class_indices = [s[2] for s in train_ds.samples]
+            counts = torch.bincount(torch.tensor(class_indices, dtype=torch.long))
+            weights = 1.0 / counts.float().clamp(min=1)
+            sample_weights = weights[torch.tensor(class_indices, dtype=torch.long)]
+            sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
+            train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=0)
+            self._emit_log(f"Klassenausgleich aktiv: {dict(zip(class_names, counts.tolist()))}")
+        else:
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+
         val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
         test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
