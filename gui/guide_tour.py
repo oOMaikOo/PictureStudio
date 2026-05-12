@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, QTimer, QPoint, QRect
 from PySide6.QtGui import QFont, QColor
 
 # ---------------------------------------------------------------------------
-# Tour steps per page index (0–7)
+# Tour steps per page index (0–7, plus 8 = Kamera)
 # Each step: (title, description, button_text_to_highlight | None)
 # button_text can be a partial match
 # ---------------------------------------------------------------------------
@@ -250,6 +250,69 @@ TOUR_STEPS = {
          "Klicke 'Einstellungen speichern' um alle\n"
          "Änderungen dauerhaft zu übernehmen.",
          "Einstellungen speichern"),
+    ],
+    8: [  # Kamera (Live-Stream-Seite, Stack-Index 8)
+        ("Live-Kamera-Seite",
+         "Diese Seite zeigt den Live-Stream deiner Kamera\n"
+         "direkt in der Anwendung — ohne Dialog.\n\n"
+         "Ideal für schnelle Kontrolle des Kamerabilds\n"
+         "und als Sprungbrett zur Aufnahme & Anomalie-Erkennung.",
+         None),
+        ("Kamera starten",
+         "Wähle den Kamera-Index (Standard: 0 für die\n"
+         "erste angeschlossene Kamera).\n\n"
+         "Klicke '▶ Kamera starten' — der Live-Stream\n"
+         "erscheint sofort im Vorschaubereich.\n"
+         "Kamera wechseln: erst stoppen, Index ändern, neu starten.",
+         "Kamera starten"),
+        ("Zeitstempel einblenden",
+         "Aktiviere 'Zeitstempel einblenden' um\n"
+         "Systemdatum und -uhrzeit live ins Bild\n"
+         "einzublenden (weißer Text, schwarzer Schatten).\n\n"
+         "Der Stempel erscheint nur in der Vorschau —\n"
+         "ob er auch gespeichert wird, steuerst du\n"
+         "im Aufnahme-Dialog.",
+         "Zeitstempel einblenden"),
+        ("Aufnahme & Anomalie-Erkennung öffnen",
+         "Klicke '⚙ Aufnahme & Anomalie-Erkennung…'\n"
+         "um den vollständigen Kamera-Dialog zu öffnen.\n\n"
+         "Dort stehen zur Verfügung:\n"
+         "• Einzelbilder & Burst-Serien aufnehmen\n"
+         "• Zeitstempel dauerhaft einbrennen\n"
+         "• Anomalie-Erkennung trainieren & nutzen",
+         "Aufnahme"),
+        ("Anomalie-Erkennung – Überblick",
+         "Die Anomalie-Erkennung arbeitet unüberwacht:\n"
+         "Du trainierst nur auf normalen Frames —\n"
+         "kein Beispielbild einer Anomalie nötig.\n\n"
+         "Schritt 1 · Normalframes sammeln\n"
+         "  Kamera auf den Normalprozess richten,\n"
+         "  'Aufnahme starten' drücken (mind. 80 Frames).\n\n"
+         "Schritt 2 · Autoencoder trainieren\n"
+         "  '→ Trainieren' drücken (Standard: 40 Epochen).\n"
+         "  Der Schwellwert wird automatisch berechnet.",
+         None),
+        ("Anomalie-Erkennung – Live-Scoring",
+         "Schritt 3 · Live-Scoring aktivieren\n"
+         "  '→ Live-Scoring' einschalten.\n\n"
+         "  Grüner Rahmen = normal\n"
+         "  Roter Rahmen + Alarmband = Anomalie erkannt\n\n"
+         "Schwellwert anpassen:\n"
+         "  Bei zu vielen Fehlalarmen → Wert erhöhen.\n"
+         "  Bei übersehenen Anomalien → Wert senken.\n\n"
+         "Anomalie-Frames werden auf Wunsch automatisch\n"
+         "gespeichert und dem Projekt hinzugefügt.",
+         None),
+        ("Kamera verlassen",
+         "Die Kamera pausiert automatisch wenn du\n"
+         "zu einer anderen Seite wechselst.\n\n"
+         "Zurückkehren: Menü Ansicht → Kamera\n"
+         "oder Shortcut Strg+K (öffnet den Dialog).\n\n"
+         "Modell speichern:\n"
+         "Trainierte Autoencoder-Modelle können im\n"
+         "Dialog als .pth-Datei gespeichert und\n"
+         "bei der nächsten Sitzung wieder geladen werden.",
+         None),
     ],
 }
 
