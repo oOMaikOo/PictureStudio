@@ -16,8 +16,8 @@ from PySide6.QtWidgets import (
     QMessageBox, QTabWidget, QWidget, QProgressBar, QCheckBox,
     QScrollArea,
 )
-from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
-from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QEvent, QRect, QPoint
+from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPainter, QPen, QColor
 
 from core.camera import list_usb_cameras, frame_to_qimage, CameraFrameThread
 from utils.logging_utils import get_logger
@@ -88,6 +88,14 @@ class CameraCaptureDialog(QDialog):
         self._ae_collect_remaining = 0
         self._ae_train_thread: Optional[_AETrainThread] = None
         self._ae_score_counter = 0     # skip counter so we score every 3rd frame
+        self._ae_score_streak = 0      # consecutive anomaly frames (for smoothing)
+
+        # ROI state (normalized 0–1 relative to frame): (x1, y1, x2, y2) or None
+        self._roi: Optional[tuple[float, float, float, float]] = None
+        self._roi_drawing = False
+        self._roi_start: Optional[QPoint] = None   # in label coords
+        self._roi_end: Optional[QPoint] = None     # in label coords (live drag)
+        self._frame_shape: tuple[int, int] = (480, 640)  # (h, w) of last frame
 
         self._build_ui()
         self._scan_usb_cameras()
@@ -251,6 +259,8 @@ class CameraCaptureDialog(QDialog):
         self._preview_lbl.setStyleSheet(
             "background:#111;color:#555;font-size:18px;border:3px solid #333;"
         )
+        self._preview_lbl.setMouseTracking(True)
+        self._preview_lbl.installEventFilter(self)
         rv.addWidget(self._preview_lbl, stretch=1)
 
         self._frame_info = QLabel("")
@@ -289,6 +299,30 @@ class CameraCaptureDialog(QDialog):
             "Hoher Rekonstruktionsfehler = unbekanntes / anomales Ereignis."
         )
         g.addWidget(self._ae_enabled_cb)
+
+        # ── ROI ──────────────────────────────────────────────────────────────
+        roi_grp = QGroupBox("0 · Analysebereich (ROI) – optional")
+        rl = QVBoxLayout(roi_grp)
+        roi_hint = QLabel("Im Vorschaubild einen Bereich aufziehen.\n"
+                          "Nur dieser Bereich fließt in Training & Scoring ein.")
+        roi_hint.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        roi_hint.setWordWrap(True)
+        rl.addWidget(roi_hint)
+        roi_btn_row = QHBoxLayout()
+        self._roi_draw_btn = QPushButton("ROI aufziehen")
+        self._roi_draw_btn.setCheckable(True)
+        self._roi_draw_btn.setToolTip("Klicken, dann im Vorschaubild Rechteck ziehen")
+        self._roi_draw_btn.toggled.connect(self._on_roi_draw_toggled)
+        roi_btn_row.addWidget(self._roi_draw_btn)
+        self._roi_clear_btn = QPushButton("ROI löschen")
+        self._roi_clear_btn.setEnabled(False)
+        self._roi_clear_btn.clicked.connect(self._clear_roi)
+        roi_btn_row.addWidget(self._roi_clear_btn)
+        rl.addLayout(roi_btn_row)
+        self._roi_lbl = QLabel("Kein ROI – ganzes Bild wird analysiert")
+        self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        rl.addWidget(self._roi_lbl)
+        g.addWidget(roi_grp)
 
         # ── Collection ───────────────────────────────────────────────────────
         coll_grp = QGroupBox("1 · Normalframes aufnehmen")
@@ -349,6 +383,21 @@ class CameraCaptureDialog(QDialog):
         # ── Live scoring ─────────────────────────────────────────────────────
         score_grp = QGroupBox("3 · Live-Erkennung")
         sl = QVBoxLayout(score_grp)
+
+        smooth_row = QHBoxLayout()
+        smooth_row.addWidget(QLabel("Glättung:"))
+        self._ae_smooth_n = QSpinBox()
+        self._ae_smooth_n.setRange(1, 20)
+        self._ae_smooth_n.setValue(5)
+        self._ae_smooth_n.setSuffix(" Frames")
+        self._ae_smooth_n.setToolTip(
+            "Alarm erst nach N aufeinanderfolgenden Frames über dem Schwellwert.\n"
+            "Verhindert Fehlalarme durch kurze Erschütterungen oder Kamerawackler.\n"
+            "1 = sofortiger Alarm, 5 = robuster gegen Einzelstörer."
+        )
+        smooth_row.addWidget(self._ae_smooth_n)
+        smooth_row.addStretch()
+        sl.addLayout(smooth_row)
 
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Schwellwert:"))
@@ -462,10 +511,14 @@ class CameraCaptureDialog(QDialog):
     def _on_frame(self, frame: np.ndarray) -> None:
         self._current_frame = frame
         h, w = frame.shape[:2]
+        self._frame_shape = (h, w)
+
+        # Region used for anomaly detection (full frame or ROI crop)
+        analysis_frame = self._crop_roi(frame)
 
         # ── Frame collection for autoencoder training ─────────────────────────
         if self._ae_collecting and self._ae_collect_remaining > 0:
-            self._detector.collect_frame(frame)
+            self._detector.collect_frame(analysis_frame)
             self._ae_collect_remaining -= 1
             n = self._detector.n_collected()
             self._ae_collect_bar.setValue(n)
@@ -481,20 +534,28 @@ class CameraCaptureDialog(QDialog):
             self._ae_score_counter += 1
             if self._ae_score_counter >= 3:
                 self._ae_score_counter = 0
-                score, is_anomaly = self._detector.is_anomaly(frame)
-                self._update_score_display(score, is_anomaly)
-                if is_anomaly and self._ae_save_anomaly_cb.isChecked():
+                score, is_anomaly = self._detector.is_anomaly(analysis_frame)
+                # Score smoothing: alarm only after N consecutive anomaly frames
+                if is_anomaly:
+                    self._ae_score_streak += 1
+                else:
+                    self._ae_score_streak = 0
+                smooth_n = self._ae_smooth_n.value()
+                smoothed_alarm = self._ae_score_streak >= smooth_n
+                self._update_score_display(score, smoothed_alarm)
+                if smoothed_alarm and self._ae_save_anomaly_cb.isChecked():
                     path = self._save_frame(frame)
                     if path:
                         self._add_to_list(path)
         else:
-            # Reset display when detection is disabled
             if not self._ae_enabled_cb.isChecked():
+                self._ae_score_streak = 0
                 self._set_preview_border_normal()
                 self._alarm_banner.setVisible(False)
 
-        # ── Display ───────────────────────────────────────────────────────────
-        display = self._apply_timestamp(frame) if self._ts_preview_cb.isChecked() else frame
+        # ── Display (timestamp + ROI overlay) ────────────────────────────────
+        display = self._apply_timestamp(frame) if self._ts_preview_cb.isChecked() else frame.copy()
+        display = self._draw_roi_overlay(display)
         pix = QPixmap.fromImage(frame_to_qimage(display))
         pix = pix.scaled(self._preview_lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self._preview_lbl.setPixmap(pix)
@@ -757,6 +818,120 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.blockSignals(False)
         self._ae_train_lbl.setText(f"Modell geladen | Schwellwert: {self._detector.threshold:.5f}")
         self._ae_score_lbl.setText("Score: – (Modell geladen, bereit)")
+
+    # ================================================================== ROI
+
+    def _on_roi_draw_toggled(self, checked: bool) -> None:
+        if checked:
+            self._roi_drawing = True
+            self._preview_lbl.setCursor(Qt.CrossCursor)
+            self._roi_draw_btn.setText("ROI aufziehen … (Klick + Ziehen)")
+        else:
+            self._roi_drawing = False
+            self._roi_start = None
+            self._roi_end = None
+            self._preview_lbl.setCursor(Qt.ArrowCursor)
+            self._roi_draw_btn.setText("ROI aufziehen")
+
+    def _clear_roi(self) -> None:
+        self._roi = None
+        self._roi_start = None
+        self._roi_end = None
+        self._roi_clear_btn.setEnabled(False)
+        self._roi_lbl.setText("Kein ROI – ganzes Bild wird analysiert")
+        self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+
+    def _crop_roi(self, frame: np.ndarray) -> np.ndarray:
+        """Return the ROI crop of frame, or the full frame if no ROI is set."""
+        if self._roi is None:
+            return frame
+        h, w = frame.shape[:2]
+        x1 = int(self._roi[0] * w)
+        y1 = int(self._roi[1] * h)
+        x2 = int(self._roi[2] * w)
+        y2 = int(self._roi[3] * h)
+        x1, x2 = max(0, min(x1, x2)), min(w, max(x1, x2))
+        y1, y2 = max(0, min(y1, y2)), min(h, max(y1, y2))
+        if x2 - x1 < 4 or y2 - y1 < 4:
+            return frame
+        return frame[y1:y2, x1:x2]
+
+    def _draw_roi_overlay(self, frame: np.ndarray) -> np.ndarray:
+        """Draw the ROI rectangle (and live drag preview) onto a display copy."""
+        out = frame if frame.flags['WRITEABLE'] else frame.copy()
+        h, w = out.shape[:2]
+
+        # Committed ROI
+        if self._roi is not None:
+            x1 = int(self._roi[0] * w)
+            y1 = int(self._roi[1] * h)
+            x2 = int(self._roi[2] * w)
+            y2 = int(self._roi[3] * h)
+            cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 255), 2)
+            cv2.putText(out, "ROI", (x1 + 4, y1 + 18),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 1, cv2.LINE_AA)
+
+        # Live drag preview
+        if self._roi_drawing and self._roi_start and self._roi_end:
+            p1 = self._label_to_frame(self._roi_start, w, h)
+            p2 = self._label_to_frame(self._roi_end, w, h)
+            if p1 and p2:
+                cv2.rectangle(out, p1, p2, (255, 200, 0), 2)
+
+        return out
+
+    def _label_to_frame(self, lpos: QPoint, fw: int, fh: int) -> Optional[tuple[int, int]]:
+        """Convert a label-pixel position to frame-pixel coordinates."""
+        lw = self._preview_lbl.width()
+        lh = self._preview_lbl.height()
+        if lw <= 0 or lh <= 0 or fw <= 0 or fh <= 0:
+            return None
+        scale = min(lw / fw, lh / fh)
+        img_w = fw * scale
+        img_h = fh * scale
+        ox = (lw - img_w) / 2
+        oy = (lh - img_h) / 2
+        fx = (lpos.x() - ox) / scale
+        fy = (lpos.y() - oy) / scale
+        return (int(max(0, min(fw - 1, fx))), int(max(0, min(fh - 1, fy))))
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._preview_lbl and self._roi_drawing:
+            t = event.type()
+            if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                self._roi_start = event.pos()
+                self._roi_end = event.pos()
+                return True
+            if t == QEvent.MouseMove and self._roi_start:
+                self._roi_end = event.pos()
+                return True
+            if t == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton and self._roi_start:
+                self._roi_end = event.pos()
+                self._finalise_roi()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _finalise_roi(self) -> None:
+        if not (self._roi_start and self._roi_end):
+            return
+        h, w = self._frame_shape
+        p1 = self._label_to_frame(self._roi_start, w, h)
+        p2 = self._label_to_frame(self._roi_end, w, h)
+        if not (p1 and p2):
+            return
+        x1n = min(p1[0], p2[0]) / w
+        y1n = min(p1[1], p2[1]) / h
+        x2n = max(p1[0], p2[0]) / w
+        y2n = max(p1[1], p2[1]) / h
+        if (x2n - x1n) < 0.02 or (y2n - y1n) < 0.02:
+            return   # too small, ignore
+        self._roi = (x1n, y1n, x2n, y2n)
+        self._roi_draw_btn.setChecked(False)   # exits draw mode via toggled signal
+        self._roi_clear_btn.setEnabled(True)
+        pw = int((x2n - x1n) * 100)
+        ph = int((y2n - y1n) * 100)
+        self._roi_lbl.setText(f"ROI: {pw}% × {ph}% des Bildes")
+        self._roi_lbl.setStyleSheet("color:#00E5FF; font-size:10px; font-weight:bold;")
 
     # ================================================================== CLEANUP
 
