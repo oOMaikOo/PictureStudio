@@ -158,6 +158,43 @@ class AnomalyDetector:
         s = self.score(frame)
         return s, s > self._threshold
 
+    def score_detailed(
+        self, frame: np.ndarray
+    ) -> tuple[float, np.ndarray, np.ndarray]:
+        """
+        Return (score, reconstruction_bgr, heatmap_overlay_bgr).
+
+        reconstruction_bgr: model's 128×128 reconstruction in BGR.
+        heatmap_overlay_bgr: per-pixel error heatmap blended onto original frame.
+        Falls back to (0.0, frame copy, frame copy) when not trained.
+        """
+        if not self._trained:
+            fc = frame.copy()
+            return 0.0, fc, fc
+
+        t = self._preprocess(frame).unsqueeze(0).to(self._device)
+        with torch.no_grad():
+            out = self._model(t)
+
+        score = float(((out - t) ** 2).mean().item())
+
+        # Reconstruction → BGR uint8
+        rec_np = out.squeeze(0).cpu().permute(1, 2, 0).numpy()
+        rec_np = (rec_np * 255).clip(0, 255).astype(np.uint8)
+        rec_bgr = cv2.cvtColor(rec_np, cv2.COLOR_RGB2BGR)
+
+        # Heatmap: channel-averaged MSE per pixel (128×128 → original size)
+        diff = ((out - t) ** 2).mean(dim=1).squeeze(0).cpu().numpy()
+        peak = diff.max()
+        diff_u8 = ((diff / peak) * 255).clip(0, 255).astype(np.uint8) if peak > 0 \
+                  else np.zeros_like(diff, dtype=np.uint8)
+        heatmap = cv2.applyColorMap(diff_u8, cv2.COLORMAP_JET)
+        h, w = frame.shape[:2]
+        heatmap_full = cv2.resize(heatmap, (w, h), interpolation=cv2.INTER_LINEAR)
+        overlay = cv2.addWeighted(frame, 0.55, heatmap_full, 0.45, 0)
+
+        return score, rec_bgr, overlay
+
     # ------------------------------------------------------------------ threshold
 
     @property

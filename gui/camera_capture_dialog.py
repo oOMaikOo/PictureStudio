@@ -89,6 +89,8 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_thread: Optional[_AETrainThread] = None
         self._ae_score_counter = 0     # skip counter so we score every 3rd frame
         self._ae_score_streak = 0      # consecutive anomaly frames (for smoothing)
+        self._recon_frame: Optional[np.ndarray] = None   # last reconstruction BGR
+        self._last_heatmap: Optional[np.ndarray] = None  # last heatmap overlay BGR
 
         # ROI state (normalized 0–1 relative to frame): (x1, y1, x2, y2) or None
         self._roi: Optional[tuple[float, float, float, float]] = None
@@ -253,6 +255,16 @@ class CameraCaptureDialog(QDialog):
         self._alarm_banner.setVisible(False)
         rv.addWidget(self._alarm_banner)
 
+        self._preview_tabs = QTabWidget()
+        self._preview_tabs.setStyleSheet(
+            "QTabBar::tab { padding: 6px 16px; font-weight: bold; }"
+            "QTabBar::tab:selected { color: #5DADE2; }"
+        )
+
+        # Tab 0 – Live (Kamerabild + optionaler Heatmap-Overlay)
+        live_w = QWidget()
+        live_l = QVBoxLayout(live_w)
+        live_l.setContentsMargins(0, 0, 0, 0)
         self._preview_lbl = QLabel("Kein Signal")
         self._preview_lbl.setAlignment(Qt.AlignCenter)
         self._preview_lbl.setMinimumSize(_PREVIEW_W, _PREVIEW_H)
@@ -261,7 +273,27 @@ class CameraCaptureDialog(QDialog):
         )
         self._preview_lbl.setMouseTracking(True)
         self._preview_lbl.installEventFilter(self)
-        rv.addWidget(self._preview_lbl, stretch=1)
+        live_l.addWidget(self._preview_lbl)
+        self._preview_tabs.addTab(live_w, "📷  Live")
+
+        # Tab 1 – Modell (Rekonstruktion des Autoencoders)
+        model_w = QWidget()
+        model_l = QVBoxLayout(model_w)
+        model_l.setContentsMargins(0, 0, 0, 0)
+        self._recon_lbl = QLabel("Modell noch nicht trainiert.\nNach dem Training erscheint hier die Rekonstruktion.")
+        self._recon_lbl.setAlignment(Qt.AlignCenter)
+        self._recon_lbl.setMinimumSize(_PREVIEW_W, _PREVIEW_H)
+        self._recon_lbl.setStyleSheet(
+            "background:#0D1B2A;color:#555;font-size:13px;border:3px solid #1A3A5C;"
+        )
+        model_l.addWidget(self._recon_lbl)
+        self._recon_info = QLabel("")
+        self._recon_info.setAlignment(Qt.AlignCenter)
+        self._recon_info.setStyleSheet("color:#7F8C8D; font-size:10px; padding:2px;")
+        model_l.addWidget(self._recon_info)
+        self._preview_tabs.addTab(model_w, "🔮  Modell")
+
+        rv.addWidget(self._preview_tabs, stretch=1)
 
         self._frame_info = QLabel("")
         self._frame_info.setAlignment(Qt.AlignRight)
@@ -293,12 +325,20 @@ class CameraCaptureDialog(QDialog):
         g = QVBoxLayout(grp)
         g.setSpacing(5)
 
-        self._ae_enabled_cb = QCheckBox("Aktiv (Live-Scoring nach Training)")
-        self._ae_enabled_cb.setToolTip(
-            "Bewertet jeden Frame mit dem trainierten Autoencoder.\n"
-            "Hoher Rekonstruktionsfehler = unbekanntes / anomales Ereignis."
+        self._ae_scoring_btn = QPushButton("▶  Live-Scoring starten")
+        self._ae_scoring_btn.setCheckable(True)
+        self._ae_scoring_btn.setEnabled(False)
+        self._ae_scoring_btn.setFixedHeight(36)
+        self._ae_scoring_btn.setStyleSheet(
+            "QPushButton{background:#555;color:#aaa;border-radius:5px;"
+            "padding:0 10px;font-weight:bold;}"
+            "QPushButton:enabled{background:#27AE60;color:white;}"
+            "QPushButton:enabled:hover{background:#1E8449;}"
+            "QPushButton:enabled:checked{background:#C0392B;}"
+            "QPushButton:enabled:checked:hover{background:#A93226;}"
         )
-        g.addWidget(self._ae_enabled_cb)
+        self._ae_scoring_btn.toggled.connect(self._on_scoring_toggled)
+        g.addWidget(self._ae_scoring_btn)
 
         # ── ROI ──────────────────────────────────────────────────────────────
         roi_grp = QGroupBox("0 · Analysebereich (ROI) – optional")
@@ -383,6 +423,14 @@ class CameraCaptureDialog(QDialog):
         # ── Live scoring ─────────────────────────────────────────────────────
         score_grp = QGroupBox("3 · Live-Erkennung")
         sl = QVBoxLayout(score_grp)
+
+        self._ae_heatmap_cb = QCheckBox("Heatmap-Overlay (zeigt anomale Bereiche)")
+        self._ae_heatmap_cb.setToolTip(
+            "Überlagert das Live-Bild mit einer Wärmekarte der Rekonstruktionsfehler.\n"
+            "Rot = hoher Fehler = potenzielle Anomalie.\n"
+            "Wechsle zum Tab '🔮 Modell' um die Rekonstruktion zu sehen."
+        )
+        sl.addWidget(self._ae_heatmap_cb)
 
         smooth_row = QHBoxLayout()
         smooth_row.addWidget(QLabel("Glättung:"))
@@ -530,10 +578,11 @@ class CameraCaptureDialog(QDialog):
                 self._ae_train_btn.setEnabled(True)
 
         # ── Anomaly scoring (every 3rd frame to reduce CPU load) ──────────────
-        if self._ae_enabled_cb.isChecked() and self._detector and self._detector.trained:
+        if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained:
             self._ae_score_counter += 1
             if self._ae_score_counter % 3 == 0:
-                score, is_anomaly = self._detector.is_anomaly(analysis_frame)
+                score, recon_bgr, heatmap_overlay = self._detector.score_detailed(analysis_frame)
+                is_anomaly = score > self._detector.threshold
                 # Score smoothing: alarm only after N consecutive anomaly frames
                 if is_anomaly:
                     self._ae_score_streak += 1
@@ -546,14 +595,24 @@ class CameraCaptureDialog(QDialog):
                     path = self._save_frame(frame)
                     if path:
                         self._add_to_list(path)
+                # Update reconstruction tab
+                self._recon_frame = recon_bgr
+                self._update_recon_tab(recon_bgr, score)
+                # Store heatmap for display step below
+                self._last_heatmap = heatmap_overlay
         else:
-            if not self._ae_enabled_cb.isChecked():
+            if not self._ae_scoring_btn.isChecked():
                 self._ae_score_streak = 0
                 self._set_preview_border_normal()
                 self._alarm_banner.setVisible(False)
+            self._last_heatmap = None
 
-        # ── Display (timestamp + ROI overlay) ────────────────────────────────
+        # ── Display (timestamp + ROI overlay + optional heatmap) ─────────────
         display = self._apply_timestamp(frame) if self._ts_preview_cb.isChecked() else frame.copy()
+        if self._ae_heatmap_cb.isChecked() and self._last_heatmap is not None:
+            display = self._last_heatmap.copy()
+            if self._ts_preview_cb.isChecked():
+                display = self._apply_timestamp(display)
         display = self._draw_roi_overlay(display)
         pix = QPixmap.fromImage(frame_to_qimage(display))
         pix = pix.scaled(self._preview_lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -755,13 +814,15 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.blockSignals(True)
         self._ae_threshold_spin.setValue(threshold)
         self._ae_threshold_spin.blockSignals(False)
-        self._ae_train_lbl.setText(
-            f"Fertig! Schwellwert: {threshold:.5f}"
-        )
+        self._ae_train_lbl.setText(f"Fertig! Schwellwert: {threshold:.5f}")
         self._ae_score_lbl.setText("Score: – (bereit)")
         self._ae_score_lbl.setStyleSheet(
             "font-weight:bold;font-size:12px;padding:5px;"
             "border-radius:5px;background:#1A252F;color:#58D68D;"
+        )
+        self._ae_scoring_btn.setEnabled(True)
+        self._recon_lbl.setText(
+            "Modell trainiert — Live-Scoring starten\num die Rekonstruktion zu sehen."
         )
         log.info(f"Autoencoder trained, threshold={threshold:.5f}")
 
@@ -806,6 +867,45 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.blockSignals(False)
         self._ae_train_lbl.setText(f"Modell geladen | Schwellwert: {self._detector.threshold:.5f}")
         self._ae_score_lbl.setText("Score: – (Modell geladen, bereit)")
+        self._ae_scoring_btn.setEnabled(True)
+        self._recon_lbl.setText(
+            "Modell geladen — Live-Scoring starten\num die Rekonstruktion zu sehen."
+        )
+
+    # ================================================================== SCORING TOGGLE
+
+    def _on_scoring_toggled(self, checked: bool) -> None:
+        if checked:
+            self._ae_scoring_btn.setText("⏹  Live-Scoring stoppen")
+            self._ae_score_streak = 0
+        else:
+            self._ae_scoring_btn.setText("▶  Live-Scoring starten")
+            self._set_preview_border_normal()
+            self._alarm_banner.setVisible(False)
+            self._last_heatmap = None
+            self._recon_lbl.setText(
+                "Live-Scoring gestoppt.\nScoring starten um die Rekonstruktion zu sehen."
+            )
+            self._recon_info.setText("")
+
+    def _update_recon_tab(self, recon_bgr: np.ndarray, score: float) -> None:
+        """Display the model's reconstruction in the Modell tab."""
+        rgb = cv2.cvtColor(recon_bgr, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb.shape
+        from PySide6.QtGui import QImage
+        img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
+        pix = QPixmap.fromImage(img)
+        lw = self._recon_lbl.width()
+        lh = self._recon_lbl.height()
+        self._recon_lbl.setPixmap(
+            pix.scaled(lw, lh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+        thr = self._detector.threshold if self._detector else 0
+        pct = int(score / thr * 100) if thr > 0 else 0
+        self._recon_info.setText(
+            f"Rekonstruktion (128×128)  |  Score: {score:.5f}  ({pct}% des Schwellwerts)  "
+            f"—  Abweichungen zwischen Live und Modell = Anomalie-Kandidaten"
+        )
 
     # ================================================================== ROI
 
@@ -925,6 +1025,7 @@ class CameraCaptureDialog(QDialog):
 
     def closeEvent(self, event) -> None:
         self._ae_collecting = False
+        self._ae_scoring_btn.setChecked(False)
         if self._ae_train_thread and self._ae_train_thread.isRunning():
             self._ae_train_thread.wait(3000)
         self._disconnect()
@@ -932,5 +1033,6 @@ class CameraCaptureDialog(QDialog):
 
     def reject(self) -> None:
         self._ae_collecting = False
+        self._ae_scoring_btn.setChecked(False)
         self._disconnect()
         super().reject()
