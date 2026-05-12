@@ -82,10 +82,14 @@ class Inferencer:
         image_path: str,
         roi: Optional[Dict] = None,
         top_k: int = 3,
+        tta_passes: int = 1,
     ) -> Dict:
         """
         Returns dict with keys:
           predicted_label, confidence, top_k (list of {label, prob}), all_probs
+
+        tta_passes > 1 activates Test-Time Augmentation: the image is run through
+        multiple randomly augmented versions and probabilities are averaged.
         """
         if not self.is_ready():
             raise RuntimeError("Kein Modell geladen.")
@@ -95,10 +99,28 @@ class Inferencer:
             x, y, w, h = int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"])
             image = image.crop((max(0, x), max(0, y), x + w, y + h))
 
-        tensor = self.transform(image).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            logits = self.model(tensor)
-            probs = F.softmax(logits, dim=1)[0].cpu().tolist()
+        if tta_passes > 1:
+            # Build a randomized TTA transform (in addition to the base transform)
+            tta_tf = transforms.Compose([
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(10),
+                transforms.ColorJitter(brightness=0.15, contrast=0.15),
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+            tensors = [self.transform(image).unsqueeze(0)]
+            for _ in range(tta_passes - 1):
+                tensors.append(tta_tf(image).unsqueeze(0))
+            batch = torch.cat(tensors, dim=0).to(self.device)
+            with torch.no_grad():
+                probs_all = F.softmax(self.model(batch), dim=1).cpu()
+            probs = probs_all.mean(dim=0).tolist()
+        else:
+            tensor = self.transform(image).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                logits = self.model(tensor)
+                probs = F.softmax(logits, dim=1)[0].cpu().tolist()
 
         k = min(top_k, len(self.class_names))
         indexed = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
@@ -109,7 +131,15 @@ class Inferencer:
             "confidence": round(top[0]["prob"], 4),
             "top_k": top,
             "all_probs": {cls: round(p, 4) for cls, p in zip(self.class_names, probs)},
+            "tta_passes": tta_passes,
         }
+
+    def classify_single(self, image_path: str, top_k: int = 3) -> Dict:
+        """Alias for the REST API. Same as predict_image without ROI."""
+        result = self.predict_image(image_path, top_k=top_k)
+        result["low_confidence"] = result["confidence"] < 0.70
+        result["path"] = image_path
+        return result
 
     def predict_folder(
         self,
@@ -117,6 +147,7 @@ class Inferencer:
         roi_templates: List[Dict] = None,
         top_k: int = 3,
         progress_callback=None,
+        tta_passes: int = 1,
     ) -> List[Dict]:
         """Classify all images in a folder. Optional ROI templates applied per image."""
         from datetime import datetime
@@ -134,7 +165,7 @@ class Inferencer:
                 roi = roi_templates[0].get("roi") if roi_templates else None
 
             try:
-                pred = self.predict_image(img_path, roi=roi, top_k=top_k)
+                pred = self.predict_image(img_path, roi=roi, top_k=top_k, tta_passes=tta_passes)
                 results.append({
                     "filename": fname,
                     "path": img_path,

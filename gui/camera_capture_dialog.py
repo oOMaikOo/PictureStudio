@@ -98,6 +98,7 @@ class CameraCaptureDialog(QDialog):
         self._roi_start: Optional[QPoint] = None   # in label coords
         self._roi_end: Optional[QPoint] = None     # in label coords (live drag)
         self._frame_shape: tuple[int, int] = (480, 640)  # (h, w) of last frame
+        self._score_history: list[float] = []      # rolling buffer for calibration
 
         self._build_ui()
         self._scan_usb_cameras()
@@ -473,17 +474,34 @@ class CameraCaptureDialog(QDialog):
         self._ae_save_anomaly_cb = QCheckBox("Anomalie-Frames automatisch speichern")
         self._ae_save_anomaly_cb.setToolTip("Speichert jeden Frame bei dem der Score den Schwellwert überschreitet.")
         sl.addWidget(self._ae_save_anomaly_cb)
+
+        calib_btn = QPushButton("📊 Schwellwert kalibrieren…")
+        calib_btn.setToolTip("Score-Verteilung der letzten Frames anzeigen und Schwellwert anpassen.")
+        calib_btn.clicked.connect(self._open_calibration)
+        sl.addWidget(calib_btn)
         g.addWidget(score_grp)
 
         # ── Model save / load ─────────────────────────────────────────────────
-        io_grp = QGroupBox("Modell speichern / laden")
-        il = QHBoxLayout(io_grp)
+        io_grp = QGroupBox("Modell speichern / laden / exportieren")
+        il = QVBoxLayout(io_grp)
+        btn_row1 = QHBoxLayout()
         save_ae_btn = QPushButton("Speichern…")
         save_ae_btn.clicked.connect(self._save_ae_model)
         load_ae_btn = QPushButton("Laden…")
         load_ae_btn.clicked.connect(self._load_ae_model)
-        il.addWidget(save_ae_btn)
-        il.addWidget(load_ae_btn)
+        btn_row1.addWidget(save_ae_btn)
+        btn_row1.addWidget(load_ae_btn)
+        il.addLayout(btn_row1)
+        btn_row2 = QHBoxLayout()
+        export_onnx_btn = QPushButton("→ ONNX")
+        export_onnx_btn.setToolTip("Autoencoder als ONNX exportieren (für Deployment)")
+        export_onnx_btn.clicked.connect(self._export_ae_onnx)
+        export_ts_btn = QPushButton("→ TorchScript")
+        export_ts_btn.setToolTip("Autoencoder als TorchScript (.pt) exportieren")
+        export_ts_btn.clicked.connect(self._export_ae_torchscript)
+        btn_row2.addWidget(export_onnx_btn)
+        btn_row2.addWidget(export_ts_btn)
+        il.addLayout(btn_row2)
         g.addWidget(io_grp)
 
         return grp
@@ -582,6 +600,9 @@ class CameraCaptureDialog(QDialog):
             self._ae_score_counter += 1
             if self._ae_score_counter % 3 == 0:
                 score, recon_bgr, heatmap_overlay = self._detector.score_detailed(analysis_frame)
+                self._score_history.append(score)
+                if len(self._score_history) > 2000:
+                    self._score_history = self._score_history[-2000:]
                 is_anomaly = score > self._detector.threshold
                 # Score smoothing: alarm only after N consecutive anomaly frames
                 if is_anomaly:
@@ -838,6 +859,23 @@ class CameraCaptureDialog(QDialog):
         if self._detector:
             self._detector.threshold = value
 
+    def _open_calibration(self) -> None:
+        if not self._score_history:
+            QMessageBox.information(
+                self, "Keine Daten",
+                "Bitte erst Live-Erkennung starten, damit Scores gesammelt werden."
+            )
+            return
+        thr = self._detector.threshold if self._detector else 0.02
+        from gui.calibration_dialog import ThresholdCalibrationDialog
+        dlg = ThresholdCalibrationDialog(
+            scores=list(self._score_history),
+            threshold=thr,
+            parent=self,
+        )
+        if dlg.exec() and dlg.selected_threshold is not None:
+            self._ae_threshold_spin.setValue(dlg.selected_threshold)
+
     def _save_ae_model(self) -> None:
         self._ensure_detector()
         if not self._detector.trained:
@@ -861,6 +899,38 @@ class CameraCaptureDialog(QDialog):
             self._detector.load(path)
         except Exception as exc:
             QMessageBox.critical(self, "Ladefehler", str(exc))
+
+    def _export_ae_onnx(self) -> None:
+        self._ensure_detector()
+        if not self._detector.trained:
+            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Autoencoder als ONNX exportieren", self._save_dir, "ONNX (*.onnx)"
+        )
+        if not path:
+            return
+        try:
+            self._detector.export_onnx(path)
+            QMessageBox.information(self, "ONNX exportiert", f"Gespeichert:\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+
+    def _export_ae_torchscript(self) -> None:
+        self._ensure_detector()
+        if not self._detector.trained:
+            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Autoencoder als TorchScript exportieren", self._save_dir, "PyTorch Script (*.pt)"
+        )
+        if not path:
+            return
+        try:
+            self._detector.export_torchscript(path)
+            QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "TorchScript-Fehler", str(exc))
             return
         self._ae_threshold_spin.blockSignals(True)
         self._ae_threshold_spin.setValue(self._detector.threshold)

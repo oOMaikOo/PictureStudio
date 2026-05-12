@@ -225,6 +225,33 @@ class AnomalyDetector:
 
     # ------------------------------------------------------------------ persistence
 
+    def export_onnx(self, path: str) -> None:
+        """Export autoencoder to ONNX (opset 17). Model must be trained."""
+        if not self._trained:
+            raise RuntimeError("Autoencoder ist noch nicht trainiert.")
+        self._model.eval()
+        dummy = torch.randn(1, 3, _IMG, _IMG)
+        torch.onnx.export(
+            self._model.cpu(), dummy, path,
+            export_params=True,
+            opset_version=17,
+            input_names=["input"],
+            output_names=["reconstruction"],
+            dynamic_axes={"input": {0: "batch"}, "reconstruction": {0: "batch"}},
+        )
+        self._model.to(self._device)
+
+    def export_torchscript(self, path: str) -> None:
+        """Export autoencoder as TorchScript (.pt). Model must be trained."""
+        if not self._trained:
+            raise RuntimeError("Autoencoder ist noch nicht trainiert.")
+        self._model.eval()
+        dummy = torch.randn(1, 3, _IMG, _IMG)
+        cpu_model = self._model.cpu()
+        scripted = torch.jit.trace(cpu_model, dummy)
+        scripted.save(path)
+        self._model.to(self._device)
+
     def save(self, path: str) -> None:
         torch.save({"model": self._model.state_dict(), "threshold": self._threshold}, path)
 

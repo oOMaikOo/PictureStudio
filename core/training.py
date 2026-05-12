@@ -416,9 +416,10 @@ class TrainingWorker:
                 for i in range(len(test_preds))
             ]
 
+        timestamp = datetime.now().isoformat()
         result = {
             "run_id":           run_id,
-            "timestamp":        datetime.now().isoformat(),
+            "timestamp":        timestamp,
             "model_type":       self.cfg.get("model_type", "resnet18"),
             "hyperparameters":  dict(self.cfg),
             "class_names":      class_names,
@@ -437,4 +438,25 @@ class TrainingWorker:
             "early_stopped":    early_stopping.triggered if early_stopping else False,
             "multi_label":      is_ml,
         }
+
+        # ── Dataset snapshot: record which images+labels were used ───────────
+        import json as _json
+        snapshot = {
+            "run_id":    run_id,
+            "timestamp": timestamp,
+            "samples":   [
+                {"path": s[0], "label": class_names[s[2]], "split": split}
+                for ds, split in [(train_ds, "train"), (val_ds, "val"), (test_ds, "test")]
+                for s in ds.samples
+            ],
+        }
+        snap_path = os.path.join(self.save_dir, f"dataset_snapshot_{run_id}.json")
+        try:
+            with open(snap_path, "w", encoding="utf-8") as fh:
+                _json.dump(snapshot, fh, indent=2, ensure_ascii=False)
+            result["dataset_snapshot_path"] = snap_path
+            self._emit_log(f"Dataset-Snapshot gespeichert: {snap_path}")
+        except Exception as exc:
+            self._emit_log(f"Snapshot-Warnung: {exc}")
+
         return result

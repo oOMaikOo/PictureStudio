@@ -10,9 +10,12 @@ GET  /api/labels                — label definitions (name, color, description)
 GET  /api/images[?labeled=true] — all images with their label(s)
 GET  /api/images/<filename>     — single image info + ROIs
 POST /api/images/label          — assign a label  {path, label}
+POST /api/classify              — live inference  {path, top_k?} or {image_b64, top_k?}
 """
+import base64
 import json
 import os
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Callable, Optional
@@ -22,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 class _ProjectHandler(BaseHTTPRequestHandler):
     # Shared state injected by RestApiServer before starting
     project = None
+    inferencer = None   # core.inference.Inferencer or None
     request_count: int = 0
 
     # ------------------------------------------------------------------ util
@@ -234,6 +238,55 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True, "path": img_path, "labels": labels})
             return
 
+        # POST /api/classify — live inference on a single image
+        if path == "/api/classify":
+            inf = _ProjectHandler.inferencer
+            if inf is None or not inf.is_ready():
+                self._err("No model loaded. Load a model via the Models page first.", 503)
+                return
+
+            top_k = int(body.get("top_k", 3))
+            img_path = body.get("path", "")
+            b64 = body.get("image_b64", "")
+
+            tmp_path = None
+            if b64:
+                try:
+                    img_bytes = base64.b64decode(b64)
+                    suffix = ".jpg"
+                    if img_bytes[:4] == b'\x89PNG':
+                        suffix = ".png"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                        f.write(img_bytes)
+                        tmp_path = f.name
+                    img_path = tmp_path
+                except Exception as exc:
+                    self._err(f"Base64 decode error: {exc}")
+                    return
+            elif not img_path:
+                self._err("Provide 'path' (file path) or 'image_b64' (base64 image).")
+                return
+            elif not os.path.isfile(img_path):
+                self._err(f"File not found: {img_path}", 404)
+                return
+
+            try:
+                result = inf.classify_single(img_path, top_k=top_k)
+                response = {
+                    "predicted_label": result.get("predicted_label", ""),
+                    "confidence":      result.get("confidence", 0.0),
+                    "top_k":           result.get("top_k", []),
+                    "low_confidence":  result.get("low_confidence", False),
+                    "path":            img_path,
+                }
+                self._send_json(response)
+            except Exception as exc:
+                self._err(f"Inference error: {exc}", 500)
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            return
+
         self._err("Endpoint not found", 404)
 
 
@@ -257,6 +310,9 @@ class RestApiServer:
 
     def set_project(self, project) -> None:
         _ProjectHandler.project = project
+
+    def set_inferencer(self, inferencer) -> None:
+        _ProjectHandler.inferencer = inferencer
 
     # ------------------------------------------------------------------ state
 

@@ -177,7 +177,7 @@ class ModelManager:
     # ------------------------------------------------------------------ export
 
     def export_onnx(self, model_id: str) -> str:
-        """Export model to ONNX format. Returns onnx_path."""
+        """Export classifier to ONNX. Returns onnx_path."""
         try:
             import torch
             from models.classifier import create_model, load_checkpoint
@@ -200,7 +200,7 @@ class ModelManager:
         torch.onnx.export(
             model, dummy, onnx_path,
             export_params=True,
-            opset_version=11,
+            opset_version=17,
             input_names=["input"],
             output_names=["output"],
             dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
@@ -209,6 +209,31 @@ class ModelManager:
         self._save()
         log.info("ONNX exportiert: %s", onnx_path)
         return onnx_path
+
+    def export_torchscript(self, model_id: str) -> str:
+        """Export classifier to TorchScript (.pt). Returns ts_path."""
+        try:
+            import torch
+            from models.classifier import create_model, load_checkpoint
+        except ImportError as exc:
+            raise RuntimeError(f"PyTorch nicht verfügbar: {exc}")
+
+        m = self.get_by_id(model_id)
+        if not m:
+            raise ValueError(f"Modell {model_id} nicht gefunden.")
+        if not os.path.exists(m.model_path):
+            raise FileNotFoundError(f"Modelldatei nicht gefunden: {m.model_path}")
+
+        model = create_model(m.architecture, len(m.class_names), pretrained=False)
+        load_checkpoint(model, m.model_path)
+        model.eval()
+
+        dummy = torch.randn(1, 3, m.image_size, m.image_size)
+        scripted = torch.jit.trace(model, dummy)
+        ts_path = m.model_path.replace(".pth", "_scripted.pt")
+        scripted.save(ts_path)
+        log.info("TorchScript exportiert: %s", ts_path)
+        return ts_path
 
     # ------------------------------------------------------------------ comparison
 

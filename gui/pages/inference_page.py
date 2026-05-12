@@ -20,12 +20,13 @@ class InferenceThread(QThread):
     finished = Signal(list)
     error    = Signal(str)
 
-    def __init__(self, inferencer, folder: str, top_k: int, roi_templates: list):
+    def __init__(self, inferencer, folder: str, top_k: int, roi_templates: list, tta_passes: int = 1):
         super().__init__()
         self.inferencer = inferencer
         self.folder = folder
         self.top_k = top_k
         self.roi_templates = roi_templates
+        self.tta_passes = tta_passes
 
     def run(self) -> None:
         try:
@@ -34,6 +35,7 @@ class InferenceThread(QThread):
                 roi_templates=self.roi_templates,
                 top_k=self.top_k,
                 progress_callback=lambda c, t: self.progress.emit(c, t),
+                tta_passes=self.tta_passes,
             )
             self.finished.emit(results)
         except Exception as exc:
@@ -54,6 +56,7 @@ class InferencePage(QWidget):
 
         from core.inference import Inferencer
         self.inferencer = Inferencer()
+        self._ensemble_inferencers: List = []   # additional Inferencer instances
         self._build_ui()
 
     def set_project(self, project, audit=None) -> None:
@@ -88,18 +91,37 @@ class InferencePage(QWidget):
         v = QVBoxLayout(box)
 
         # Model
-        mg = QGroupBox("Modell")
+        mg = QGroupBox("Modell / Ensemble")
         mv = QVBoxLayout(mg)
         self.model_path_label = QLabel("Kein Modell geladen")
         self.model_path_label.setWordWrap(True)
         mv.addWidget(self.model_path_label)
-        load_model_btn = QPushButton("Modell laden (.pth)")
+        load_model_btn = QPushButton("Primärmodell laden (.pth)")
         load_model_btn.clicked.connect(self._load_model)
         mv.addWidget(load_model_btn)
         self.model_info_label = QLabel("")
         self.model_info_label.setWordWrap(True)
         self.model_info_label.setStyleSheet("color:#27AE60;font-size:10px;")
         mv.addWidget(self.model_info_label)
+
+        ens_info = QLabel("Ensemble: weitere Modelle hinzufügen (average softmax):")
+        ens_info.setStyleSheet("color:#aaa;font-size:10px;")
+        ens_info.setWordWrap(True)
+        mv.addWidget(ens_info)
+        self._ens_list = QLabel("(kein Ensemble)")
+        self._ens_list.setStyleSheet("color:#888;font-size:10px;")
+        self._ens_list.setWordWrap(True)
+        mv.addWidget(self._ens_list)
+        ens_btn_row = QHBoxLayout()
+        add_ens_btn = QPushButton("+ Modell hinzufügen")
+        add_ens_btn.setStyleSheet("font-size:10px;padding:3px;")
+        add_ens_btn.clicked.connect(self._add_ensemble_model)
+        ens_btn_row.addWidget(add_ens_btn)
+        clr_ens_btn = QPushButton("Löschen")
+        clr_ens_btn.setStyleSheet("font-size:10px;padding:3px;")
+        clr_ens_btn.clicked.connect(self._clear_ensemble)
+        ens_btn_row.addWidget(clr_ens_btn)
+        mv.addLayout(ens_btn_row)
         v.addWidget(mg)
 
         # Input
@@ -135,6 +157,18 @@ class InferencePage(QWidget):
         self.topk_spin.setValue(3)
         topk_row.addWidget(self.topk_spin)
         ov.addLayout(topk_row)
+        tta_row = QHBoxLayout()
+        tta_row.addWidget(QLabel("TTA-Passes:"))
+        self.tta_spin = QSpinBox()
+        self.tta_spin.setRange(1, 20)
+        self.tta_spin.setValue(1)
+        self.tta_spin.setToolTip(
+            "Test-Time Augmentation: 1 = deaktiviert.\n"
+            "Höher = robustere Vorhersagen, aber langsamer.\n"
+            "Empfehlung: 5–10 für unsichere Bilder."
+        )
+        tta_row.addWidget(self.tta_spin)
+        ov.addLayout(tta_row)
         self.use_roi_template_cb = QCheckBox("ROI-Vorlagen anwenden")
         ov.addWidget(self.use_roi_template_cb)
         v.addWidget(og)
@@ -298,6 +332,54 @@ class InferencePage(QWidget):
         if path:
             self.load_model_path(path)
 
+    def _add_ensemble_model(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Ensemble-Modell hinzufügen", "", "PyTorch (*.pth)"
+        )
+        if not path:
+            return
+        from core.inference import Inferencer
+        inf = Inferencer()
+        try:
+            inf.load_model(path)
+            self._ensemble_inferencers.append(inf)
+            names = [os.path.basename(i.model_path) for i in self._ensemble_inferencers]
+            self._ens_list.setText("Ensemble:\n" + "\n".join(f"  • {n}" for n in names))
+        except Exception as exc:
+            QMessageBox.critical(self, "Ensemble-Fehler", str(exc))
+
+    def _clear_ensemble(self) -> None:
+        self._ensemble_inferencers.clear()
+        self._ens_list.setText("(kein Ensemble)")
+
+    def _ensemble_predict(self, img_path: str, top_k: int, tta_passes: int) -> Dict:
+        """Average softmax over primary + ensemble models."""
+        import torch
+        import torch.nn.functional as F
+
+        all_inferencers = [self.inferencer] + self._ensemble_inferencers
+        avg_probs = None
+        for inf in all_inferencers:
+            pred = inf.predict_image(img_path, top_k=top_k, tta_passes=tta_passes)
+            probs = list(pred["all_probs"].values())
+            if avg_probs is None:
+                avg_probs = probs
+            else:
+                avg_probs = [a + b for a, b in zip(avg_probs, probs)]
+
+        n = len(all_inferencers)
+        avg_probs = [p / n for p in avg_probs]
+        indexed = sorted(enumerate(avg_probs), key=lambda x: x[1], reverse=True)
+        class_names = self.inferencer.class_names
+        top = [{"label": class_names[i], "prob": round(p, 4)} for i, p in indexed[:top_k]]
+        return {
+            "predicted_label": top[0]["label"],
+            "confidence": round(top[0]["prob"], 4),
+            "top_k": top,
+            "all_probs": {cls: round(p, 4) for cls, p in zip(class_names, avg_probs)},
+            "ensemble_size": n,
+        }
+
     def _classify_single(self) -> None:
         if not self.inferencer.is_ready():
             QMessageBox.warning(self, "Kein Modell", "Bitte erst ein Modell laden.")
@@ -310,7 +392,12 @@ class InferencePage(QWidget):
         if not path:
             return
         try:
-            pred = self.inferencer.predict_image(path, top_k=self.topk_spin.value())
+            top_k = self.topk_spin.value()
+            tta = self.tta_spin.value()
+            if self._ensemble_inferencers:
+                pred = self._ensemble_predict(path, top_k, tta)
+            else:
+                pred = self.inferencer.predict_image(path, top_k=top_k, tta_passes=tta)
             result = {
                 "filename": os.path.basename(path), "path": path,
                 "predicted_label": pred["predicted_label"],
@@ -348,7 +435,8 @@ class InferencePage(QWidget):
         self.table.setRowCount(0)
 
         self._thread = InferenceThread(
-            self.inferencer, folder, self.topk_spin.value(), roi_templates
+            self.inferencer, folder, self.topk_spin.value(), roi_templates,
+            tta_passes=self.tta_spin.value(),
         )
         self._thread.progress.connect(lambda c, t: self.progress_bar.setValue(int(c / t * 100)))
         self._thread.finished.connect(self._on_finished)

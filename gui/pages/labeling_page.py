@@ -311,6 +311,11 @@ class LabelingPage(QWidget):
         v.addLayout(toolbar)
 
         from gui.widgets.roi_editor import ROIEditor
+        from gui.widgets.mask_editor import MaskEditorPanel
+        from PySide6.QtWidgets import QTabWidget as _QTabWidget
+
+        self._center_tabs = _QTabWidget()
+
         self.roi_editor = ROIEditor()
         self.roi_editor.roi_added.connect(self._on_roi_added)
         self.roi_editor.roi_deleted.connect(self._on_roi_deleted)
@@ -322,7 +327,14 @@ class LabelingPage(QWidget):
         self.roi_editor.space_pressed.connect(self._next_image)
         self.roi_editor.setContextMenuPolicy(Qt.CustomContextMenu)
         self.roi_editor.customContextMenuRequested.connect(self._on_image_context_menu)
-        v.addWidget(self.roi_editor)
+        self._center_tabs.addTab(self.roi_editor, "🔲 ROI / Klassifikation")
+
+        self.mask_editor = MaskEditorPanel()
+        self.mask_editor.mask_saved.connect(lambda p: None)  # no-op for now
+        self._center_tabs.addTab(self.mask_editor, "🎨 Segmentierungsmaske")
+
+        self._center_tabs.currentChanged.connect(self._on_center_tab_changed)
+        v.addWidget(self._center_tabs)
 
         # Fix del_btn binding
         del_btn.clicked.disconnect()
@@ -836,10 +848,16 @@ class LabelingPage(QWidget):
         self._save_current_rois()
         self._load_image(image_path)
 
+    def _on_center_tab_changed(self, idx: int) -> None:
+        if idx == 1 and self._current_image:
+            self.mask_editor.load_image(self._current_image)
+
     def _load_image(self, image_path: str) -> None:
         self._current_image = image_path
         self.img_path_label.setText(os.path.basename(image_path))
         self.roi_editor.load_image(image_path)
+        if self._center_tabs.currentIndex() == 1:
+            self.mask_editor.load_image(image_path)
         rois = self.project.get_rois(image_path) if self.project else []
         self.roi_editor.load_rois(rois)
         self._refresh_roi_list()

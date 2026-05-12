@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
     QPushButton, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QMessageBox, QTextEdit, QFileDialog, QInputDialog,
+    QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -35,9 +36,24 @@ class ModelsPage(QWidget):
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
+        self._tabs = QTabWidget()
+        layout.addWidget(self._tabs)
+
+        # ── Tab 1: Model Library ──────────────────────────────────────────────
+        lib_widget = self._build_library_tab()
+        self._tabs.addTab(lib_widget, "📦 Modellbibliothek")
+
+        # ── Tab 2: Run History / Comparison ──────────────────────────────────
+        hist_widget = self._build_history_tab()
+        self._tabs.addTab(hist_widget, "📊 Run-History")
+
+    def _build_library_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QWidget
+        w = QWidget()
         splitter = QSplitter(Qt.Horizontal)
-        layout.addWidget(splitter)
+        hl = QHBoxLayout(w)
+        hl.addWidget(splitter)
 
         # Left: table
         left = QGroupBox("Modellbibliothek")
@@ -79,6 +95,7 @@ class ModelsPage(QWidget):
 
         for label, slot in [
             ("Als ONNX exportieren", self._export_onnx),
+            ("Als TorchScript exportieren", self._export_torchscript),
             ("Umbenennen", self._rename_model),
             ("Archivieren", self._archive_model),
             ("Löschen", self._delete_model),
@@ -93,6 +110,33 @@ class ModelsPage(QWidget):
         rv.addWidget(self.compare_btn)
         splitter.addWidget(right)
         splitter.setSizes([600, 400])
+        return w
+
+    def _build_history_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QWidget
+        w = QWidget()
+        vl = QVBoxLayout(w)
+
+        hdr = QHBoxLayout()
+        hdr.addWidget(QLabel("Alle Trainingsläufe im Vergleich:"))
+        hdr.addStretch()
+        refresh_btn = QPushButton("Aktualisieren")
+        refresh_btn.clicked.connect(self._refresh_history)
+        hdr.addWidget(refresh_btn)
+        vl.addLayout(hdr)
+
+        self._history_table = QTableWidget(0, 8)
+        self._history_table.setHorizontalHeaderLabels([
+            "Datum", "Run-ID", "Architektur", "Accuracy", "F1",
+            "Train-Acc", "Epochen", "Gerät"
+        ])
+        self._history_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._history_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._history_table.setAlternatingRowColors(True)
+        vl.addWidget(self._history_table)
+
+        return w
 
     # ------------------------------------------------------------------ refresh
 
@@ -118,13 +162,41 @@ class ModelsPage(QWidget):
 
         # Also register any new run results not yet in registry
         if self.project and self.project.training_runs:
-            # Register runs not in manager
             existing_run_ids = {m.run_id for m in self._manager.get_all(include_archived=True)}
             for run in self.project.training_runs:
                 if run.get("run_id") not in existing_run_ids:
                     self._manager.register(run)
-            # Refresh again if new models were added
             self.refresh()
+            return
+
+        self._refresh_history()
+
+    def _refresh_history(self) -> None:
+        if not self._manager:
+            return
+        all_models = self._manager.get_all(include_archived=True)
+        self._history_table.setRowCount(len(all_models))
+        best_acc = max((m.metrics.get("accuracy", 0) for m in all_models), default=0)
+        for row, m in enumerate(sorted(all_models, key=lambda x: x.created_at, reverse=True)):
+            acc = m.metrics.get("accuracy", 0)
+            f1 = m.metrics.get("macro_f1", 0)
+            bvm = m.hyperparameters  # best_val_metrics stored in registry
+            items = [
+                m.created_at[:16],
+                m.run_id[:8],
+                m.architecture,
+                f"{acc*100:.2f}%",
+                f"{f1*100:.2f}%",
+                f"{m.metrics.get('train_acc', 0)*100:.1f}%" if "train_acc" in m.metrics else "–",
+                str(m.hyperparameters.get("epochs", "–")),
+                m.hyperparameters.get("device", "–"),
+            ]
+            for col, val in enumerate(items):
+                item = QTableWidgetItem(str(val))
+                item.setTextAlignment(Qt.AlignCenter)
+                if col == 3 and acc >= best_acc and acc > 0:
+                    item.setForeground(QColor("#2ECC71"))
+                self._history_table.setItem(row, col, item)
 
     def _selected_model_id(self) -> Optional[str]:
         row = self.table.currentRow()
@@ -200,6 +272,16 @@ class ModelsPage(QWidget):
             self.refresh()
         except Exception as exc:
             QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+
+    def _export_torchscript(self) -> None:
+        mid = self._selected_model_id()
+        if not mid or not self._manager:
+            return
+        try:
+            path = self._manager.export_torchscript(mid)
+            QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "TorchScript-Fehler", str(exc))
 
     def _rename_model(self) -> None:
         mid = self._selected_model_id()

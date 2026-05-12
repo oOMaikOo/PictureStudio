@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         self.data_page.images_loaded.connect(self._on_images_loaded)
         self.training_page.training_finished.connect(self._on_training_finished)
         self.models_page.model_loaded.connect(self.inference_page.load_model_path)
+        self.models_page.model_loaded.connect(self._on_model_loaded_api)
         self.settings_page.set_settings(self._settings)
         self.settings_page.set_api_server(self._rest_server)
         self.training_page.set_settings(self._settings)
@@ -283,6 +284,10 @@ class MainWindow(QMainWindow):
             f"AL-Queue aktualisiert — {n} Bilder warten auf Labeling. "
             "Wechsle zum Labeling-Reiter."
         )
+
+    def _on_model_loaded_api(self, model_path: str) -> None:
+        """Push the loaded inferencer into the REST API for live classify."""
+        self._rest_server.set_inferencer(self.inference_page.inferencer)
 
     def _on_labels_applied(self, count: int) -> None:
         """Refresh labeling page after semi-automatic labeling."""
