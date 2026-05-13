@@ -692,7 +692,16 @@ class CameraCaptureDialog(QDialog):
         # ── Display (timestamp + ROI overlay + optional heatmap) ─────────────
         display = self._apply_timestamp(frame) if self._ts_preview_cb.isChecked() else frame.copy()
         if self._ae_heatmap_cb.isChecked() and self._last_heatmap is not None:
-            display = self._last_heatmap.copy()
+            if self._roi is not None:
+                # Composite the ROI heatmap back into the correct position in the full frame
+                hd, wd = display.shape[:2]
+                x1 = int(self._roi[0] * wd); y1 = int(self._roi[1] * hd)
+                x2 = int(self._roi[2] * wd); y2 = int(self._roi[3] * hd)
+                rw, rh = max(1, x2 - x1), max(1, y2 - y1)
+                hm = cv2.resize(self._last_heatmap, (rw, rh), interpolation=cv2.INTER_LINEAR)
+                display[y1:y2, x1:x2] = hm
+            else:
+                display = self._last_heatmap.copy()
             if self._ts_preview_cb.isChecked():
                 display = self._apply_timestamp(display)
         display = self._draw_roi_overlay(display)
@@ -960,6 +969,8 @@ class CameraCaptureDialog(QDialog):
         if path:
             self._detector.save(path)
             self._ae_model_path = path
+            # Save ROI alongside model so it can be restored on load
+            self._save_model_meta(path)
             QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
 
     def _load_ae_model(self) -> None:
@@ -972,6 +983,7 @@ class CameraCaptureDialog(QDialog):
         try:
             self._detector.load(path)
             self._ae_model_path = path
+            self._load_model_meta(path)
         except Exception as exc:
             QMessageBox.critical(self, "Ladefehler", str(exc))
 
@@ -1016,6 +1028,46 @@ class CameraCaptureDialog(QDialog):
         self._recon_lbl.setText(
             "Modell geladen — Live-Scoring starten\num die Rekonstruktion zu sehen."
         )
+
+    # ================================================================== MODEL META (ROI sidecar)
+
+    def _meta_path(self, model_path: str) -> str:
+        base, _ = os.path.splitext(model_path)
+        return base + "_meta.json"
+
+    def _save_model_meta(self, model_path: str) -> None:
+        import json
+        meta = {"roi": list(self._roi) if self._roi else None}
+        try:
+            with open(self._meta_path(model_path), "w", encoding="utf-8") as f:
+                json.dump(meta, f)
+        except Exception:
+            pass  # meta is optional; don't block the save
+
+    def _load_model_meta(self, model_path: str) -> None:
+        import json
+        mp = self._meta_path(model_path)
+        if not os.path.isfile(mp):
+            return
+        try:
+            with open(mp, encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception:
+            return
+        roi = meta.get("roi")
+        if roi and len(roi) == 4:
+            self._roi = tuple(float(v) for v in roi)
+            self._roi_clear_btn.setEnabled(True)
+            pw = int((self._roi[2] - self._roi[0]) * 100)
+            ph = int((self._roi[3] - self._roi[1]) * 100)
+            self._roi_lbl.setText(f"ROI: {pw}% × {ph}% des Bildes (wiederhergestellt)")
+            self._roi_lbl.setStyleSheet("color:#00E5FF; font-size:10px; font-weight:bold;")
+        else:
+            # Model was trained without ROI — clear any existing ROI to avoid mismatch
+            self._roi = None
+            self._roi_clear_btn.setEnabled(False)
+            self._roi_lbl.setText("Kein ROI – ganzes Bild wird analysiert")
+            self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
 
     # ================================================================== MONITORING PROFILE
 
