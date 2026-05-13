@@ -293,14 +293,17 @@ class ModelsPage(QWidget):
                 self.table.setItem(row, col, item)
                 item.setData(Qt.UserRole, m.model_id)
 
-        # Also register any new run results not yet in registry
+        # Register any new run results not yet in registry
         if self.project and self.project.training_runs:
             existing_run_ids = {m.run_id for m in self._manager.get_all(include_archived=True)}
+            newly_registered = False
             for run in self.project.training_runs:
                 if run.get("run_id") not in existing_run_ids:
                     self._manager.register(run)
-            self.refresh()
-            return
+                    newly_registered = True
+            if newly_registered:
+                self.refresh()
+                return
 
         self._refresh_history()
 
