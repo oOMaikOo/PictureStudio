@@ -230,7 +230,8 @@ class TrainingWorker:
 
         batch_size = self.cfg.get("batch_size", 16)
 
-        # Weighted sampler for class imbalance (single-label only)
+        # Weighted sampler + loss for class imbalance (single-label only)
+        class_weights_tensor = None
         if self.cfg.get("class_balance", False) and not is_ml and hasattr(train_ds, "samples"):
             from torch.utils.data import WeightedRandomSampler
             class_indices = [s[2] for s in train_ds.samples]
@@ -239,7 +240,12 @@ class TrainingWorker:
             sample_weights = weights[torch.tensor(class_indices, dtype=torch.long)]
             sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
             train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=0)
-            self._emit_log(f"Klassenausgleich aktiv: {dict(zip(class_names, counts.tolist()))}")
+            # Normalise weights so the loss scale stays comparable across runs
+            class_weights_tensor = (weights / weights.sum() * len(weights)).to(device)
+            self._emit_log(
+                f"Klassenausgleich aktiv (WeightedSampler + gewichteter Loss): "
+                f"{dict(zip(class_names, counts.tolist()))}"
+            )
         else:
             train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
 
@@ -253,7 +259,11 @@ class TrainingWorker:
             pretrained=self.cfg.get("use_pretrained", True),
         ).to(device)
 
-        criterion = nn.BCEWithLogitsLoss() if is_ml else nn.CrossEntropyLoss()
+        criterion = (
+            nn.BCEWithLogitsLoss()
+            if is_ml
+            else nn.CrossEntropyLoss(weight=class_weights_tensor)
+        )
         lr = self.cfg.get("learning_rate", 0.001)
         opt_name = self.cfg.get("optimizer", "adam").lower()
         wd = self.cfg.get("weight_decay", 1e-4)

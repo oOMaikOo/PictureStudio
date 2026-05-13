@@ -3,22 +3,52 @@ Image Labeling Studio – Entry point.
 """
 import sys
 import os
+import traceback
 
 # Ensure project root is on sys.path when running as a script
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from gui.main_window import MainWindow
-from utils.logging_utils import setup_logging
+from utils.logging_utils import setup_logging, get_logger
 from utils.config import APP_NAME
+
+_LOG_DIR = os.path.join(os.path.expanduser("~"), ".image_labeling_studio", "logs")
+
+
+def _install_exception_hook(log_dir: str) -> None:
+    """Catch unhandled exceptions, write to log, show user-friendly dialog."""
+    import logging
+    logger = logging.getLogger("ImageLabelingStudio")
+
+    def _hook(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        logger.critical("Unbehandelter Fehler:\n%s", msg)
+        app = QApplication.instance()
+        if app:
+            dlg = QMessageBox()
+            dlg.setIcon(QMessageBox.Critical)
+            dlg.setWindowTitle("Unerwarteter Fehler")
+            dlg.setText(
+                "Ein unerwarteter Fehler ist aufgetreten.\n"
+                f"Details wurden in das Fehlerlog geschrieben:\n{log_dir}"
+            )
+            dlg.setDetailedText(msg)
+            dlg.exec()
+
+    sys.excepthook = _hook
 
 
 def main() -> None:
-    log_dir = os.path.join(os.path.expanduser("~"), ".image_labeling_studio", "logs")
+    log_dir = _LOG_DIR
     setup_logging(log_dir=log_dir)
+    _install_exception_hook(log_dir)
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)

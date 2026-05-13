@@ -605,15 +605,76 @@ class LabelingPage(QWidget):
 
         v.addWidget(stats_box)
 
+        # Shortcut reference panel
+        shortcuts_box = QGroupBox("Tastenkürzel")
+        sb2 = QVBoxLayout(shortcuts_box)
+        shortcuts_box.setStyleSheet("QGroupBox { font-size: 10px; color: #555; }")
+        _shortcuts = [
+            ("←  /  →",      "Voriges / Nächstes Bild"),
+            ("1 – 9",         "Label direkt zuweisen"),
+            ("Leertaste",     "Nächstes Bild"),
+            ("Entf",          "Label entfernen"),
+            ("U",             "Unsicher markieren"),
+            ("Strg+Z / Y",    "Rückgängig / Wiederholen"),
+        ]
+        for key, desc in _shortcuts:
+            row = QHBoxLayout()
+            key_lbl = QLabel(key)
+            key_lbl.setFixedWidth(72)
+            key_lbl.setStyleSheet(
+                "background:#21262D; color:#7EE787; font-family:monospace;"
+                " font-size:10px; border-radius:3px; padding:1px 4px;"
+            )
+            row.addWidget(key_lbl)
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet("color:#8B949E; font-size:10px;")
+            row.addWidget(desc_lbl)
+            row.addStretch()
+            w = QWidget()
+            w.setLayout(row)
+            sb2.addWidget(w)
+        v.addWidget(shortcuts_box)
+
         v.addStretch()
         return scroll
 
     def _setup_shortcuts(self) -> None:
-        QShortcut(QKeySequence("N"), self, self._next_image)
-        QShortcut(QKeySequence("P"), self, self._prev_image)
-        QShortcut(QKeySequence("Ctrl+Z"), self, self._undo_stack.undo)
-        QShortcut(QKeySequence("Ctrl+Y"), self, self._undo_stack.redo)
+        # Navigation
+        QShortcut(QKeySequence("N"),          self, self._next_image)
+        QShortcut(QKeySequence("P"),          self, self._prev_image)
+        QShortcut(QKeySequence(Qt.Key_Right), self, self._next_image)
+        QShortcut(QKeySequence(Qt.Key_Left),  self, self._prev_image)
+        # Undo / Redo
+        QShortcut(QKeySequence("Ctrl+Z"),       self, self._undo_stack.undo)
+        QShortcut(QKeySequence("Ctrl+Y"),       self, self._undo_stack.redo)
         QShortcut(QKeySequence("Ctrl+Shift+Z"), self, self._undo_stack.redo)
+        # Label clear (Delete key)
+        QShortcut(QKeySequence(Qt.Key_Delete), self, self._clear_current_label)
+        # Toggle uncertain flag
+        QShortcut(QKeySequence("U"), self, self._shortcut_toggle_uncertain)
+
+    def _clear_current_label(self) -> None:
+        """Delete shortcut: remove label from current image."""
+        if not self.project or not self._current_image:
+            return
+        if self.project.is_multi_label:
+            from gui.labeling_commands import SetMultiLabelsCommand
+            self._undo_stack.push(
+                SetMultiLabelsCommand(
+                    self, self._current_image, [],
+                    list(self.project.get_image_multi_labels(self._current_image))
+                )
+            )
+        else:
+            self._assign_label_direct(self._current_image, "")
+
+    def _shortcut_toggle_uncertain(self) -> None:
+        """U shortcut: toggle the uncertain flag on the current image."""
+        if not self.project or not self._current_image:
+            return
+        current = self.project.is_label_uncertain(self._current_image)
+        # Toggle via the button so the undo command is used
+        self._uncertain_btn.setChecked(not current)
 
     # ------------------------------------------------------------------ project
 

@@ -42,6 +42,8 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_statusbar()
         self._apply_theme(self._settings.get_theme())
+        self.dashboard_page.set_recent_projects(self._settings.get_recent_projects())
+        self._check_crash_recovery()
 
         # Autosave timer
         self._autosave_timer = QTimer(self)
@@ -113,6 +115,7 @@ class MainWindow(QMainWindow):
         # Cross-page signals
         self.dashboard_page.new_project_requested.connect(self._new_project)
         self.dashboard_page.open_project_requested.connect(self._open_project)
+        self.dashboard_page.open_recent_requested.connect(self._open_recent)
         self.data_page.images_loaded.connect(self._on_images_loaded)
         self.training_page.training_finished.connect(self._on_training_finished)
         self.models_page.model_loaded.connect(self.inference_page.load_model_path)
@@ -238,6 +241,10 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
             hm.addAction(a)
         hm.addSeparator()
+        log_a = QAction("Fehlerlog anzeigen…", self)
+        log_a.triggered.connect(self._show_log_viewer)
+        hm.addAction(log_a)
+        hm.addSeparator()
         about_a = QAction("Über…", self)
         about_a.triggered.connect(self._show_about)
         hm.addAction(about_a)
@@ -252,7 +259,10 @@ class MainWindow(QMainWindow):
         self.setStatusBar(sb)
         from PySide6.QtWidgets import QLabel
         self._status_label = QLabel("Bereit – kein Projekt geladen")
-        sb.addWidget(self._status_label)
+        sb.addWidget(self._status_label, 1)
+        self._autosave_label = QLabel("")
+        self._autosave_label.setStyleSheet("color: #3FB950; font-size: 10px; padding-right: 8px;")
+        sb.addPermanentWidget(self._autosave_label)
 
     # ------------------------------------------------------------------ page switching
 
@@ -376,6 +386,7 @@ class MainWindow(QMainWindow):
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)
         self._refresh_recent_menu()
+        self.dashboard_page.set_recent_projects(self._settings.get_recent_projects())
         self.setWindowTitle(f"{APP_NAME} – {project.config.name or project.project_path}")
         self._update_status()
         self._switch_page(0)  # Go to dashboard
@@ -460,8 +471,13 @@ class MainWindow(QMainWindow):
             try:
                 self.labeling_page._save_current_rois()
                 self.project.save()
+                from datetime import datetime as _dt
+                self._autosave_label.setText(
+                    f"✓ Auto-gespeichert {_dt.now().strftime('%H:%M:%S')}"
+                )
                 log.debug("Autosave erfolgreich")
             except Exception as exc:
+                self._autosave_label.setText("⚠ Autosave fehlgeschlagen")
                 log.warning("Autosave fehlgeschlagen: %s", exc)
 
     def _reset_autosave_timer(self) -> None:
@@ -611,6 +627,68 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "_tour") and self._tour.isVisible():
             self._tour._reposition()
+
+    def _check_crash_recovery(self) -> None:
+        """Scan recent project paths for orphaned .tmp files from a crashed write."""
+        for path in self._settings.get_recent_projects():
+            tmp = path + ".tmp"
+            if os.path.exists(tmp) and not os.path.exists(path):
+                reply = QMessageBox.question(
+                    self, "Crash-Wiederherstellung",
+                    f"Eine unvollständige Speicherung wurde gefunden:\n{tmp}\n\n"
+                    "Soll die Datei als Projektdatei wiederhergestellt werden?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply == QMessageBox.Yes:
+                    try:
+                        os.replace(tmp, path)
+                        from core.project import Project
+                        self._load_project(Project.load(path))
+                    except Exception as exc:
+                        QMessageBox.critical(self, "Wiederherstellungsfehler", str(exc))
+                else:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
+
+    def _show_log_viewer(self) -> None:
+        from utils.logging_utils import get_log_file, get_log_dir
+        log_file = get_log_file()
+        log_dir = get_log_dir()
+        from PySide6.QtWidgets import QDialog, QTextEdit, QVBoxLayout, QPushButton, QHBoxLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Fehlerlog")
+        dlg.resize(860, 520)
+        v = QVBoxLayout(dlg)
+        te = QTextEdit()
+        te.setReadOnly(True)
+        te.setFont(QFont("Courier New", 9))
+        if log_file and os.path.exists(log_file):
+            try:
+                with open(log_file, encoding="utf-8") as fh:
+                    content = fh.read()
+                te.setPlainText(content)
+                te.moveCursor(te.textCursor().End)
+            except Exception as exc:
+                te.setPlainText(f"Log konnte nicht geladen werden: {exc}")
+        else:
+            te.setPlainText(f"Kein Log für diese Sitzung gefunden.\nLog-Ordner: {log_dir}")
+        v.addWidget(te)
+        btn_row = QHBoxLayout()
+        if log_dir and os.path.exists(log_dir):
+            open_btn = QPushButton("Log-Ordner öffnen")
+            open_btn.clicked.connect(lambda: __import__("subprocess").Popen(
+                ["open" if __import__("platform").system() == "Darwin"
+                 else "xdg-open", log_dir]
+            ))
+            btn_row.addWidget(open_btn)
+        btn_row.addStretch()
+        close_btn = QPushButton("Schließen")
+        close_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(close_btn)
+        v.addLayout(btn_row)
+        dlg.exec()
 
     def _show_about(self) -> None:
         from utils.reproducibility import get_software_versions

@@ -124,7 +124,7 @@ class BatchInferencePage(QWidget):
         v.addWidget(ig)
 
         # ── Options ────────────────────────────────────────────────────────────
-        og = QGroupBox("Filter")
+        og = QGroupBox("Filter & Schwellwert")
         ov = QVBoxLayout(og)
         conf_row = QHBoxLayout()
         conf_row.addWidget(QLabel("Min. Confidence:"))
@@ -132,8 +132,26 @@ class BatchInferencePage(QWidget):
         self._min_conf_spin.setRange(0.0, 1.0)
         self._min_conf_spin.setSingleStep(0.05)
         self._min_conf_spin.setValue(0.0)
+        self._min_conf_spin.setToolTip(
+            "Ergebnisse unterhalb dieser Konfidenz werden ausgeblendet.\n"
+            "0.0 = alle anzeigen."
+        )
         conf_row.addWidget(self._min_conf_spin)
         ov.addLayout(conf_row)
+
+        thresh_row = QHBoxLayout()
+        thresh_row.addWidget(QLabel("Warnschwelle:"))
+        self._warn_thresh_spin = QDoubleSpinBox()
+        self._warn_thresh_spin.setRange(0.0, 1.0)
+        self._warn_thresh_spin.setSingleStep(0.05)
+        self._warn_thresh_spin.setValue(0.70)
+        self._warn_thresh_spin.setToolTip(
+            "Ergebnisse unterhalb dieser Konfidenz werden\n"
+            "rot hinterlegt und als 'Unsicher' markiert."
+        )
+        thresh_row.addWidget(self._warn_thresh_spin)
+        ov.addLayout(thresh_row)
+
         cls_row = QHBoxLayout()
         cls_row.addWidget(QLabel("Klassen-Filter:"))
         self._cls_filter_combo = QComboBox()
@@ -143,6 +161,14 @@ class BatchInferencePage(QWidget):
         apply_btn = QPushButton("Filter anwenden")
         apply_btn.clicked.connect(self._apply_filter)
         ov.addWidget(apply_btn)
+
+        export_low_btn = QPushButton("Unsichere exportieren…")
+        export_low_btn.setToolTip(
+            "Alle Ergebnisse unterhalb der Warnschwelle als CSV exportieren.\n"
+            "Nützlich für gezielte manuelle Nachprüfung."
+        )
+        export_low_btn.clicked.connect(self._export_low_confidence)
+        ov.addWidget(export_low_btn)
         v.addWidget(og)
 
         # ── Run ────────────────────────────────────────────────────────────────
@@ -340,6 +366,7 @@ class BatchInferencePage(QWidget):
 
     def _show_results(self, results: List[Dict]) -> None:
         min_conf = self._min_conf_spin.value()
+        warn_thresh = self._warn_thresh_spin.value()
         cls_filter = self._cls_filter_combo.currentText()
 
         filtered = [
@@ -352,11 +379,15 @@ class BatchInferencePage(QWidget):
         self._table.setRowCount(len(filtered))
 
         errors = sum(1 for r in filtered if r["error"])
+        uncertain = sum(1 for r in filtered if r["confidence"] < warn_thresh and not r["error"])
         counts: Dict[str, int] = {}
         for r in filtered:
             counts[r["predicted"]] = counts.get(r["predicted"], 0) + 1
 
+        warn_bg = QColor(80, 30, 20)
         for row, res in enumerate(filtered):
+            is_uncertain = res["confidence"] < warn_thresh and not res["error"]
+
             self._table.setItem(row, 0, QTableWidgetItem(res["filename"]))
             self._table.setItem(row, 1, QTableWidgetItem(res["predicted"]))
 
@@ -364,31 +395,69 @@ class BatchInferencePage(QWidget):
             conf_item.setData(Qt.UserRole, res["confidence"])
             if res["confidence"] >= 0.9:
                 conf_item.setForeground(QColor("#3FB950"))
-            elif res["confidence"] >= 0.7:
+            elif res["confidence"] >= warn_thresh:
                 conf_item.setForeground(QColor("#D29922"))
             else:
                 conf_item.setForeground(QColor("#F85149"))
             self._table.setItem(row, 2, conf_item)
 
-            err_item = QTableWidgetItem(res["error"] or "")
+            err_item = QTableWidgetItem(res["error"] or ("⚠ Niedrig" if is_uncertain else ""))
             if res["error"]:
                 err_item.setForeground(QColor("#F85149"))
+            elif is_uncertain:
+                err_item.setForeground(QColor("#D29922"))
             self._table.setItem(row, 3, err_item)
 
             for col in range(4):
                 item = self._table.item(row, col)
                 if item:
                     item.setData(Qt.UserRole + 1, res["path"])
+                    if is_uncertain:
+                        item.setBackground(warn_bg)
 
         self._table.setSortingEnabled(True)
 
         summary_parts = [f"{len(filtered)} Bilder"]
         for cls, n in sorted(counts.items()):
             summary_parts.append(f"{cls}: {n}")
+        if uncertain:
+            summary_parts.append(f"⚠ {uncertain} unsicher (<{warn_thresh:.0%})")
         if errors:
-            summary_parts.append(f"⚠ {errors} Fehler")
+            summary_parts.append(f"✗ {errors} Fehler")
         self._summary_lbl.setText("  |  ".join(summary_parts))
         self._status_lbl.setText(f"Fertig — {len(results)} Bilder verarbeitet")
+
+    def _export_low_confidence(self) -> None:
+        if not self._results:
+            QMessageBox.information(self, "Keine Daten", "Bitte zuerst Batch starten.")
+            return
+        warn_thresh = self._warn_thresh_spin.value()
+        low = [r for r in self._results if r["confidence"] < warn_thresh and not r["error"]]
+        if not low:
+            QMessageBox.information(
+                self, "Keine unsicheren Ergebnisse",
+                f"Alle Ergebnisse liegen über der Warnschwelle ({warn_thresh:.0%})."
+            )
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Unsichere Ergebnisse exportieren",
+            "low_confidence.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["filename", "path", "predicted", "confidence"])
+                for r in low:
+                    writer.writerow([r["filename"], r["path"], r["predicted"],
+                                     f"{r['confidence']:.4f}"])
+            QMessageBox.information(
+                self, "Exportiert",
+                f"{len(low)} unsichere Ergebnisse gespeichert:\n{path}"
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Exportfehler", str(exc))
 
     def _apply_filter(self) -> None:
         if self._results:

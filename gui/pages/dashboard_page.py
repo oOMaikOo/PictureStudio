@@ -2,7 +2,7 @@
 Dashboard page: project overview with statistics cards.
 """
 import os
-from typing import Optional
+from typing import Optional, List
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
@@ -49,10 +49,12 @@ class DashboardPage(QWidget):
 
     open_project_requested = Signal()
     new_project_requested = Signal()
+    open_recent_requested = Signal(str)   # emits file path
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.project = None
+        self._recent_projects: List[str] = []
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -73,8 +75,11 @@ class DashboardPage(QWidget):
 
         # No-project hint
         self._no_project_widget = QWidget()
-        np_layout = QHBoxLayout(self._no_project_widget)
-        np_layout.addStretch()
+        np_layout = QVBoxLayout(self._no_project_widget)
+        np_layout.setSpacing(16)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
         _btn_ss = (
             "QPushButton {{ background:{bg}; color:white; border:none; border-radius:6px;"
             " padding:10px 24px; font-size:13px; font-weight:bold; }}"
@@ -86,9 +91,18 @@ class DashboardPage(QWidget):
         open_btn = QPushButton("Projekt öffnen…")
         open_btn.setStyleSheet(_btn_ss.format(bg="#21262D", hov="#30363D"))
         open_btn.clicked.connect(self.open_project_requested)
-        np_layout.addWidget(new_btn)
-        np_layout.addWidget(open_btn)
-        np_layout.addStretch()
+        btn_row.addWidget(new_btn)
+        btn_row.addWidget(open_btn)
+        btn_row.addStretch()
+        np_layout.addLayout(btn_row)
+
+        # Recent projects section (shown when there are recents)
+        self._recent_group = QGroupBox("Zuletzt geöffnet")
+        self._recent_layout = QVBoxLayout(self._recent_group)
+        self._recent_layout.setSpacing(4)
+        np_layout.addWidget(self._recent_group)
+        self._recent_group.hide()
+
         layout.addWidget(self._no_project_widget)
 
         # Stats cards grid
@@ -146,9 +160,37 @@ class DashboardPage(QWidget):
         self.project = project
         self.refresh()
 
+    def set_recent_projects(self, paths: List[str]) -> None:
+        self._recent_projects = [p for p in paths if os.path.exists(p)]
+        self._refresh_recent_section()
+
+    def _refresh_recent_section(self) -> None:
+        # Clear existing buttons
+        for i in reversed(range(self._recent_layout.count())):
+            w = self._recent_layout.itemAt(i).widget()
+            if w:
+                w.deleteLater()
+
+        if not self._recent_projects:
+            self._recent_group.hide()
+            return
+
+        self._recent_group.show()
+        for path in self._recent_projects[:8]:
+            btn = QPushButton(f"  {os.path.basename(path)}")
+            btn.setToolTip(path)
+            btn.setStyleSheet(
+                "QPushButton { text-align:left; background:#161B22; border:1px solid #30363D;"
+                " border-radius:4px; padding:6px 10px; color:#ADBAC7; }"
+                "QPushButton:hover { background:#1F6FEB; color:white; border-color:#1F6FEB; }"
+            )
+            btn.clicked.connect(lambda _, p=path: self.open_recent_requested.emit(p))
+            self._recent_layout.addWidget(btn)
+
     def refresh(self) -> None:
         if not self.project:
             self._no_project_widget.setVisible(True)
+            self._refresh_recent_section()
             return
         self._no_project_widget.setVisible(False)
         data = self.project.get_dashboard_data()
@@ -170,29 +212,40 @@ class DashboardPage(QWidget):
         self._last_labels["last_run_f1"].setText(f"{f1*100:.2f}%" if f1 else "–")
         self._last_labels["current_model"].setText(data.get("current_model", "") or "–")
 
-        # Class distribution bars
+        # Class distribution bars (with percentage)
         for i in reversed(range(self._class_layout.count())):
-            self._class_layout.itemAt(i).widget().deleteLater()
+            w = self._class_layout.itemAt(i).widget()
+            if w:
+                w.deleteLater()
 
         label_counts = data.get("label_counts", {})
         total_labeled = sum(label_counts.values()) or 1
         colors = [info.get("color", "#888") for info in self.project.labels.values()]
+        max_count = max(label_counts.values(), default=1) or 1
 
         for (lbl, cnt), color in zip(label_counts.items(), colors):
             row = QHBoxLayout()
-            name_lbl = QLabel(f"{lbl}")
-            name_lbl.setFixedWidth(150)
+            name_lbl = QLabel(lbl)
+            name_lbl.setFixedWidth(140)
             name_lbl.setStyleSheet(f"color: {color}; font-weight: bold;")
             row.addWidget(name_lbl)
-            bar = QFrame()
-            pct = int(cnt / total_labeled * 300)
-            bar.setFixedSize(max(pct, 4), 18)
+
+            bar_container = QFrame()
+            bar_container.setFixedHeight(18)
+            bar_container.setStyleSheet("background: #21262D; border-radius: 3px;")
+            bar_container.setMinimumWidth(200)
+            bar = QFrame(bar_container)
+            fill_w = max(int(cnt / max_count * 200), 4 if cnt > 0 else 0)
+            bar.setGeometry(0, 0, fill_w, 18)
             bar.setStyleSheet(f"background: {color}; border-radius: 3px;")
-            row.addWidget(bar)
-            cnt_lbl = QLabel(f" {cnt}")
-            cnt_lbl.setStyleSheet("color: #aaa;")
+            row.addWidget(bar_container, stretch=1)
+
+            pct = cnt / total_labeled * 100
+            cnt_lbl = QLabel(f"  {cnt}  ({pct:.1f}%)")
+            cnt_lbl.setStyleSheet("color: #aaa; font-size: 11px;")
+            cnt_lbl.setFixedWidth(100)
             row.addWidget(cnt_lbl)
-            row.addStretch()
+
             container_w = QWidget()
             container_w.setLayout(row)
             self._class_layout.addWidget(container_w)
@@ -205,11 +258,17 @@ class DashboardPage(QWidget):
         if len(counts) >= 2 and min(counts) > 0:
             ratio = max(counts) / min(counts)
             if ratio > 5:
-                warns.append(f"⚠ Klassenungleichgewicht: Ratio {ratio:.1f}:1. Augmentation empfohlen.")
+                warns.append(
+                    f"⚠ Klassenungleichgewicht: Ratio {ratio:.1f}:1 — "
+                    "'Klassenausgleich' im Training aktivieren."
+                )
         from utils.config import MIN_IMAGES_PER_CLASS
         for lbl, cnt in label_counts.items():
             if 0 < cnt < MIN_IMAGES_PER_CLASS:
-                warns.append(f"⚠ Klasse '{lbl}' hat nur {cnt} Bilder (Mindestens {MIN_IMAGES_PER_CLASS} empfohlen).")
+                warns.append(
+                    f"⚠ Klasse '{lbl}' hat nur {cnt} Bilder "
+                    f"(Mindestens {MIN_IMAGES_PER_CLASS} empfohlen)."
+                )
 
         self._warn_label.setText("\n".join(warns) if warns else "✓ Keine Warnungen.")
         self._warn_label.setStyleSheet("color: #D29922;" if warns else "color: #3FB950;")

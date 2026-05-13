@@ -11,7 +11,105 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QBrush
+
+
+class _AccuracyChart(QWidget):
+    """Simple bar chart showing validation accuracy per training run."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._data: List[dict] = []   # list of {label, acc, f1, is_best}
+        self.setMinimumHeight(160)
+
+    def set_data(self, runs: List[dict]) -> None:
+        self._data = runs
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        if not self._data:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        pad_l, pad_r, pad_t, pad_b = 48, 16, 16, 36
+        chart_w = w - pad_l - pad_r
+        chart_h = h - pad_t - pad_b
+
+        # Background
+        painter.fillRect(0, 0, w, h, QColor("#0D1117"))
+
+        # Axis lines
+        pen = QPen(QColor("#30363D"))
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.drawLine(pad_l, pad_t, pad_l, pad_t + chart_h)
+        painter.drawLine(pad_l, pad_t + chart_h, pad_l + chart_w, pad_t + chart_h)
+
+        # Y-axis labels (0%, 50%, 100%)
+        painter.setPen(QColor("#8B949E"))
+        font = painter.font()
+        font.setPointSize(8)
+        painter.setFont(font)
+        for pct in [0, 50, 100]:
+            y = pad_t + chart_h - int(pct / 100 * chart_h)
+            painter.drawText(2, y + 4, 42, 12, Qt.AlignRight, f"{pct}%")
+            if pct > 0:
+                painter.setPen(QPen(QColor("#21262D")))
+                painter.drawLine(pad_l, y, pad_l + chart_w, y)
+                painter.setPen(QColor("#8B949E"))
+
+        # Bars
+        n = len(self._data)
+        if n == 0:
+            return
+        bar_w = max(8, min(40, (chart_w - 4) // n - 4))
+        spacing = (chart_w - n * bar_w) // (n + 1)
+
+        for i, entry in enumerate(self._data):
+            x = pad_l + spacing + i * (bar_w + spacing)
+            acc = min(max(entry.get("acc", 0), 0), 1)
+            f1 = min(max(entry.get("f1", 0), 0), 1)
+            bar_h_acc = int(acc * chart_h)
+            bar_h_f1 = int(f1 * chart_h)
+
+            # Accuracy bar
+            color = QColor("#1F6FEB") if not entry.get("is_best") else QColor("#2ECC71")
+            painter.fillRect(x, pad_t + chart_h - bar_h_acc, bar_w, bar_h_acc, color)
+
+            # F1 overlay (thin line)
+            if f1 > 0:
+                painter.setPen(QPen(QColor("#D29922"), 2))
+                y_f1 = pad_t + chart_h - bar_h_f1
+                painter.drawLine(x, y_f1, x + bar_w, y_f1)
+                painter.setPen(Qt.NoPen)
+
+            # Value label on bar
+            painter.setPen(QColor("#FFFFFF"))
+            if bar_h_acc > 16:
+                painter.drawText(
+                    x, pad_t + chart_h - bar_h_acc, bar_w, 14,
+                    Qt.AlignHCenter, f"{acc*100:.0f}%"
+                )
+
+            # X-axis label (run index or short ID)
+            painter.setPen(QColor("#8B949E"))
+            lbl = entry.get("label", str(i + 1))
+            painter.drawText(
+                x - 4, pad_t + chart_h + 4, bar_w + 8, 28,
+                Qt.AlignHCenter | Qt.AlignTop, lbl
+            )
+
+        # Legend
+        painter.setPen(QColor("#1F6FEB"))
+        painter.fillRect(pad_l, 2, 10, 10, QColor("#1F6FEB"))
+        painter.setPen(QColor("#8B949E"))
+        painter.drawText(pad_l + 14, 2, 80, 12, Qt.AlignLeft, "Accuracy")
+        painter.setPen(QPen(QColor("#D29922"), 2))
+        y_leg = 2 + 5
+        painter.drawLine(pad_l + 100, y_leg, pad_l + 110, y_leg)
+        painter.setPen(QColor("#8B949E"))
+        painter.drawText(pad_l + 114, 2, 40, 12, Qt.AlignLeft, "F1")
 
 
 class ModelsPage(QWidget):
@@ -141,7 +239,7 @@ class ModelsPage(QWidget):
         return w
 
     def _build_history_tab(self) -> QWidget:
-        from PySide6.QtWidgets import QWidget
+        from PySide6.QtWidgets import QWidget, QSplitter
         w = QWidget()
         vl = QVBoxLayout(w)
 
@@ -153,6 +251,8 @@ class ModelsPage(QWidget):
         hdr.addWidget(refresh_btn)
         vl.addLayout(hdr)
 
+        splitter = QSplitter(Qt.Vertical)
+
         self._history_table = QTableWidget(0, 8)
         self._history_table.setHorizontalHeaderLabels([
             "Datum", "Run-ID", "Architektur", "Accuracy", "F1",
@@ -162,7 +262,12 @@ class ModelsPage(QWidget):
         self._history_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self._history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._history_table.setAlternatingRowColors(True)
-        vl.addWidget(self._history_table)
+        splitter.addWidget(self._history_table)
+
+        self._history_chart = _AccuracyChart()
+        splitter.addWidget(self._history_chart)
+        splitter.setSizes([300, 200])
+        vl.addWidget(splitter)
 
         return w
 
@@ -203,12 +308,13 @@ class ModelsPage(QWidget):
         if not self._manager:
             return
         all_models = self._manager.get_all(include_archived=True)
-        self._history_table.setRowCount(len(all_models))
-        best_acc = max((m.metrics.get("accuracy", 0) for m in all_models), default=0)
-        for row, m in enumerate(sorted(all_models, key=lambda x: x.created_at, reverse=True)):
+        sorted_models = sorted(all_models, key=lambda x: x.created_at)
+        self._history_table.setRowCount(len(sorted_models))
+        best_acc = max((m.metrics.get("accuracy", 0) for m in sorted_models), default=0)
+        chart_data = []
+        for row, m in enumerate(sorted(sorted_models, key=lambda x: x.created_at, reverse=True)):
             acc = m.metrics.get("accuracy", 0)
             f1 = m.metrics.get("macro_f1", 0)
-            bvm = m.hyperparameters  # best_val_metrics stored in registry
             items = [
                 m.created_at[:16],
                 m.run_id[:8],
@@ -225,6 +331,17 @@ class ModelsPage(QWidget):
                 if col == 3 and acc >= best_acc and acc > 0:
                     item.setForeground(QColor("#2ECC71"))
                 self._history_table.setItem(row, col, item)
+
+        # Build chart data (chronological order)
+        for i, m in enumerate(sorted_models):
+            chart_data.append({
+                "label": m.created_at[5:10],   # MM-DD
+                "acc":   m.metrics.get("accuracy", 0),
+                "f1":    m.metrics.get("macro_f1", 0),
+                "is_best": m.is_best,
+            })
+        if hasattr(self, "_history_chart"):
+            self._history_chart.set_data(chart_data)
 
     def _selected_model_id(self) -> Optional[str]:
         row = self.table.currentRow()
