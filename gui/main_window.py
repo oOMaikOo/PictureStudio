@@ -76,30 +76,33 @@ class MainWindow(QMainWindow):
         self._tour = GuideTour(self)
 
         # Instantiate all pages
-        from gui.pages.dashboard_page   import DashboardPage
-        from gui.pages.data_page        import DataPage
-        from gui.pages.camera_page      import CameraPage
-        from gui.pages.labeling_page    import LabelingPage
-        from gui.pages.training_page    import TrainingPage
-        from gui.pages.models_page      import ModelsPage
-        from gui.pages.inference_page   import InferencePage
-        from gui.pages.export_page      import ExportPage
-        from gui.pages.settings_page    import SettingsPage
+        from gui.pages.dashboard_page       import DashboardPage
+        from gui.pages.data_page            import DataPage
+        from gui.pages.camera_page          import CameraPage
+        from gui.pages.labeling_page        import LabelingPage
+        from gui.pages.training_page        import TrainingPage
+        from gui.pages.models_page          import ModelsPage
+        from gui.pages.inference_page       import InferencePage
+        from gui.pages.export_page          import ExportPage
+        from gui.pages.settings_page        import SettingsPage
+        from gui.pages.batch_inference_page import BatchInferencePage
 
-        self.dashboard_page  = DashboardPage()
-        self.data_page       = DataPage()
-        self.camera_page     = CameraPage()
-        self.labeling_page   = LabelingPage()
-        self.training_page   = TrainingPage()
-        self.models_page     = ModelsPage()
-        self.inference_page  = InferencePage()
-        self.export_page     = ExportPage()
-        self.settings_page   = SettingsPage()
+        self.dashboard_page    = DashboardPage()
+        self.data_page         = DataPage()
+        self.camera_page       = CameraPage()
+        self.labeling_page     = LabelingPage()
+        self.training_page     = TrainingPage()
+        self.models_page       = ModelsPage()
+        self.inference_page    = InferencePage()
+        self.export_page       = ExportPage()
+        self.settings_page     = SettingsPage()
+        self.batch_page        = BatchInferencePage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
             self.training_page, self.models_page, self.inference_page,
             self.export_page, self.settings_page, self.camera_page,
+            self.batch_page,   # index 9
         ]:
             self.stack.addWidget(page)
 
@@ -180,6 +183,12 @@ class MainWindow(QMainWindow):
         info_a.triggered.connect(self._show_project_info)
         pm.addAction(info_a)
 
+        pm.addSeparator()
+        report_a = QAction("Bericht erstellen…", self)
+        report_a.setShortcut("Ctrl+R")
+        report_a.triggered.connect(self._create_report)
+        pm.addAction(report_a)
+
         # View
         vm = mb.addMenu("Ansicht")
         for label, idx in [
@@ -189,6 +198,7 @@ class MainWindow(QMainWindow):
             ("Training",       3),
             ("Modelle",        4),
             ("Klassifikation", 5),
+            ("Batch-Inferenz", 9),
             ("Export",         6),
             ("Einstellungen",  7),
         ]:
@@ -361,6 +371,7 @@ class MainWindow(QMainWindow):
         self.models_page.set_project(project)
         self.inference_page.set_project(project, self.audit)
         self.export_page.set_project(project)
+        self.batch_page.set_project(project)
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)
@@ -380,6 +391,22 @@ class MainWindow(QMainWindow):
         ) if self.project.project_path else None
         from gui.camera_capture_dialog import CameraCaptureDialog
         dlg = CameraCaptureDialog(save_dir=save_dir, parent=self)
+        # Inject MQTT client if configured
+        mqtt_cfg = self._settings.get_mqtt_config()
+        if mqtt_cfg.get("enabled"):
+            from core.mqtt_client import MQTTAlarmClient
+            mqtt = MQTTAlarmClient(
+                host=mqtt_cfg.get("host", "localhost"),
+                port=int(mqtt_cfg.get("port", 1883)),
+                topic=mqtt_cfg.get("topic", "picture_studio/anomaly"),
+                username=mqtt_cfg.get("username", ""),
+                password=mqtt_cfg.get("password", ""),
+            )
+            if mqtt.connect():
+                dlg.set_mqtt_client(mqtt)
+        # Inject REST API server for live dashboard scores
+        if self._rest_server.is_running:
+            dlg.set_api_server(self._rest_server)
         if dlg.exec() and dlg.captured_paths:
             added = sum(1 for p in dlg.captured_paths if self.project.add_image(p))
             if added:
@@ -532,6 +559,14 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     # ------------------------------------------------------------------ info / about
+
+    def _create_report(self) -> None:
+        if not self.project:
+            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            return
+        from gui.report_dialog import ReportDialog
+        dlg = ReportDialog(self.project, self)
+        dlg.exec()
 
     def _show_project_info(self) -> None:
         if not self.project:

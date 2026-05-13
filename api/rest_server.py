@@ -9,6 +9,9 @@ GET  /api/project               — full project statistics
 GET  /api/labels                — label definitions (name, color, description)
 GET  /api/images[?labeled=true] — all images with their label(s)
 GET  /api/images/<filename>     — single image info + ROIs
+GET  /api/scores                — last N anomaly scores (live monitoring feed)
+GET  /api/events[?limit=N]      — recent anomaly events from CSV log
+GET  /dashboard                 — self-contained HTML monitoring dashboard
 POST /api/images/label          — assign a label  {path, label}
 POST /api/classify              — live inference  {path, top_k?} or {image_b64, top_k?}
 """
@@ -27,6 +30,8 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     project = None
     inferencer = None   # core.inference.Inferencer or None
     request_count: int = 0
+    score_buffer: list = []          # rolling list of (timestamp, score, threshold)
+    event_log_path: str = ""         # path to anomaly_events.csv (set externally)
 
     # ------------------------------------------------------------------ util
 
@@ -176,7 +181,48 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             })
             return
 
+        # /api/scores — live anomaly score buffer
+        if path == "/api/scores":
+            limit = int(qs.get("limit", ["120"])[0])
+            buf = _ProjectHandler.score_buffer[-limit:]
+            self._send_json({"scores": buf, "count": len(buf)})
+            return
+
+        # /api/events — recent anomaly events from CSV log
+        if path == "/api/events":
+            limit = int(qs.get("limit", ["100"])[0])
+            events = self._read_event_log(limit)
+            self._send_json({"events": events, "count": len(events)})
+            return
+
+        # /dashboard — HTML monitoring dashboard
+        if path in ("/dashboard", "/dashboard/"):
+            html = _build_dashboard_html()
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         self._err("Endpoint not found", 404)
+
+    def _read_event_log(self, limit: int) -> list:
+        path = _ProjectHandler.event_log_path
+        if not path or not os.path.isfile(path):
+            return []
+        import csv as csv_mod
+        rows = []
+        try:
+            with open(path, encoding="utf-8", newline="") as f:
+                reader = csv_mod.DictReader(f)
+                for row in reader:
+                    rows.append(dict(row))
+        except Exception:
+            return []
+        return rows[-limit:]
 
     # ------------------------------------------------------------------ POST
 
@@ -290,6 +336,173 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         self._err("Endpoint not found", 404)
 
 
+# ── Dashboard HTML ─────────────────────────────────────────────────────────
+
+def _build_dashboard_html() -> str:
+    return """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Picture Studio – Monitoring Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #22272E; color: #CDD9E5;
+         padding: 20px; }
+  h1 { color: #5DADE2; margin-bottom: 16px; font-size: 22px; }
+  h2 { color: #7FC3F5; font-size: 14px; margin-bottom: 8px; letter-spacing: .05em; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 14px; margin-bottom: 20px; }
+  .card { background: #2D333B; border-radius: 8px; padding: 16px; border: 1px solid #373E47; }
+  .card .val { font-size: 30px; font-weight: bold; color: #58D68D; margin: 6px 0; }
+  .card .val.alarm { color: #E74C3C; }
+  .card .lbl { font-size: 11px; color: #768390; }
+  #chart-wrap { background: #2D333B; border-radius: 8px; padding: 16px;
+                border: 1px solid #373E47; margin-bottom: 20px; }
+  canvas { width: 100%; height: 180px; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #373E47; color: #CDD9E5; padding: 8px; text-align: left; }
+  td { padding: 7px 8px; border-bottom: 1px solid #373E47; }
+  tr.alarm td { background: rgba(231,76,60,.15); }
+  #status-dot { display: inline-block; width: 10px; height: 10px;
+                border-radius: 50%; background: #58D68D; margin-right: 6px; }
+  #status-dot.err { background: #E74C3C; }
+  .section { background: #2D333B; border-radius: 8px; padding: 16px;
+             border: 1px solid #373E47; }
+  .footer { font-size: 10px; color: #545D68; margin-top: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<h1><span id="status-dot"></span>Picture Studio – Live Monitor</h1>
+
+<div class="grid">
+  <div class="card">
+    <div class="lbl">Letzter Score</div>
+    <div class="val" id="last-score">–</div>
+    <div class="lbl" id="score-pct">–</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Schwellwert</div>
+    <div class="val" id="threshold">–</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Alarme (Session)</div>
+    <div class="val alarm" id="alarm-count">–</div>
+  </div>
+  <div class="card">
+    <div class="lbl">Gesamt-Events (Log)</div>
+    <div class="val" id="event-count">–</div>
+  </div>
+</div>
+
+<div id="chart-wrap">
+  <h2>Score-Verlauf (letzte 120 Frames)</h2>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="section">
+  <h2>Letzte Anomalie-Events</h2>
+  <table>
+    <thead><tr><th>Zeit</th><th>Score</th><th>%</th><th>Bild</th></tr></thead>
+    <tbody id="events-body"><tr><td colspan="4" style="color:#545D68">Lade…</td></tr></tbody>
+  </table>
+</div>
+
+<div class="footer">Aktualisiert alle 3 Sekunden &middot; Picture Studio</div>
+
+<script>
+const BASE = window.location.origin;
+let scores = [];
+let threshold = 0;
+let alarmCount = 0;
+
+function draw(canvas, scores, thr) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth;
+  const H = canvas.height = canvas.offsetHeight || 180;
+  ctx.clearRect(0, 0, W, H);
+  if (!scores.length) return;
+  const vals = scores.map(s => s.score);
+  const max = Math.max(...vals, thr * 1.5, 0.001);
+  const n = vals.length;
+  const dx = W / Math.max(n - 1, 1);
+
+  // threshold line
+  const ty = H - (thr / max) * H;
+  ctx.strokeStyle = '#E67E22';
+  ctx.setLineDash([6, 4]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(W, ty); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // score line
+  ctx.lineWidth = 2;
+  vals.forEach((v, i) => {
+    const x = i * dx;
+    const y = H - (v / max) * H;
+    ctx.strokeStyle = v > thr ? '#E74C3C' : '#2ECC71';
+    if (i === 0) { ctx.beginPath(); ctx.moveTo(x, y); }
+    else { ctx.lineTo(x, y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y); }
+  });
+}
+
+async function fetchData() {
+  try {
+    const [sRes, eRes] = await Promise.all([
+      fetch(BASE + '/api/scores?limit=120'),
+      fetch(BASE + '/api/events?limit=20'),
+    ]);
+    const sData = await sRes.json();
+    const eData = await eRes.json();
+
+    scores = sData.scores || [];
+    alarmCount = scores.filter(s => s.alarm).length;
+    const last = scores[scores.length - 1];
+    threshold = last ? last.threshold : 0;
+
+    document.getElementById('status-dot').className = '';
+    if (last) {
+      document.getElementById('last-score').textContent = last.score.toFixed(5);
+      document.getElementById('last-score').className = 'val' + (last.alarm ? ' alarm' : '');
+      const pct = threshold > 0 ? Math.round(last.score / threshold * 100) : 0;
+      document.getElementById('score-pct').textContent = pct + '% des Schwellwerts';
+      document.getElementById('threshold').textContent = threshold.toFixed(5);
+    }
+    document.getElementById('alarm-count').textContent = alarmCount;
+    document.getElementById('event-count').textContent = eData.count;
+
+    const canvas = document.getElementById('chart');
+    draw(canvas, scores, threshold);
+
+    const tbody = document.getElementById('events-body');
+    tbody.innerHTML = '';
+    const events = (eData.events || []).slice().reverse();
+    if (!events.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#545D68">Keine Events</td></tr>';
+    } else {
+      events.forEach(ev => {
+        const tr = document.createElement('tr');
+        if (parseFloat(ev.score) > parseFloat(ev.threshold)) tr.className = 'alarm';
+        tr.innerHTML = '<td>' + (ev.timestamp||'–') + '</td>'
+          + '<td>' + parseFloat(ev.score||0).toFixed(5) + '</td>'
+          + '<td>' + (ev.score_pct||'–') + '%</td>'
+          + '<td style="font-size:10px;color:#768390">' + (ev.frame_path ? ev.frame_path.split('/').pop() : '–') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+  } catch(e) {
+    document.getElementById('status-dot').className = 'err';
+    console.warn('fetch error', e);
+  }
+}
+
+fetchData();
+setInterval(fetchData, 3000);
+</script>
+</body>
+</html>"""
+
+
 class RestApiServer:
     """
     Manages a single-threaded HTTP server in a background daemon thread.
@@ -313,6 +526,22 @@ class RestApiServer:
 
     def set_inferencer(self, inferencer) -> None:
         _ProjectHandler.inferencer = inferencer
+
+    def push_score(self, score: float, threshold: float) -> None:
+        """Thread-safe: push one score to the live score buffer (keeps last 500)."""
+        from datetime import datetime
+        entry = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "score": round(score, 6),
+            "threshold": round(threshold, 6),
+            "alarm": score > threshold,
+        }
+        _ProjectHandler.score_buffer.append(entry)
+        if len(_ProjectHandler.score_buffer) > 500:
+            _ProjectHandler.score_buffer = _ProjectHandler.score_buffer[-500:]
+
+    def set_event_log_path(self, path: str) -> None:
+        _ProjectHandler.event_log_path = path
 
     # ------------------------------------------------------------------ state
 

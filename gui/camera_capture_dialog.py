@@ -99,9 +99,21 @@ class CameraCaptureDialog(QDialog):
         self._roi_end: Optional[QPoint] = None     # in label coords (live drag)
         self._frame_shape: tuple[int, int] = (480, 640)  # (h, w) of last frame
         self._score_history: list[float] = []      # rolling buffer for calibration
+        self._event_logger = None                  # AnomalyEventLogger, created on scoring start
+        self._mqtt_client = None                   # MQTTAlarmClient, injected via set_mqtt_client
+        self._ae_model_path: Optional[str] = None  # last saved/loaded model path
+        self._api_server = None                    # RestApiServer, injected via set_api_server
 
         self._build_ui()
         self._scan_usb_cameras()
+
+    def set_mqtt_client(self, client) -> None:
+        """Inject an MQTTAlarmClient so anomaly alarms are published via MQTT."""
+        self._mqtt_client = client
+
+    def set_api_server(self, server) -> None:
+        """Inject RestApiServer so live scores are pushed to the web dashboard."""
+        self._api_server = server
 
     # ================================================================== UI BUILD
 
@@ -479,6 +491,26 @@ class CameraCaptureDialog(QDialog):
         calib_btn.setToolTip("Score-Verteilung der letzten Frames anzeigen und Schwellwert anpassen.")
         calib_btn.clicked.connect(self._open_calibration)
         sl.addWidget(calib_btn)
+
+        # Score time-series chart
+        from gui.widgets.score_chart import ScoreChart
+        self._score_chart = ScoreChart()
+        self._score_chart.setToolTip("Live-Verlauf der Anomalie-Scores (grün = OK, rot = Alarm)")
+        sl.addWidget(self._score_chart)
+
+        # Event log row
+        log_row = QHBoxLayout()
+        self._event_log_lbl = QLabel("Events: –")
+        self._event_log_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        log_row.addWidget(self._event_log_lbl)
+        log_row.addStretch()
+        self._open_log_btn = QPushButton("Log öffnen")
+        self._open_log_btn.setFixedWidth(90)
+        self._open_log_btn.setEnabled(False)
+        self._open_log_btn.clicked.connect(self._open_event_log)
+        log_row.addWidget(self._open_log_btn)
+        sl.addLayout(log_row)
+
         g.addWidget(score_grp)
 
         # ── Model save / load ─────────────────────────────────────────────────
@@ -502,6 +534,19 @@ class CameraCaptureDialog(QDialog):
         btn_row2.addWidget(export_onnx_btn)
         btn_row2.addWidget(export_ts_btn)
         il.addLayout(btn_row2)
+        btn_row3 = QHBoxLayout()
+        export_profile_btn = QPushButton("📋 Profil exportieren…")
+        export_profile_btn.setToolTip(
+            "Speichert Modell, Kamera, Schwellwert etc. als JSON-Profil\n"
+            "für den headless monitor_daemon.py"
+        )
+        export_profile_btn.clicked.connect(self._export_monitoring_profile)
+        load_profile_btn = QPushButton("📂 Profil laden…")
+        load_profile_btn.setToolTip("Lädt ein zuvor exportiertes Monitoring-Profil")
+        load_profile_btn.clicked.connect(self._load_monitoring_profile)
+        btn_row3.addWidget(export_profile_btn)
+        btn_row3.addWidget(load_profile_btn)
+        il.addLayout(btn_row3)
         g.addWidget(io_grp)
 
         return grp
@@ -612,10 +657,26 @@ class CameraCaptureDialog(QDialog):
                 smooth_n = self._ae_smooth_n.value()
                 smoothed_alarm = self._ae_score_streak >= smooth_n
                 self._update_score_display(score, smoothed_alarm)
-                if smoothed_alarm and self._ae_save_anomaly_cb.isChecked():
-                    path = self._save_frame(frame)
-                    if path:
-                        self._add_to_list(path)
+                self._score_chart.update_data(self._score_history, self._detector.threshold)
+                if self._api_server is not None:
+                    self._api_server.push_score(score, self._detector.threshold)
+                if smoothed_alarm:
+                    saved_path = ""
+                    if self._ae_save_anomaly_cb.isChecked():
+                        saved_path = self._save_frame(frame) or ""
+                        if saved_path:
+                            self._add_to_list(saved_path)
+                    if self._event_logger is not None:
+                        self._event_logger.log_event(
+                            score, self._detector.threshold, saved_path
+                        )
+                        self._event_log_lbl.setText(
+                            f"Events: {self._event_logger.event_count}"
+                        )
+                    if self._mqtt_client is not None:
+                        self._mqtt_client.publish_alarm(
+                            score, self._detector.threshold, saved_path, alarm=True
+                        )
                 # Update reconstruction tab
                 self._recon_frame = recon_bgr
                 self._update_recon_tab(recon_bgr, score)
@@ -859,6 +920,18 @@ class CameraCaptureDialog(QDialog):
         if self._detector:
             self._detector.threshold = value
 
+    def _open_event_log(self) -> None:
+        if self._event_logger is None:
+            return
+        import subprocess, sys
+        path = self._event_logger.log_path
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        elif sys.platform == "win32":
+            os.startfile(path)
+        else:
+            subprocess.Popen(["xdg-open", path])
+
     def _open_calibration(self) -> None:
         if not self._score_history:
             QMessageBox.information(
@@ -886,6 +959,7 @@ class CameraCaptureDialog(QDialog):
         )
         if path:
             self._detector.save(path)
+            self._ae_model_path = path
             QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
 
     def _load_ae_model(self) -> None:
@@ -897,6 +971,7 @@ class CameraCaptureDialog(QDialog):
         self._ensure_detector()
         try:
             self._detector.load(path)
+            self._ae_model_path = path
         except Exception as exc:
             QMessageBox.critical(self, "Ladefehler", str(exc))
 
@@ -942,12 +1017,114 @@ class CameraCaptureDialog(QDialog):
             "Modell geladen — Live-Scoring starten\num die Rekonstruktion zu sehen."
         )
 
+    # ================================================================== MONITORING PROFILE
+
+    def _export_monitoring_profile(self) -> None:
+        from core.monitoring_profile import default_profile, save_profile
+        if not (self._detector and self._detector.trained):
+            QMessageBox.warning(
+                self, "Kein Modell",
+                "Bitte erst einen Autoencoder trainieren oder laden."
+            )
+            return
+        profile = default_profile()
+        profile["model_path"] = self._ae_model_path or ""
+        profile["model_format"] = "pytorch"
+        profile["threshold"] = float(self._ae_threshold_spin.value())
+        profile["smooth_n"] = int(self._ae_smooth_n.value())
+        profile["save_dir"] = self._save_dir
+        profile["roi"] = list(self._roi) if self._roi else None
+        profile["save_anomalies"] = self._ae_save_anomaly_cb.isChecked()
+        profile["scoring_interval"] = 3
+        if self._src_tabs.currentIndex() == 0:
+            data = self._usb_combo.currentData()
+            profile["camera_source"] = int(data) if data is not None else 0
+        else:
+            profile["camera_source"] = self._ip_edit.text().strip() or 0
+        if self._mqtt_client is not None:
+            profile["mqtt"]["enabled"] = True
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Monitoring-Profil exportieren",
+            os.path.join(self._save_dir, "monitor_profile.json"),
+            "JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            save_profile(profile, path)
+            QMessageBox.information(
+                self, "Profil exportiert",
+                f"Monitoring-Profil gespeichert:\n{path}\n\n"
+                "Starten mit:\n  python scripts/monitor_daemon.py "
+                f"--profile \"{path}\""
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Fehler", str(exc))
+
+    def _load_monitoring_profile(self) -> None:
+        from core.monitoring_profile import load_profile
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Monitoring-Profil laden", self._save_dir, "JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            profile = load_profile(path)
+        except Exception as exc:
+            QMessageBox.critical(self, "Ladefehler", str(exc))
+            return
+        # Apply threshold
+        self._ae_threshold_spin.setValue(float(profile.get("threshold", 0.02)))
+        self._ae_smooth_n.setValue(int(profile.get("smooth_n", 5)))
+        self._ae_save_anomaly_cb.setChecked(bool(profile.get("save_anomalies", True)))
+        save_dir = profile.get("save_dir", "")
+        if save_dir and os.path.isdir(save_dir):
+            self._save_dir = save_dir
+            self._dir_edit.setText(save_dir)
+        # Load model if path is set and valid
+        model_path = profile.get("model_path", "")
+        if model_path and os.path.isfile(model_path):
+            self._ensure_detector()
+            try:
+                self._detector.load(model_path)
+                self._ae_model_path = model_path
+                self._ae_scoring_btn.setEnabled(True)
+                self._ae_threshold_spin.blockSignals(True)
+                self._ae_threshold_spin.setValue(self._detector.threshold)
+                self._ae_threshold_spin.blockSignals(False)
+                self._ae_train_lbl.setText(f"Modell geladen | Schwellwert: {self._detector.threshold:.5f}")
+            except Exception as exc:
+                QMessageBox.warning(self, "Modell-Ladefehler", str(exc))
+        # Camera source
+        src = profile.get("camera_source", 0)
+        if isinstance(src, str):
+            self._src_tabs.setCurrentIndex(1)
+            self._ip_edit.setText(src)
+        else:
+            self._src_tabs.setCurrentIndex(0)
+        # ROI
+        roi = profile.get("roi")
+        if roi and len(roi) == 4:
+            self._roi = tuple(roi)
+            self._roi_clear_btn.setEnabled(True)
+            self._roi_lbl.setText(
+                f"ROI: ({roi[0]:.2f},{roi[1]:.2f}) – ({roi[2]:.2f},{roi[3]:.2f})"
+            )
+        QMessageBox.information(self, "Profil geladen", f"Profil geladen:\n{path}")
+
     # ================================================================== SCORING TOGGLE
 
     def _on_scoring_toggled(self, checked: bool) -> None:
         if checked:
             self._ae_scoring_btn.setText("⏹  Live-Scoring stoppen")
             self._ae_score_streak = 0
+            from core.anomaly_logger import AnomalyEventLogger
+            log_path = os.path.join(self._save_dir, "anomaly_events.csv")
+            self._event_logger = AnomalyEventLogger(log_path)
+            self._event_log_lbl.setText(f"Events: {self._event_logger.event_count}")
+            self._open_log_btn.setEnabled(True)
+            if self._api_server is not None:
+                self._api_server.set_event_log_path(log_path)
         else:
             self._ae_scoring_btn.setText("▶  Live-Scoring starten")
             self._set_preview_border_normal()

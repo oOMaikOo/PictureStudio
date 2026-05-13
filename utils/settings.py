@@ -88,6 +88,13 @@ class AppSettings:
     def set_show_top_k(self, val: int) -> None:
         self._s.setValue("inference/show_top_k", val)
 
+    # ---- mqtt ----
+    def get_mqtt_config(self) -> dict:
+        return self._s.value("mqtt/config", {}) or {}
+
+    def save_mqtt_config(self, cfg: dict) -> None:
+        self._s.setValue("mqtt/config", cfg)
+
     # ---- ssh profiles ----
     def get_ssh_profiles(self) -> list:
         return self._s.value("ssh/profiles", []) or []

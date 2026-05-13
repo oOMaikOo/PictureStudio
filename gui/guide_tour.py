@@ -309,16 +309,19 @@ TOUR_STEPS = {
          "Speichern eine Sicherungskopie (.bak)\n"
          "im Projektverzeichnis.",
          None),
-        ("REST-API konfigurieren",
-         "Der integrierte REST-Server läuft auf\n"
-         "http://localhost:5000 (konfigurierbar).\n\n"
+        ("REST-API & Web-Dashboard",
+         "REST-Server: Einstellungen → API starten\n"
+         "(Standard-Port: 8765)\n\n"
          "Endpunkte:\n"
-         "GET  /api/status  → Projektstatus\n"
-         "GET  /api/labels  → Klassemliste\n"
-         "POST /api/classify → Bild bewerten\n\n"
-         "Modell auf der Klassifikations-Seite\n"
-         "laden, dann ist die API aktiv.",
-         None),
+         "GET  /api/status   → Projektstatus\n"
+         "GET  /api/labels   → Klassenliste\n"
+         "POST /api/classify → Bild bewerten\n"
+         "GET  /api/scores   → Live Score-Puffer\n"
+         "GET  /api/events   → Anomalie-Events\n"
+         "GET  /dashboard    → Live-Dashboard\n\n"
+         "'📊 Dashboard' → öffnet Browser-Dashboard\n"
+         "mit Live-Monitoring (aktualisiert alle 3 s).",
+         "Dashboard"),
         ("SSH-Profile anlegen",
          "'Profil hinzufügen' für SSH-Ferntraining:\n"
          "• Name (frei wählbar)\n"
@@ -399,6 +402,33 @@ TOUR_STEPS = {
          "ONNX läuft in ONNX Runtime, OpenCV,\n"
          "TensorRT und vielen anderen Frameworks.",
          None),
+        ("Monitoring-Profil exportieren",
+         "Für 24/7-Betrieb ohne GUI:\n\n"
+         "1. Modell trainieren und speichern\n"
+         "2. '📋 Profil exportieren…' klicken\n"
+         "3. JSON-Datei speichern\n\n"
+         "Das Profil enthält:\n"
+         "• Modellpfad + Format\n"
+         "• Schwellwert & Glättung\n"
+         "• Kameraquelle & Speicherordner\n"
+         "• ROI-Koordinaten\n"
+         "• MQTT-Konfiguration\n\n"
+         "Dann headless starten:\n"
+         "python scripts/monitor_daemon.py\n"
+         "  --profile monitor_profile.json",
+         "Profil exportieren"),
+        ("Event-Log & MQTT-Alarm",
+         "Während Live-Scoring:\n\n"
+         "Event-Log (CSV): Jeder Alarm wird\n"
+         "automatisch geloggt:\n"
+         "• Zeitstempel, Score, Schwellwert\n"
+         "• Pfad zum gespeicherten Frame\n"
+         "'Log öffnen' → CSV in Standardprogramm\n\n"
+         "MQTT: Einstellungen → MQTT konfigurieren\n"
+         "Jeder Alarm wird als JSON-Payload\n"
+         "an den Broker publiziert.\n\n"
+         "pip install paho-mqtt",
+         "Log öffnen"),
     ],
 }
 

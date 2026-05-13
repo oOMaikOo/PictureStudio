@@ -8,8 +8,9 @@ from typing import Dict, List, Optional
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QPushButton, QCheckBox, QSpinBox, QGroupBox, QScrollArea,
-    QWidget, QComboBox, QFileDialog, QProgressBar, QSizePolicy,
+    QPushButton, QCheckBox, QSpinBox, QDoubleSpinBox, QGroupBox,
+    QScrollArea, QWidget, QComboBox, QFileDialog, QProgressBar,
+    QSizePolicy, QSlider,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap, QImage
@@ -42,39 +43,40 @@ class AugWorker(QThread):
             from torchvision import transforms
 
             img = PILImage.open(self.image_path).convert("RGB")
-
-            # Original — just resize
             orig = img.resize((self.image_size, self.image_size), PILImage.BILINEAR)
 
-            # Build augmentation pipeline (PIL in → PIL out, no ToTensor)
             t_list = []
-            if self.aug_cfg.get("flip"):
+            cfg = self.aug_cfg
+            if cfg.get("flip"):
                 t_list.append(transforms.RandomHorizontalFlip(p=0.5))
                 t_list.append(transforms.RandomVerticalFlip(p=0.15))
-            if self.aug_cfg.get("rotation"):
-                t_list.append(transforms.RandomRotation(15))
-            if self.aug_cfg.get("brightness") or self.aug_cfg.get("contrast"):
+            if cfg.get("rotation"):
+                deg = float(cfg.get("rotation_degrees", 15))
+                t_list.append(transforms.RandomRotation(deg))
+            if cfg.get("brightness") or cfg.get("contrast"):
+                bri = float(cfg.get("brightness_strength", 0.35))
                 t_list.append(transforms.ColorJitter(
-                    brightness=0.35 if self.aug_cfg.get("brightness") else 0,
-                    contrast=0.35 if self.aug_cfg.get("contrast") else 0,
+                    brightness=bri if cfg.get("brightness") else 0,
+                    contrast=bri if cfg.get("contrast") else 0,
                     saturation=0.15,
                 ))
-            if self.aug_cfg.get("scale"):
+            if cfg.get("blur"):
+                radius = int(cfg.get("blur_radius", 3))
+                radius = radius if radius % 2 == 1 else radius + 1
+                t_list.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
+            if cfg.get("scale"):
+                scale_lo = float(cfg.get("scale_min", 0.75))
                 t_list.append(transforms.RandomResizedCrop(
-                    self.image_size, scale=(0.75, 1.0)
+                    self.image_size, scale=(scale_lo, 1.0)
                 ))
             else:
                 t_list.append(transforms.Resize((self.image_size, self.image_size)))
 
             pipeline = transforms.Compose(t_list) if t_list else None
-
-            augmented = []
-            for _ in range(self.n_samples):
-                if pipeline is not None:
-                    augmented.append(pipeline(img))
-                else:
-                    augmented.append(orig.copy())
-
+            augmented = [
+                pipeline(img) if pipeline else orig.copy()
+                for _ in range(self.n_samples)
+            ]
             self.done.emit(orig, augmented)
         except Exception as exc:
             self.error.emit(str(exc))
@@ -126,17 +128,22 @@ class _ThumbCell(QLabel):
 
 class AugmentationPreviewDialog(QDialog):
     """
-    Shows original + N augmented samples for a chosen image.
+    Augmentation editor + live preview dialog.
+    Shows original + N randomly augmented versions of a chosen image.
+    Emits `config_accepted` with the final aug_cfg dict when the user
+    clicks "Einstellungen übernehmen".
 
     Parameters
     ----------
     project     : current Project (for picking images)
-    aug_cfg     : dict with keys flip/rotation/brightness/contrast/scale
+    aug_cfg     : dict with keys flip/rotation/brightness/contrast/scale/blur + intensity params
     image_size  : model input size in pixels
     """
 
+    config_accepted = Signal(dict)   # emitted when user clicks "Übernehmen"
+
     COLS      = 3
-    N_SAMPLES = 8   # augmented samples (original is shown separately)
+    N_SAMPLES = 8
 
     def __init__(self, project, aug_cfg: Dict,
                  image_size: int = 224, parent=None):
@@ -145,11 +152,10 @@ class AugmentationPreviewDialog(QDialog):
         self._image_path = ""
         self._worker: Optional[AugWorker] = None
 
-        self.setWindowTitle("Augmentierungs-Vorschau")
-        self.resize(680, 660)
+        self.setWindowTitle("Augmentierungs-Editor")
+        self.resize(780, 740)
         self._build_ui(aug_cfg, image_size)
 
-        # Pre-select first project image
         if project and project.images:
             first = project.images[0]
             if os.path.isfile(first):
@@ -161,14 +167,31 @@ class AugmentationPreviewDialog(QDialog):
 
     # ------------------------------------------------------------------ UI
 
+    def _slider_row(self, label: str, lo: int, hi: int, val: int,
+                    unit: str = "") -> tuple:
+        """Return (QHBoxLayout, QSlider, QLabel) for a labeled slider."""
+        row = QHBoxLayout()
+        lbl = QLabel(label)
+        lbl.setFixedWidth(130)
+        lbl.setStyleSheet("color:#ADBAC7;font-size:10px;")
+        row.addWidget(lbl)
+        sld = QSlider(Qt.Horizontal)
+        sld.setRange(lo, hi)
+        sld.setValue(val)
+        row.addWidget(sld)
+        val_lbl = QLabel(f"{val}{unit}")
+        val_lbl.setFixedWidth(44)
+        val_lbl.setStyleSheet("color:#388BFD;font-size:10px;")
+        row.addWidget(val_lbl)
+        sld.valueChanged.connect(lambda v, l=val_lbl, u=unit: l.setText(f"{v}{u}"))
+        return row, sld, val_lbl
+
     def _build_ui(self, aug_cfg: Dict, image_size: int) -> None:
         root = QVBoxLayout(self)
 
-        # ── Controls ────────────────────────────────────────────────────────
-        ctrl = QGroupBox("Einstellungen")
-        cv   = QVBoxLayout(ctrl)
-
-        # Image picker
+        # ── Image picker ────────────────────────────────────────────────────
+        img_grp = QGroupBox("Vorschau-Bild")
+        img_v = QVBoxLayout(img_grp)
         img_row = QHBoxLayout()
         img_row.addWidget(QLabel("Bild:"))
         self._img_combo = QComboBox()
@@ -183,38 +206,72 @@ class AugmentationPreviewDialog(QDialog):
         browse_btn.setFixedWidth(60)
         browse_btn.clicked.connect(self._browse_image)
         img_row.addWidget(browse_btn)
-        cv.addLayout(img_row)
+        img_v.addLayout(img_row)
+        root.addWidget(img_grp)
 
-        # Augmentation toggles + image size
-        aug_row = QHBoxLayout()
-        self._cb_flip       = QCheckBox("Flip")
-        self._cb_rotation   = QCheckBox("Rotation")
-        self._cb_brightness = QCheckBox("Helligkeit")
-        self._cb_scale      = QCheckBox("Skalierung")
-        self._cb_flip.setChecked(aug_cfg.get("flip", True))
-        self._cb_rotation.setChecked(aug_cfg.get("rotation", True))
-        self._cb_brightness.setChecked(
-            aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True)
-        )
-        self._cb_scale.setChecked(aug_cfg.get("scale", False))
-        for cb in [self._cb_flip, self._cb_rotation, self._cb_brightness, self._cb_scale]:
+        # ── Augmentation editor ──────────────────────────────────────────────
+        aug_grp = QGroupBox("Augmentierungen")
+        av = QVBoxLayout(aug_grp)
+
+        def _cb(text: str, key: str, default: bool) -> QCheckBox:
+            cb = QCheckBox(text)
+            cb.setChecked(aug_cfg.get(key, default))
             cb.stateChanged.connect(self._generate)
-            aug_row.addWidget(cb)
-        aug_row.addSpacing(16)
-        aug_row.addWidget(QLabel("Größe:"))
+            return cb
+
+        # Row 1: toggles
+        tog_row = QHBoxLayout()
+        self._cb_flip       = _cb("Flip",        "flip",       True)
+        self._cb_rotation   = _cb("Rotation",    "rotation",   True)
+        self._cb_brightness = _cb("Helligkeit",  "brightness", True)
+        self._cb_scale      = _cb("Skalierung",  "scale",      False)
+        self._cb_blur       = _cb("Blur",        "blur",       False)
+        for cb in [self._cb_flip, self._cb_rotation, self._cb_brightness,
+                   self._cb_scale, self._cb_blur]:
+            tog_row.addWidget(cb)
+        tog_row.addStretch()
+        av.addLayout(tog_row)
+
+        # Sliders
+        row, self._rot_sld, _ = self._slider_row(
+            "Rotation (±°):", 1, 45, int(aug_cfg.get("rotation_degrees", 15)), "°"
+        )
+        self._rot_sld.valueChanged.connect(self._generate)
+        av.addLayout(row)
+
+        row, self._bri_sld, _ = self._slider_row(
+            "Helligkeit:", 5, 80, int(aug_cfg.get("brightness_strength", 0.3) * 100), "%"
+        )
+        self._bri_sld.valueChanged.connect(self._generate)
+        av.addLayout(row)
+
+        row, self._blur_sld, _ = self._slider_row(
+            "Blur Radius:", 1, 11, int(aug_cfg.get("blur_radius", 3)), "px"
+        )
+        self._blur_sld.valueChanged.connect(self._generate)
+        av.addLayout(row)
+
+        row, self._scale_sld, _ = self._slider_row(
+            "Skalierung min:", 50, 95, int(aug_cfg.get("scale_min", 0.8) * 100), "%"
+        )
+        self._scale_sld.valueChanged.connect(self._generate)
+        av.addLayout(row)
+
+        # Image size + regen
+        bottom_row = QHBoxLayout()
+        bottom_row.addWidget(QLabel("Bildgröße:"))
         self._size_spin = QSpinBox()
         self._size_spin.setRange(64, 512)
         self._size_spin.setSingleStep(32)
         self._size_spin.setValue(image_size)
         self._size_spin.valueChanged.connect(self._generate)
-        aug_row.addWidget(self._size_spin)
-        aug_row.addStretch()
+        bottom_row.addWidget(self._size_spin)
+        bottom_row.addStretch()
         self._regen_btn = QPushButton("↺ Neu generieren")
         self._regen_btn.clicked.connect(self._generate)
-        aug_row.addWidget(self._regen_btn)
-        cv.addLayout(aug_row)
-
-        root.addWidget(ctrl)
+        bottom_row.addWidget(self._regen_btn)
+        av.addLayout(bottom_row)
+        root.addWidget(aug_grp)
 
         # ── Progress ────────────────────────────────────────────────────────
         self._progress = QProgressBar()
@@ -233,34 +290,51 @@ class AugmentationPreviewDialog(QDialog):
         scroll.setWidget(grid_widget)
         root.addWidget(scroll, stretch=1)
 
-        # Create cells: 1 original + N_SAMPLES augmented
         total = 1 + self.N_SAMPLES
         self._cells: List[_ThumbCell] = []
         for i in range(total):
-            caption = "Original" if i == 0 else f"Augmentiert {i}"
+            caption = "Original" if i == 0 else f"Aug {i}"
             cell = _ThumbCell(caption)
-            row, col = divmod(i, self.COLS)
-            self._grid.addWidget(cell, row, col)
+            row_i, col = divmod(i, self.COLS)
+            self._grid.addWidget(cell, row_i, col)
             self._cells.append(cell)
 
-        # ── Close button ────────────────────────────────────────────────────
+        # ── Buttons ─────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         close_btn = QPushButton("Schließen")
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
+        accept_btn = QPushButton("Einstellungen übernehmen")
+        accept_btn.setStyleSheet(
+            "background:#1F6FEB;color:white;font-weight:bold;padding:5px 14px;"
+        )
+        accept_btn.setToolTip(
+            "Aktuelle Augmentierungs-Einstellungen in die Trainingsseite übernehmen"
+        )
+        accept_btn.clicked.connect(self._accept_config)
+        btn_row.addWidget(accept_btn)
         root.addLayout(btn_row)
 
     # ------------------------------------------------------------------ helpers
 
     def _current_aug_cfg(self) -> Dict:
         return {
-            "flip":       self._cb_flip.isChecked(),
-            "rotation":   self._cb_rotation.isChecked(),
-            "brightness": self._cb_brightness.isChecked(),
-            "contrast":   self._cb_brightness.isChecked(),
-            "scale":      self._cb_scale.isChecked(),
+            "flip":                self._cb_flip.isChecked(),
+            "rotation":            self._cb_rotation.isChecked(),
+            "rotation_degrees":    self._rot_sld.value(),
+            "brightness":          self._cb_brightness.isChecked(),
+            "contrast":            self._cb_brightness.isChecked(),
+            "brightness_strength": self._bri_sld.value() / 100.0,
+            "scale":               self._cb_scale.isChecked(),
+            "scale_min":           self._scale_sld.value() / 100.0,
+            "blur":                self._cb_blur.isChecked(),
+            "blur_radius":         self._blur_sld.value(),
         }
+
+    def _accept_config(self) -> None:
+        self.config_accepted.emit(self._current_aug_cfg())
+        self.accept()
 
     # ------------------------------------------------------------------ events
 

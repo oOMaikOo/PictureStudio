@@ -247,7 +247,31 @@ class LabelingPage(QWidget):
         self._al_done_btn.setToolTip("Bild als gelabelt markieren und aus Queue entfernen")
         self._al_done_btn.clicked.connect(self._al_mark_done)
         al_nav_row.addWidget(self._al_done_btn)
+
+        self._al_accept_btn = QPushButton("⚡ Übernehmen")
+        self._al_accept_btn.setStyleSheet(
+            "background:#1F6FEB; color:white; border-radius:4px; padding:3px 8px;"
+        )
+        self._al_accept_btn.setToolTip(
+            "Vorgeschlagenes Label für dieses Bild übernehmen und zum nächsten springen"
+        )
+        self._al_accept_btn.clicked.connect(self._al_accept_suggestion)
+        al_nav_row.addWidget(self._al_accept_btn)
         alp.addLayout(al_nav_row)
+
+        # Bulk accept row
+        al_bulk_row = QHBoxLayout()
+        self._al_bulk_btn = QPushButton("⚡ Alle ≥80% übernehmen")
+        self._al_bulk_btn.setStyleSheet(
+            "background:#BC8CFF; color:white; border-radius:4px;"
+            "padding:3px 8px; font-size:10px;"
+        )
+        self._al_bulk_btn.setToolTip(
+            "Alle Queue-Bilder mit Confidence ≥ 80% automatisch labeln"
+        )
+        self._al_bulk_btn.clicked.connect(self._al_bulk_accept)
+        al_bulk_row.addWidget(self._al_bulk_btn)
+        alp.addLayout(al_bulk_row)
 
         self._al_panel.hide()
         v.addWidget(self._al_panel)
@@ -1514,10 +1538,15 @@ class LabelingPage(QWidget):
                 if unlabeled else "Alle Queue-Bilder wurden gelabelt."
             )
         self._al_next_btn.setEnabled(bool(unlabeled))
-        self._al_done_btn.setEnabled(
-            bool(self._current_image and
-                 any(e["path"] == self._current_image for e in queue))
+        in_queue = bool(
+            self._current_image and
+            any(e["path"] == self._current_image for e in queue)
         )
+        self._al_done_btn.setEnabled(in_queue)
+        self._al_accept_btn.setEnabled(in_queue and bool(
+            next((e for e in queue if e["path"] == self._current_image), {})
+            .get("predicted_label", "") in self.project.labels
+        ))
 
     def _al_next_image(self) -> None:
         """Jump to the next unlabeled image in the AL queue."""
@@ -1580,6 +1609,61 @@ class LabelingPage(QWidget):
         if reply == QMessageBox.Yes:
             self.project.clear_al_queue()
             self._al_panel.hide()
+
+    def _al_accept_suggestion(self) -> None:
+        """Apply the predicted label for the current image and advance to next."""
+        if not self.project or not self._current_image:
+            return
+        queue = self.project.get_al_queue()
+        entry = next((e for e in queue if e["path"] == self._current_image), None)
+        if not entry:
+            return
+        suggested = entry.get("predicted_label", "")
+        if suggested and suggested in self.project.labels:
+            self._assign_label_direct(self._current_image, suggested)
+        self._al_mark_done()
+
+    def _al_bulk_accept(self) -> None:
+        """Auto-label all AL queue images with confidence ≥ 80%."""
+        if not self.project:
+            return
+        queue = self.project.get_al_queue()
+        eligible = [
+            e for e in queue
+            if e.get("confidence", 0) >= 0.80
+            and e.get("predicted_label", "") in self.project.labels
+            and e.get("path", "") in self.project.images
+        ]
+        if not eligible:
+            QMessageBox.information(
+                self, "Keine Kandidaten",
+                "Keine Queue-Einträge mit Confidence ≥ 80% und bekanntem Label gefunden."
+            )
+            return
+        reply = QMessageBox.question(
+            self, "Bulk-Accept",
+            f"{len(eligible)} Bilder werden automatisch gelabelt.\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        from gui.labeling_commands import BulkSetImageLabelCommand
+        assignments = {e["path"]: e["predicted_label"] for e in eligible}
+        old_labels = {
+            path: self.project.get_image_label(path) for path in assignments
+        }
+        self._undo_stack.push(
+            BulkSetImageLabelCommand(self, assignments, old_labels)
+        )
+        for path in assignments:
+            self.project.remove_from_al_queue(path)
+        self.refresh_al_queue_panel()
+        self._refresh_thumb_list()
+        QMessageBox.information(
+            self, "Fertig",
+            f"{len(eligible)} Labels übernommen.\n"
+            "Im Labeling-Reiter zur Kontrolle prüfen."
+        )
 
     # ------------------------------------------------------------------ stats & progress
 

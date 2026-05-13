@@ -51,15 +51,24 @@ class ImageROIDataset(Dataset if HAS_TORCH else object):
                 aug_transforms.append(transforms.RandomHorizontalFlip())
                 aug_transforms.append(transforms.RandomVerticalFlip(p=0.1))
             if aug_cfg.get("rotation", True):
-                aug_transforms.append(transforms.RandomRotation(15))
+                deg = float(aug_cfg.get("rotation_degrees", 15))
+                aug_transforms.append(transforms.RandomRotation(deg))
             if aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True):
+                bri = float(aug_cfg.get("brightness_strength", 0.3))
                 aug_transforms.append(transforms.ColorJitter(
-                    brightness=0.3 if aug_cfg.get("brightness") else 0,
-                    contrast=0.3 if aug_cfg.get("contrast") else 0,
+                    brightness=bri if aug_cfg.get("brightness") else 0,
+                    contrast=bri if aug_cfg.get("contrast") else 0,
                     saturation=0.1,
                 ))
+            if aug_cfg.get("blur", False):
+                radius = int(aug_cfg.get("blur_radius", 3))
+                radius = radius if radius % 2 == 1 else radius + 1
+                aug_transforms.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
             if aug_cfg.get("scale", False):
-                aug_transforms.append(transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)))
+                scale_lo = float(aug_cfg.get("scale_min", 0.8))
+                aug_transforms.append(
+                    transforms.RandomResizedCrop(image_size, scale=(scale_lo, 1.0))
+                )
             else:
                 aug_transforms.append(transforms.Resize((image_size, image_size)))
         else:
@@ -106,15 +115,24 @@ class MultiLabelImageDataset(Dataset if HAS_TORCH else object):
                 aug_transforms.append(transforms.RandomHorizontalFlip())
                 aug_transforms.append(transforms.RandomVerticalFlip(p=0.1))
             if aug_cfg.get("rotation", True):
-                aug_transforms.append(transforms.RandomRotation(15))
+                deg = float(aug_cfg.get("rotation_degrees", 15))
+                aug_transforms.append(transforms.RandomRotation(deg))
             if aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True):
+                bri = float(aug_cfg.get("brightness_strength", 0.3))
                 aug_transforms.append(transforms.ColorJitter(
-                    brightness=0.3 if aug_cfg.get("brightness") else 0,
-                    contrast=0.3 if aug_cfg.get("contrast") else 0,
+                    brightness=bri if aug_cfg.get("brightness") else 0,
+                    contrast=bri if aug_cfg.get("contrast") else 0,
                     saturation=0.1,
                 ))
+            if aug_cfg.get("blur", False):
+                radius = int(aug_cfg.get("blur_radius", 3))
+                radius = radius if radius % 2 == 1 else radius + 1
+                aug_transforms.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
             if aug_cfg.get("scale", False):
-                aug_transforms.append(transforms.RandomResizedCrop(image_size, scale=(0.8, 1.0)))
+                scale_lo = float(aug_cfg.get("scale_min", 0.8))
+                aug_transforms.append(
+                    transforms.RandomResizedCrop(image_size, scale=(scale_lo, 1.0))
+                )
             else:
                 aug_transforms.append(transforms.Resize((image_size, image_size)))
         else:

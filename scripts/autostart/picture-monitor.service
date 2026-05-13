@@ -1,0 +1,20 @@
+[Unit]
+Description=Picture Studio Anomaly Monitor Daemon
+After=network.target
+
+[Service]
+Type=simple
+# ── Edit these three paths ────────────────────────────────────────────────
+User=pi
+WorkingDirectory=/opt/picture
+ExecStart=/opt/picture/.venv/bin/python /opt/picture/scripts/monitor_daemon.py \
+          --profile /opt/picture/profiles/monitor_profile.json
+# ─────────────────────────────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=picture-monitor
+
+[Install]
+WantedBy=multi-user.target

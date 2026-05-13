@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>de.picturestudio.monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Edit the path to match your virtualenv and profile location -->
+    <string>/opt/picture/.venv/bin/python</string>
+    <string>/opt/picture/scripts/monitor_daemon.py</string>
+    <string>--profile</string>
+    <string>/opt/picture/profiles/monitor_profile.json</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/opt/picture</string>
+
+  <!-- Start immediately and restart on exit -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Stdout/Stderr logs -->
+  <key>StandardOutPath</key>
+  <string>/var/log/picture-monitor.log</string>
+  <key>StandardErrorPath</key>
+  <string>/var/log/picture-monitor-error.log</string>
+</dict>
+</plist>

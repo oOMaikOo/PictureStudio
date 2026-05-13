@@ -173,11 +173,13 @@ class TrainingPage(QWidget):
         self.aug_brightness = QCheckBox("Helligkeit / Kontrast")
         self.aug_brightness.setChecked(True)
         self.aug_scale = QCheckBox("Skalierung (Random Crop)")
-        for cb in [self.aug_flip, self.aug_rotation, self.aug_brightness, self.aug_scale]:
+        self.aug_blur = QCheckBox("Blur (Gaussian)")
+        for cb in [self.aug_flip, self.aug_rotation, self.aug_brightness,
+                   self.aug_scale, self.aug_blur]:
             ab.addWidget(cb)
-        aug_preview_btn = QPushButton("🔍 Vorschau anzeigen…")
+        aug_preview_btn = QPushButton("🔍 Editor / Vorschau…")
         aug_preview_btn.setToolTip(
-            "Zeigt, wie die gewählten Augmentierungen auf Bilder aus dem Projekt wirken."
+            "Augmentierungs-Editor öffnen: Intensitäten einstellen und Live-Vorschau sehen."
         )
         aug_preview_btn.setStyleSheet(
             "background:#6C3483; color:white; padding:4px; border-radius:3px;"
@@ -358,13 +360,7 @@ class TrainingPage(QWidget):
     # ------------------------------------------------------------------ augmentation preview
 
     def _show_aug_preview(self) -> None:
-        aug_cfg = {
-            "flip":       self.aug_flip.isChecked(),
-            "rotation":   self.aug_rotation.isChecked(),
-            "brightness": self.aug_brightness.isChecked(),
-            "contrast":   self.aug_brightness.isChecked(),
-            "scale":      self.aug_scale.isChecked(),
-        }
+        aug_cfg = self._get_config().get("augmentation", {})
         from gui.augmentation_preview_dialog import AugmentationPreviewDialog
         dlg = AugmentationPreviewDialog(
             project=self.project,
@@ -372,7 +368,23 @@ class TrainingPage(QWidget):
             image_size=self.img_size_spin.value(),
             parent=self,
         )
+        dlg.config_accepted.connect(self._apply_aug_cfg)
         dlg.exec()
+
+    def _apply_aug_cfg(self, cfg: dict) -> None:
+        """Apply augmentation settings returned from the editor dialog."""
+        self.aug_flip.setChecked(cfg.get("flip", True))
+        self.aug_rotation.setChecked(cfg.get("rotation", True))
+        self.aug_brightness.setChecked(cfg.get("brightness", True))
+        self.aug_scale.setChecked(cfg.get("scale", False))
+        self.aug_blur.setChecked(cfg.get("blur", False))
+        # Store intensity params for use in _get_config
+        self._aug_extra = {
+            "rotation_degrees":    cfg.get("rotation_degrees", 15),
+            "brightness_strength": cfg.get("brightness_strength", 0.3),
+            "scale_min":           cfg.get("scale_min", 0.8),
+            "blur_radius":         cfg.get("blur_radius", 3),
+        }
 
     # ------------------------------------------------------------------ config
 
@@ -396,11 +408,13 @@ class TrainingPage(QWidget):
             "use_rois": self.use_rois_cb.isChecked(),
             "class_balance": self.class_balance_cb.isChecked(),
             "augmentation": {
-                "flip": self.aug_flip.isChecked(),
-                "rotation": self.aug_rotation.isChecked(),
-                "brightness": self.aug_brightness.isChecked(),
-                "contrast": self.aug_brightness.isChecked(),
-                "scale": self.aug_scale.isChecked(),
+                "flip":                self.aug_flip.isChecked(),
+                "rotation":            self.aug_rotation.isChecked(),
+                "brightness":          self.aug_brightness.isChecked(),
+                "contrast":            self.aug_brightness.isChecked(),
+                "scale":               self.aug_scale.isChecked(),
+                "blur":                self.aug_blur.isChecked(),
+                **getattr(self, "_aug_extra", {}),
             },
             "resume_checkpoint": self.resume_path_label.text() if self.resume_cb.isChecked() else "",
             "ssh_enabled": self.ssh_enabled_cb.isChecked(),

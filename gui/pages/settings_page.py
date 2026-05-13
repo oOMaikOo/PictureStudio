@@ -135,6 +135,11 @@ class SettingsPage(QWidget):
         self.api_copy_btn.setToolTip("Basis-URL in Zwischenablage kopieren")
         self.api_copy_btn.clicked.connect(self._copy_api_url)
         api_btn_row.addWidget(self.api_copy_btn)
+        self.api_dashboard_btn = QPushButton("📊 Dashboard")
+        self.api_dashboard_btn.setEnabled(False)
+        self.api_dashboard_btn.setToolTip("Live-Monitoring-Dashboard im Browser öffnen")
+        self.api_dashboard_btn.clicked.connect(self._open_dashboard)
+        api_btn_row.addWidget(self.api_dashboard_btn)
         ag.addLayout(api_btn_row)
 
         api_hint = QLabel(
@@ -155,6 +160,38 @@ class SettingsPage(QWidget):
         api_hint.setWordWrap(True)
         ag.addWidget(api_hint)
         layout.addWidget(api_group)
+
+        # MQTT
+        mqtt_group = QGroupBox("MQTT-Alarm (Anomalie-Erkennung)")
+        mf = QFormLayout(mqtt_group)
+        self.mqtt_enabled_cb = QCheckBox("MQTT-Publishing aktiviert")
+        mf.addRow("", self.mqtt_enabled_cb)
+        self.mqtt_host_edit = QLineEdit("localhost")
+        mf.addRow("Broker-Host:", self.mqtt_host_edit)
+        self.mqtt_port_spin = QSpinBox()
+        self.mqtt_port_spin.setRange(1, 65535)
+        self.mqtt_port_spin.setValue(1883)
+        mf.addRow("Port:", self.mqtt_port_spin)
+        self.mqtt_topic_edit = QLineEdit("picture_studio/anomaly")
+        mf.addRow("Topic:", self.mqtt_topic_edit)
+        self.mqtt_user_edit = QLineEdit()
+        self.mqtt_user_edit.setPlaceholderText("optional")
+        mf.addRow("Benutzername:", self.mqtt_user_edit)
+        self.mqtt_pass_edit = QLineEdit()
+        self.mqtt_pass_edit.setEchoMode(QLineEdit.Password)
+        self.mqtt_pass_edit.setPlaceholderText("optional")
+        mf.addRow("Passwort:", self.mqtt_pass_edit)
+        self.mqtt_status_lbl = QLabel("Nicht verbunden")
+        self.mqtt_status_lbl.setStyleSheet("color:#7F8C8D;font-size:10px;")
+        mf.addRow("Status:", self.mqtt_status_lbl)
+        mqtt_hint = QLabel(
+            "<small>Publiziert JSON-Events bei jedem Anomalie-Alarm.<br>"
+            "paho-mqtt muss installiert sein: <tt>pip install paho-mqtt</tt></small>"
+        )
+        mqtt_hint.setStyleSheet("color:#7F8C8D;")
+        mqtt_hint.setWordWrap(True)
+        mf.addRow(mqtt_hint)
+        layout.addWidget(mqtt_group)
 
         # SSH profiles
         ssh_group = QGroupBox("SSH-Profile")
@@ -190,6 +227,17 @@ class SettingsPage(QWidget):
         self.thumb_size_spin.setValue(self._settings.get_thumbnail_size())
         self.low_conf_spin.setValue(self._settings.get_low_confidence_threshold())
         self.top_k_spin.setValue(self._settings.get_show_top_k())
+        mqtt = self._settings.get_mqtt_config()
+        self.mqtt_enabled_cb.setChecked(bool(mqtt.get("enabled", False)))
+        self.mqtt_host_edit.setText(mqtt.get("host", "localhost"))
+        self.mqtt_port_spin.setValue(int(mqtt.get("port", 1883)))
+        self.mqtt_topic_edit.setText(mqtt.get("topic", "picture_studio/anomaly"))
+        self.mqtt_user_edit.setText(mqtt.get("username", ""))
+        self.mqtt_pass_edit.setText(mqtt.get("password", ""))
+        from core.mqtt_client import HAS_MQTT
+        if not HAS_MQTT:
+            self.mqtt_status_lbl.setText("paho-mqtt nicht installiert")
+            self.mqtt_status_lbl.setStyleSheet("color:#F85149;font-size:10px;")
         self._refresh_ssh_list()
 
     def _refresh_ssh_list(self) -> None:
@@ -263,6 +311,7 @@ class SettingsPage(QWidget):
                 "font-weight:bold;border-radius:4px;"
             )
             self.api_copy_btn.setEnabled(False)
+            self.api_dashboard_btn.setEnabled(False)
             self.api_port_spin.setEnabled(True)
         else:
             port = self.api_port_spin.value()
@@ -274,6 +323,7 @@ class SettingsPage(QWidget):
                     "font-weight:bold;border-radius:4px;"
                 )
                 self.api_copy_btn.setEnabled(True)
+                self.api_dashboard_btn.setEnabled(True)
                 self.api_port_spin.setEnabled(False)
 
     def _on_api_status(self, msg: str) -> None:
@@ -287,6 +337,12 @@ class SettingsPage(QWidget):
         if self._api_server and self._api_server.is_running:
             QApplication.clipboard().setText(self._api_server.url)
 
+    def _open_dashboard(self) -> None:
+        if self._api_server and self._api_server.is_running:
+            import webbrowser
+            port = self._api_server.port
+            webbrowser.open(f"http://localhost:{port}/dashboard")
+
     def _save(self) -> None:
         if not self._settings:
             return
@@ -298,6 +354,14 @@ class SettingsPage(QWidget):
         self._settings.set_thumbnail_size(self.thumb_size_spin.value())
         self._settings.set_low_confidence_threshold(self.low_conf_spin.value())
         self._settings.set_show_top_k(self.top_k_spin.value())
+        self._settings.save_mqtt_config({
+            "enabled":  self.mqtt_enabled_cb.isChecked(),
+            "host":     self.mqtt_host_edit.text().strip(),
+            "port":     self.mqtt_port_spin.value(),
+            "topic":    self.mqtt_topic_edit.text().strip(),
+            "username": self.mqtt_user_edit.text().strip(),
+            "password": self.mqtt_pass_edit.text(),
+        })
         self._settings.sync()
         self.autosave_changed.emit(self.autosave_spin.value(), self.autosave_cb.isChecked())
         QMessageBox.information(self, "Gespeichert", "Einstellungen wurden gespeichert.")

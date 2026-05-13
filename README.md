@@ -13,11 +13,12 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 | **Labeling** | Schnellzuweisung 1–9, Multi-Label-Modus, Label-Hierarchien, Undo/Redo, Audit-Trail, Pixel-Segmentierungsmasken (5 Klassen) |
 | **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; ROI-Vorlagen; Batch-Übertragung auf alle Bilder |
 | **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), SSH-Ferntraining |
-| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder auf Normalframes; Live-Scoring, Heatmap, Bounding Box, konfigurierbarer Schwellwert, Schwellwert-Kalibrierungsdialog |
+| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder auf Normalframes; Live-Scoring, Heatmap, Bounding Box, konfigurierbarer Schwellwert, Schwellwert-Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm |
 | **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17), TorchScript-Export, Accuracy/F1-Vergleich, Run-History, Archivieren/Löschen |
 | **Inferenz** | Batch-Inferenz, Top-K-Anzeige, Test-Time Augmentation (TTA), Ensemble-Inferenz, Semi-automatisches Labeling, Konfidenz-Farbkodierung |
 | **Metriken & Berichte** | Accuracy, F1, gewichteter F1, ROC/AUC, Top-K, HTML- und Excel-Trainingsbericht, Konfusionsmatrix |
-| **REST-API** | `POST /api/classify` (Pfad oder Base64-Bild), `GET /api/status`, `GET /api/labels` — für externe Integration |
+| **REST-API** | `POST /api/classify` (Pfad oder Base64-Bild), `GET /api/status`, `GET /api/labels`, `GET /api/scores`, `GET /api/events`, `GET /dashboard` — für externe Integration und Web-Monitoring |
+| **24/7-Daemon** | `scripts/monitor_daemon.py` — headless, kein GUI, ONNX/PyTorch, CSV-Log, MQTT; Autostart via launchd (macOS) oder systemd (Linux) |
 | **Export** | COCO JSON, YOLO TXT, CSV-Annotationen; Excel-Inferenzergebnisse (konfigurierbare Spalten) |
 | **UX** | Modernes Dark-Theme (GitHub-Dark Palette), Sidebar-Navigation (gesperrt bis Projekt geladen), geführte Tour, F1-Hilfe, QSettings-Persistenz |
 
@@ -283,6 +284,168 @@ python main.py
 
 ---
 
+### Anleitung C — 24/7-Monitoring ohne GUI (Daemon)
+
+> Ziel: Einen Prozess dauerhaft überwachen, ohne die komplette Desktop-App laufen zu lassen. Der Daemon läuft headless im Hintergrund, schreibt Events in ein CSV-Log, publiziert Alarme per MQTT und stellt ein Web-Dashboard bereit.
+
+---
+
+#### Schritt 1 — Monitoring-Profil erstellen (in der GUI)
+
+1. Anomaliemodell wie in Anleitung B (Schritte 1–6) trainieren und speichern
+2. Im Kamera-Dialog: **"📋 Profil exportieren…"** klicken (Gruppe *Modell speichern / laden / exportieren*)
+3. Speicherort wählen (z. B. `~/monitor/monitor_profile.json`)
+4. Das JSON-Profil enthält alle Parameter:
+
+```json
+{
+  "version": 1,
+  "model_path": "/pfad/zum/autoencoder.pth",
+  "model_format": "pytorch",
+  "threshold": 0.023,
+  "camera_source": 0,
+  "save_dir": "/pfad/zu/anomalie-frames/",
+  "smooth_n": 5,
+  "roi": [0.1, 0.2, 0.9, 0.8],
+  "mqtt": { "enabled": false, "host": "localhost", "port": 1883, "topic": "picture_studio/anomaly" },
+  "scoring_interval": 3,
+  "save_anomalies": true
+}
+```
+
+> Profil kann auch manuell erstellt oder per Text-Editor angepasst werden.
+
+---
+
+#### Schritt 2 — Daemon starten
+
+```bash
+# Virtualenv aktivieren
+source .venv/bin/activate
+
+# Daemon starten
+python scripts/monitor_daemon.py --profile /pfad/zum/monitor_profile.json
+
+# Optional: Frames nicht speichern (nur Logging + MQTT)
+python scripts/monitor_daemon.py --profile monitor_profile.json --no-save
+```
+
+Ausgabe im Terminal:
+```
+[daemon] PyTorch model loaded: /pfad/autoencoder.pth
+[daemon] Camera opened: 0
+[daemon] Threshold: 0.02300  |  Smooth: 5 frames
+[daemon] Event log: /pfad/anomalies/anomaly_events.csv
+[daemon] Running — press Ctrl+C to stop
+
+[status] frames=150  score=0.01823 (79%)  alarms=0  streak=0
+[ALARM]  2026-05-13T14:23:01 score=0.04512 (196%)  frame=anomaly_20260513_142301_0001.png
+```
+
+> Beenden mit `Ctrl+C` oder `kill -TERM <PID>` — der Daemon schließt Kamera und Log sauber.
+
+---
+
+#### Schritt 3 — Web-Dashboard (optional)
+
+Der integrierte REST-Server der Desktop-App liefert unter `/dashboard` ein Live-Dashboard.
+
+1. In der App: **Einstellungen → REST-API Server → API starten**
+2. **📊 Dashboard**-Button klicken (oder Browser öffnen: `http://localhost:8765/dashboard`)
+3. Das Dashboard aktualisiert sich alle 3 Sekunden automatisch:
+   - Score-Verlaufsgraph (120 Frames, grün/rot je nach Alarm)
+   - Aktuelle Score-Werte und Schwellwert
+   - Tabelle der letzten Anomalie-Events
+
+**API-Endpunkte für das Dashboard:**
+| Endpunkt | Beschreibung |
+|---|---|
+| `GET /dashboard` | HTML-Dashboard (selbstenthaltend) |
+| `GET /api/scores?limit=120` | Live-Score-Puffer (JSON) |
+| `GET /api/events?limit=50` | Letzte Events aus dem CSV-Log (JSON) |
+
+---
+
+#### Schritt 4 — Autostart konfigurieren
+
+**macOS (launchd):**
+```bash
+# 1. Plist anpassen (Pfade editieren)
+nano scripts/autostart/de.picturestudio.monitor.plist
+
+# 2. In LaunchDaemons installieren (systemweit, startet beim Boot)
+sudo cp scripts/autostart/de.picturestudio.monitor.plist /Library/LaunchDaemons/
+sudo launchctl load /Library/LaunchDaemons/de.picturestudio.monitor.plist
+
+# Oder als Benutzer-Agent (nur bei Anmeldung)
+cp scripts/autostart/de.picturestudio.monitor.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/de.picturestudio.monitor.plist
+
+# Status prüfen
+launchctl list | grep picturestudio
+# Log anzeigen
+tail -f /var/log/picture-monitor.log
+```
+
+**Linux (systemd):**
+```bash
+# 1. Service-Datei anpassen (User, WorkingDirectory, Pfade)
+nano scripts/autostart/picture-monitor.service
+
+# 2. Installieren und aktivieren
+sudo cp scripts/autostart/picture-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable picture-monitor
+sudo systemctl start picture-monitor
+
+# Status und Logs
+sudo systemctl status picture-monitor
+sudo journalctl -u picture-monitor -f
+```
+
+---
+
+#### Schritt 5 — ONNX-Modell für schnellere Inferenz (optional)
+
+ONNX Runtime ist deutlich schneller als PyTorch auf CPU und benötigt keine PyTorch-Installation.
+
+```bash
+pip install onnxruntime
+
+# Modell in der App exportieren: Kamera-Dialog → "→ ONNX"
+# Profil anpassen:
+```
+```json
+{
+  "model_path": "/pfad/autoencoder.onnx",
+  "model_format": "onnx"
+}
+```
+
+Der Daemon wählt automatisch ONNX Runtime wenn verfügbar, sonst PyTorch als Fallback.
+
+| Backend | Geschwindigkeit | Abhängigkeit |
+|---|---|---|
+| ONNX Runtime | ~3–5× schneller (CPU) | `pip install onnxruntime` |
+| PyTorch | Standard-Fallback | Bereits in requirements.txt |
+
+---
+
+#### Übersicht: GUI vs. Daemon
+
+| Feature | Desktop-App | Daemon |
+|---|---|---|
+| Live-Vorschau | ✅ | ❌ |
+| Anomalie-Scoring | ✅ | ✅ |
+| CSV-Event-Log | ✅ | ✅ |
+| MQTT-Alarm | ✅ | ✅ |
+| Web-Dashboard | ✅ (via REST-API) | ❌ (eigene Integration möglich) |
+| ONNX-Inferenz | ❌ | ✅ |
+| Autostart | ❌ | ✅ |
+| Ressourcenverbrauch | ~500 MB RAM | ~150 MB RAM |
+
+---
+
 ## Tastenkürzel
 
 ### Global
@@ -337,13 +500,20 @@ python main.py
 
 ## REST-API
 
-Der integrierte REST-Server läuft auf `http://localhost:5000` (konfigurierbar in Einstellungen).
+Der integrierte REST-Server läuft auf `http://localhost:8765` (konfigurierbar in Einstellungen).
 
 | Endpunkt | Methode | Beschreibung |
 |---|---|---|
 | `/api/status` | GET | Projektstatus und geladenes Modell |
+| `/api/project` | GET | Vollständige Projektstatistik |
 | `/api/labels` | GET | Liste aller definierten Klassen |
-| `/api/classify` | POST | Bild klassifizieren (JSON: `path` oder `image_b64`) |
+| `/api/images` | GET | Alle Bilder mit Labels (`?labeled=true/false`) |
+| `/api/images/<name>` | GET | Einzelbild mit ROIs |
+| `/api/images/label` | POST | Label zuweisen (`{path, label}`) |
+| `/api/classify` | POST | Bild klassifizieren (`{path}` oder `{image_b64}`) |
+| `/api/scores` | GET | Live-Score-Puffer für Anomalie-Dashboard |
+| `/api/events` | GET | Letzte Anomalie-Events aus CSV-Log |
+| `/dashboard` | GET | HTML Live-Monitoring-Dashboard |
 
 **Beispiel-Request:**
 ```bash
@@ -388,6 +558,9 @@ Picture/
 │   ├── remote_training.py  # RemoteTrainingThread (SSH-Ferntraining)
 │   ├── camera.py           # USB/IP-Kamera-Thread
 │   ├── audit.py            # JSONL-Audit-Trail
+│   ├── anomaly_logger.py   # CSV-Event-Logger für Anomalie-Alarme
+│   ├── mqtt_client.py      # MQTT-Publisher (paho-mqtt, optional)
+│   ├── monitoring_profile.py # Profil-Format für Headless-Daemon
 │   └── report.py           # HTML-Trainingsbericht
 │
 ├── models/
@@ -420,7 +593,12 @@ Picture/
 │       └── thumbnail_list.py
 │
 ├── scripts/
-│   └── remote_train.py     # Standalone-Skript für SSH-Ferntraining
+│   ├── remote_train.py     # Standalone-Skript für SSH-Ferntraining
+│   ├── monitor_daemon.py   # Headless Anomalie-Monitor-Daemon (kein GUI)
+│   └── autostart/
+│       ├── start_monitor.sh                    # Shell-Helfer
+│       ├── picture-monitor.service             # systemd (Linux)
+│       └── de.picturestudio.monitor.plist      # launchd (macOS)
 │
 └── tests/
     ├── conftest.py
@@ -448,6 +626,10 @@ Picture/
 | Viele Fehlalarme (Anomalie) | Schwellwert erhöhen (`📊 Schwellwert kalibrieren`), Beleuchtung stabilisieren |
 | Projektdatei beschädigt | `.bak`-Backup im Projektverzeichnis in `.json` umbenennen |
 | Thumbnails laden langsam | Thumbnail-Größe in Einstellungen reduzieren (z. B. 60 px) |
+| Daemon startet nicht | Virtualenv prüfen; `model_path` in Profil muss absoluter Pfad sein |
+| Dashboard leer | REST-API in Einstellungen starten; Kamera-Dialog öffnen → Scoring aktivieren |
+| ONNX-Daemon: `ImportError` | `pip install onnxruntime`; Fallback auf PyTorch ist automatisch aktiv |
+| MQTT verbindet nicht | Broker-Adresse und Port prüfen; `paho-mqtt` installiert? (`pip install paho-mqtt`) |
 
 ---
 

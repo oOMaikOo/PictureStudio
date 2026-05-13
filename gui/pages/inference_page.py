@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QFileDialog, QTableWidget, QTableWidgetItem,
     QHeaderView, QProgressBar, QMessageBox, QAbstractItemView,
     QDoubleSpinBox, QComboBox, QCheckBox, QSpinBox, QTabWidget,
-    QTextEdit,
+    QTextEdit, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject
 from PySide6.QtGui import QColor, QFont, QPixmap
@@ -82,9 +82,17 @@ class InferencePage(QWidget):
         layout = QHBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
         layout.addWidget(splitter)
-        splitter.addWidget(self._build_control_panel())
+
+        # Wrap control panel in a scroll area so it never clips on small windows
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(self._build_control_panel())
+        splitter.addWidget(scroll)
+
         splitter.addWidget(self._build_results_panel())
-        splitter.setSizes([300, 700])
+        splitter.setSizes([320, 680])
 
     def _build_control_panel(self) -> QGroupBox:
         box = QGroupBox("Inferenz-Steuerung")

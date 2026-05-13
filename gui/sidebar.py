@@ -26,6 +26,7 @@ _IMAGE_PAGES: List[Tuple[str, str, int]] = [
     ("Training",       "🧠", 3),
     ("Modelle",        "📊", 4),
     ("Klassifikation", "🔍", 5),
+    ("Batch",          "📦", 9),
     ("Export",         "📤", 6),
     ("Einstellungen",  "⚙",  7),
 ]
