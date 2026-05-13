@@ -672,9 +672,8 @@ class LabelingPage(QWidget):
         """U shortcut: toggle the uncertain flag on the current image."""
         if not self.project or not self._current_image:
             return
-        current = self.project.is_label_uncertain(self._current_image)
-        # Toggle via the button so the undo command is used
-        self._uncertain_btn.setChecked(not current)
+        # click() toggles checked state AND emits clicked(bool) → _toggle_uncertain
+        self._uncertain_btn.click()
 
     # ------------------------------------------------------------------ project
 

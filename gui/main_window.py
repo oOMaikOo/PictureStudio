@@ -669,7 +669,8 @@ class MainWindow(QMainWindow):
                 with open(log_file, encoding="utf-8") as fh:
                     content = fh.read()
                 te.setPlainText(content)
-                te.moveCursor(te.textCursor().End)
+                from PySide6.QtGui import QTextCursor
+                te.moveCursor(QTextCursor.End)
             except Exception as exc:
                 te.setPlainText(f"Log konnte nicht geladen werden: {exc}")
         else:
