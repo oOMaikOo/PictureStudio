@@ -10,9 +10,10 @@ from PySide6.QtCore import Qt, QTimer, QPoint, QRect
 from PySide6.QtGui import QFont, QColor
 
 # ---------------------------------------------------------------------------
-# Tour steps per page index (0–7, plus 8 = Kamera)
+# Tour steps per page index (0–9)
+# 0=Dashboard, 1=Daten, 2=Labeling, 3=Training, 4=Modelle,
+# 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch
 # Each step: (title, description, button_text_to_highlight | None)
-# button_text can be a partial match
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
     0: [  # Dashboard
@@ -429,6 +430,37 @@ TOUR_STEPS = {
          "an den Broker publiziert.\n\n"
          "pip install paho-mqtt",
          "Log öffnen"),
+    ],
+    9: [  # Batch-Inferenz
+        ("Batch-Inferenz",
+         "Klassifiziere einen ganzen Ordner\n"
+         "mit einem trainierten Modell in einem Durchlauf.\n\n"
+         "Ergebnis: sortierbare Tabelle mit\n"
+         "Dateiname, Klasse, Konfidenz, Fehler\n"
+         "und CSV-Export.",
+         None),
+        ("Modell laden",
+         "Modell aus dem Projekt wählen\n"
+         "(Dropdown zeigt alle Trainingsläufe)\n"
+         "oder externe .pth-Datei laden.\n\n"
+         "'Ausgewähltes Modell laden' → bereit.",
+         "Ausgewähltes Modell laden"),
+        ("Bilder auswählen",
+         "'Ordner wählen…' → Ordner mit Bildern\n"
+         "oder 'Projektbilder verwenden' um alle\n"
+         "Bilder des aktuellen Projekts zu nehmen.\n\n"
+         "Konfidenz-Filter: nur Ergebnisse über\n"
+         "dem Schwellwert werden angezeigt.",
+         "Ordner wählen"),
+        ("Batch starten & exportieren",
+         "'Batch starten' → alle Bilder werden\n"
+         "nacheinander klassifiziert.\n\n"
+         "Ergebnisse in der Tabelle:\n"
+         "• Klick auf Spaltenköpfe → sortieren\n"
+         "• Rot = unter Min. Confidence\n\n"
+         "'Als CSV exportieren' → Tabelle als\n"
+         "CSV-Datei speichern.",
+         "Batch starten"),
     ],
 }
 

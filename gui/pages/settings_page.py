@@ -299,6 +299,16 @@ class SettingsPage(QWidget):
         self._api_server = server
         if server:
             server.set_status_callback(self._on_api_status)
+            # Sync button states in case the API was already running
+            if server.is_running:
+                self.api_toggle_btn.setText("API stoppen")
+                self.api_toggle_btn.setStyleSheet(
+                    "background:#E74C3C;color:white;padding:5px 10px;"
+                    "font-weight:bold;border-radius:4px;"
+                )
+                self.api_copy_btn.setEnabled(True)
+                self.api_dashboard_btn.setEnabled(True)
+                self.api_port_spin.setEnabled(False)
 
     def _toggle_api(self) -> None:
         if not self._api_server:

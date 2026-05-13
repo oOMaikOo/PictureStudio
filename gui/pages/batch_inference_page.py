@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
     QPushButton, QFileDialog, QTableWidget, QTableWidgetItem,
     QHeaderView, QProgressBar, QMessageBox, QAbstractItemView,
-    QComboBox, QDoubleSpinBox, QSplitter,
+    QComboBox, QDoubleSpinBox, QSplitter, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QColor, QFont
@@ -67,9 +67,15 @@ class BatchInferencePage(QWidget):
         splitter = QSplitter(Qt.Horizontal)
         root.addWidget(splitter)
 
-        splitter.addWidget(self._build_left())
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(self._build_left())
+        splitter.addWidget(scroll)
+
         splitter.addWidget(self._build_right())
-        splitter.setSizes([300, 800])
+        splitter.setSizes([320, 780])
 
     def _build_left(self) -> QWidget:
         w = QWidget()

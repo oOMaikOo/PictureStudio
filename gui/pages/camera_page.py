@@ -3,6 +3,8 @@ Live-Kamera-Seite: eingebetteter Livestream mit Schnellzugriff auf den Aufnahme-
 """
 from __future__ import annotations
 
+import os
+
 import cv2
 import numpy as np
 
@@ -174,7 +176,12 @@ class CameraPage(QWidget):
             self._stop_camera()
 
         from gui.camera_capture_dialog import CameraCaptureDialog
-        dlg = CameraCaptureDialog(self._project, parent=self)
+        save_dir = None
+        if self._project and getattr(self._project, "project_path", None):
+            save_dir = os.path.join(
+                os.path.dirname(self._project.project_path), "camera_captures"
+            )
+        dlg = CameraCaptureDialog(save_dir=save_dir, parent=self)
         dlg.exec()
 
         if was_running:

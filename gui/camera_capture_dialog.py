@@ -1018,16 +1018,6 @@ class CameraCaptureDialog(QDialog):
             QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
         except Exception as exc:
             QMessageBox.critical(self, "TorchScript-Fehler", str(exc))
-            return
-        self._ae_threshold_spin.blockSignals(True)
-        self._ae_threshold_spin.setValue(self._detector.threshold)
-        self._ae_threshold_spin.blockSignals(False)
-        self._ae_train_lbl.setText(f"Modell geladen | Schwellwert: {self._detector.threshold:.5f}")
-        self._ae_score_lbl.setText("Score: – (Modell geladen, bereit)")
-        self._ae_scoring_btn.setEnabled(True)
-        self._recon_lbl.setText(
-            "Modell geladen — Live-Scoring starten\num die Rekonstruktion zu sehen."
-        )
 
     # ================================================================== MODEL META (ROI sidecar)
 
