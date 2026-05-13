@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 
 from gui.main_window import MainWindow
 from utils.logging_utils import setup_logging, get_logger
@@ -54,6 +54,13 @@ def main() -> None:
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("ImageLabelingStudio")
     app.setStyle("Fusion")
+
+    _assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    for _icon_name in ("icon.icns", "icon_1024.png"):
+        _icon_path = os.path.join(_assets, _icon_name)
+        if os.path.exists(_icon_path):
+            app.setWindowIcon(QIcon(_icon_path))
+            break
 
     # Dark palette
     from PySide6.QtGui import QPalette, QColor
