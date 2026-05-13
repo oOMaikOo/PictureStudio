@@ -446,6 +446,54 @@ Der Daemon wählt automatisch ONNX Runtime wenn verfügbar, sonst PyTorch als Fa
 
 ---
 
+## Trainings-Tipps & Best Practices
+
+### Hyperparameter-Wahl
+
+| Parameter | Empfehlung | Hinweis |
+|---|---|---|
+| **Architektur** | EfficientNet-B0 | Bestes Genauigkeits-/Größe-Verhältnis; ResNet-18 als schneller Startpunkt |
+| **Vortraining** | ✅ aktiviert | Transfer Learning braucht 5–10× weniger Daten und Epochen |
+| **Bildgröße** | 224 px | Standard; 128 px für einfache Aufgaben, 320+ für feine Details |
+| **Batch-Größe** | 32 (GPU) / 8–16 (CPU) | Größere Batches → stabilere Gradienten; bei wenig RAM reduzieren |
+| **Epochen** | 20–50 + Early Stopping | Mit Early Stopping (Geduld 5) kann man höher gehen |
+| **Learning Rate** | 0.001 | Bei instabilem Training (NaN/Explosion) auf 0.0001 reduzieren |
+| **Optimizer** | AdamW | Adam für schnellen Start; AdamW hat bessere L2-Regularisierung |
+| **Scheduler** | reduce_on_plateau | Passt LR automatisch an — gut für die meisten Aufgaben |
+| **Train-Split** | 0.70–0.80 | Bei < 200 Bildern lieber 0.80 wählen |
+
+### Wann was tun?
+
+| Problem | Lösung |
+|---|---|
+| Val-Accuracy stagniert früh | Learning Rate erhöhen oder Architektur mit mehr Kapazität wählen |
+| Training-Acc hoch, Val-Acc niedrig (Overfitting) | Mehr Augmentation, Dropout, AdamW, weniger Epochen, mehr Daten |
+| Loss wird NaN | Learning Rate um Faktor 10 reduzieren; Mixed Precision deaktivieren |
+| Klasse wird kaum erkannt | Klassenausgleich aktivieren; mehr Bilder für diese Klasse sammeln |
+| Training sehr langsam | Gerät auf `cuda` oder `mps` stellen; Bildgröße auf 128 reduzieren |
+| Unsichere Vorhersagen (< 70%) | Mehr Trainingsbilder; ähnlichere Klassen trennen; Top-K erhöhen |
+
+### Augmentation-Strategie
+
+| Anwendungsfall | Empfohlene Augmentierungen |
+|---|---|
+| Qualitätskontrolle (fixe Kamera) | Flip ✅ · Helligkeit ✅ · Blur ✅ · Rotation ❌ |
+| Objekt in verschiedenen Posen | Flip ✅ · Rotation ✅ · Skalierung ✅ · Helligkeit ✅ |
+| Schriften / Barcodes / Pfeile | Flip ❌ · Rotation ❌ · Helligkeit ✅ |
+| Mikroskopie / Satellitenbilder | Kein Vortraining (ImageNet deaktivieren) · alle Augmentierungen ✅ |
+
+### Anomalie-Erkennung Tipps
+
+| Situation | Empfehlung |
+|---|---|
+| Zu viele Fehlalarme | Schwellwert erhöhen oder `📊 Schwellwert kalibrieren` → µ+2,5σ |
+| Echte Anomalien werden übersehen | Schwellwert senken → µ+1,5σ; mehr Normalframes sammeln |
+| Modell schlecht nach Beleuchtungswechsel | Normalframes unter verschiedenen Bedingungen aufnehmen |
+| Kameraschwingungen lösen Alarm aus | Glättung (Smooth-N) erhöhen (7–10 Frames) |
+| ROI setzen | Im Kamera-Dialog ROI ziehen → nur der definierte Bereich fließt ins Modell |
+
+---
+
 ## Tastenkürzel
 
 ### Global

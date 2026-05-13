@@ -62,11 +62,22 @@ class DataPage(QWidget):
 
         load_btn = QPushButton("Bilder laden…")
         load_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
+        load_btn.setToolTip(
+            "Ordner mit Bildern auswählen.\n"
+            "Unterstützte Formate: JPG, PNG, BMP, TIFF, WebP.\n"
+            "Alle Bilder im Ordner werden zum Projekt hinzugefügt.\n"
+            "Tipp: Bilder per Drag & Drop ins Fenster ziehen geht auch."
+        )
         load_btn.clicked.connect(self._load_images)
         cv.addWidget(load_btn)
 
         cam_btn = QPushButton("Kamera aufnehmen…")
         cam_btn.setStyleSheet("background:#9B59B6;color:white;padding:8px;font-weight:bold;")
+        cam_btn.setToolTip(
+            "Live-Kamera öffnen und Bilder direkt ins Projekt aufnehmen.\n"
+            "Unterstützt USB-Kameras (Index 0, 1, …) und IP-Kameras (RTSP/HTTP).\n"
+            "Einzelbild, Burst-Modus und automatische Anomalieerkennung verfügbar."
+        )
         cam_btn.clicked.connect(self._open_camera_dialog)
         cv.addWidget(cam_btn)
 
@@ -78,6 +89,14 @@ class DataPage(QWidget):
 
         analyze_btn = QPushButton("Dataset analysieren")
         analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
+        analyze_btn.setToolTip(
+            "Analysiert den Datensatz und zeigt:\n"
+            "• Klassenverteilung und Ungleichgewicht\n"
+            "• Fehlende oder unlesbare Dateien\n"
+            "• MD5-Duplikate (identische Bilder)\n"
+            "• Bildgrößen und Formatstatistiken\n"
+            "Empfehlung: vor dem Training ausführen."
+        )
         analyze_btn.clicked.connect(self._run_analysis)
         cv.addWidget(analyze_btn)
 
@@ -88,6 +107,21 @@ class DataPage(QWidget):
 
         export_group = QGroupBox("Dataset exportieren")
         eg = QVBoxLayout(export_group)
+        _export_tips = {
+            "Als COCO JSON": (
+                "Exportiert Annotationen im COCO-Format (JSON).\n"
+                "Kompatibel mit: Detectron2, MMDetection, Ultralytics YOLO v8+,\n"
+                "CVAT, LabelStudio und vielen anderen Frameworks."
+            ),
+            "Als YOLO TXT": (
+                "Exportiert Annotationen im YOLO-Format (eine .txt-Datei pro Bild).\n"
+                "Kompatibel mit: Ultralytics YOLOv5/v8, Darknet."
+            ),
+            "Als CSV": (
+                "Exportiert Labels und ROIs als CSV-Tabelle.\n"
+                "Gut für eigene Tools, Excel oder pandas-Analysen."
+            ),
+        }
         for label, slot in [
             ("Als COCO JSON", self._export_coco),
             ("Als YOLO TXT",  self._export_yolo),
@@ -95,15 +129,25 @@ class DataPage(QWidget):
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
+            if label in _export_tips:
+                btn.setToolTip(_export_tips[label])
             eg.addWidget(btn)
         cv.addWidget(export_group)
 
         valid_group = QGroupBox("Bilddateien prüfen")
         vg = QVBoxLayout(valid_group)
         check_btn = QPushButton("Fehlende Dateien prüfen")
+        check_btn.setToolTip(
+            "Prüft ob alle Bilddateien noch an ihrem gespeicherten Pfad vorhanden sind.\n"
+            "Fehlende Dateien werden rot markiert."
+        )
         check_btn.clicked.connect(self._check_files)
         vg.addWidget(check_btn)
         fix_btn = QPushButton("Bildpfade korrigieren…")
+        fix_btn.setToolTip(
+            "Bilder die verschoben oder umbenannt wurden neu verknüpfen.\n"
+            "Nützlich wenn das Projekt auf einen anderen Rechner kopiert wurde."
+        )
         fix_btn.clicked.connect(self._fix_paths)
         vg.addWidget(fix_btn)
         cv.addWidget(valid_group)

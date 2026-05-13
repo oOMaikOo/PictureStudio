@@ -93,26 +93,61 @@ class TrainingPage(QWidget):
 
         self.model_combo = QComboBox()
         self.model_combo.addItems(get_available_models())
+        self.model_combo.setToolTip(
+            "Architektur des neuronalen Netzes:\n"
+            "• ResNet-18 — schnell, guter Startpunkt, ~11 M Parameter\n"
+            "• ResNet-50 — höhere Kapazität, ~25 M Parameter\n"
+            "• MobileNetV2 — sehr effizient, gut für CPU-Deployment\n"
+            "• EfficientNet-B0 — bestes Genauigkeits-/Größe-Verhältnis\n"
+            "• SimpleCNN — kein Transfer Learning, ideal für Tests"
+        )
         form.addRow("Architektur:", self.model_combo)
 
         self.pretrained_cb = QCheckBox("Vortrainierte Gewichte (ImageNet)")
         self.pretrained_cb.setChecked(True)
+        self.pretrained_cb.setToolTip(
+            "Transfer Learning: Gewichte aus ImageNet-Vortraining laden.\n"
+            "Empfohlen — braucht viel weniger Daten und Epochen.\n"
+            "Deaktivieren nur wenn die Bilder sehr unähnlich zu Fotos sind\n"
+            "(z. B. Röntgenbilder, Mikroskopie, Satellitenbilder)."
+        )
         form.addRow("", self.pretrained_cb)
 
         self.img_size_spin = QSpinBox()
         self.img_size_spin.setRange(32, 1024)
         self.img_size_spin.setValue(224)
         self.img_size_spin.setSingleStep(32)
+        self.img_size_spin.setToolTip(
+            "Eingabegröße in Pixel (quadratisch). Bilder werden auf dieses Format\n"
+            "skaliert bevor sie ins Netz gehen.\n"
+            "• 224 px — Standard für ImageNet-vortrainierte Modelle\n"
+            "• 128 px — schneller, weniger Speicher, ausreichend für einfache Aufgaben\n"
+            "• 320–512 px — für kleine Details oder feine Strukturen\n"
+            "Tipp: immer Vielfaches von 32 wählen."
+        )
         form.addRow("Bildgröße (px):", self.img_size_spin)
 
         self.batch_spin = QSpinBox()
         self.batch_spin.setRange(1, 512)
         self.batch_spin.setValue(16)
+        self.batch_spin.setToolTip(
+            "Anzahl Bilder pro Trainingsschritt.\n"
+            "• Größere Batches → stabilere Gradienten, brauchen mehr GPU-Speicher\n"
+            "• Kleinere Batches → weniger Speicher, etwas rauschigeres Training\n"
+            "Empfehlung: 32 (GPU) | 8–16 (CPU) | 4–8 (wenig Daten)"
+        )
         form.addRow("Batch-Größe:", self.batch_spin)
 
         self.epochs_spin = QSpinBox()
         self.epochs_spin.setRange(1, 1000)
         self.epochs_spin.setValue(20)
+        self.epochs_spin.setToolTip(
+            "Anzahl vollständiger Durchläufe durch den Trainingsdatensatz.\n"
+            "• Zu wenig → Underfitting (Modell lernt zu wenig)\n"
+            "• Zu viel → Overfitting (Modell lernt auswendig)\n"
+            "Empfehlung: 20–50 mit Early Stopping; \n"
+            "beobachte Val-Loss in den Live-Kurven."
+        )
         form.addRow("Epochen:", self.epochs_spin)
 
         self.lr_spin = QDoubleSpinBox()
@@ -120,32 +155,74 @@ class TrainingPage(QWidget):
         self.lr_spin.setValue(0.001)
         self.lr_spin.setDecimals(7)
         self.lr_spin.setSingleStep(0.0001)
+        self.lr_spin.setToolTip(
+            "Lernrate — wie groß die Gewichtsänderungen pro Schritt sind.\n"
+            "• 0.001 (1e-3) — Standardwert, gut für Adam/AdamW\n"
+            "• 0.0001 (1e-4) — konservativ, wenn Training instabil\n"
+            "• 0.01 — aggressiv, funktioniert manchmal mit SGD\n"
+            "Tipp: bei 'NaN Loss' Lernrate um Faktor 10 reduzieren."
+        )
         form.addRow("Learning Rate:", self.lr_spin)
 
         self.opt_combo = QComboBox()
         self.opt_combo.addItems(["adam", "adamw", "sgd"])
+        self.opt_combo.setToolTip(
+            "Optimierungsalgorithmus:\n"
+            "• adam — adaptiv, robust, guter Standard für die meisten Aufgaben\n"
+            "• adamw — wie Adam + L2-Gewichtsregularisierung (gegen Overfitting)\n"
+            "• sgd — klassisch, oft mit Momentum; braucht sorgfältige LR-Wahl"
+        )
         form.addRow("Optimizer:", self.opt_combo)
 
         self.sched_combo = QComboBox()
         self.sched_combo.addItems(["reduce_on_plateau", "cosine", "step"])
+        self.sched_combo.setToolTip(
+            "Lernraten-Scheduler — passt die LR während des Trainings an:\n"
+            "• reduce_on_plateau — halbiert LR wenn Val-Loss stagniert (empfohlen)\n"
+            "• cosine — sanfte Cosinuskurve von LR bis fast 0 über alle Epochen\n"
+            "• step — reduziert LR alle N Epochen um festen Faktor"
+        )
         form.addRow("LR-Scheduler:", self.sched_combo)
 
         self.early_stop_spin = QSpinBox()
         self.early_stop_spin.setRange(0, 100)
         self.early_stop_spin.setValue(0)
-        self.early_stop_spin.setToolTip("0 = deaktiviert")
+        self.early_stop_spin.setToolTip(
+            "Training automatisch stoppen wenn Val-Loss sich N Epochen nicht verbessert.\n"
+            "0 = deaktiviert\n"
+            "Empfehlung: 5–10 — schützt vor Overfitting und spart Zeit.\n"
+            "Das beste Modell (niedrigster Val-Loss) wird gespeichert."
+        )
         form.addRow("Early Stopping (Geduld):", self.early_stop_spin)
 
         self.seed_spin = QSpinBox()
         self.seed_spin.setRange(0, 99999)
         self.seed_spin.setValue(42)
+        self.seed_spin.setToolTip(
+            "Zufalls-Seed für reproduzierbare Ergebnisse.\n"
+            "Gleicher Seed → gleicher Train/Val-Split und gleiche Augmentation.\n"
+            "Wert ändern um zu prüfen ob Ergebnisse stabil sind."
+        )
         form.addRow("Seed:", self.seed_spin)
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu", "cuda", "mps"])
+        self.device_combo.setToolTip(
+            "Rechengerät für das Training:\n"
+            "• auto — wählt automatisch GPU (cuda) > Apple MPS > CPU\n"
+            "• cuda — NVIDIA GPU (10–50× schneller als CPU)\n"
+            "• mps — Apple Silicon GPU (Mac M1/M2/M3, ~5–15× schneller)\n"
+            "• cpu — immer verfügbar, aber langsam"
+        )
         form.addRow("Gerät:", self.device_combo)
 
         self.amp_cb = QCheckBox("Mixed Precision (AMP, nur CUDA)")
+        self.amp_cb.setToolTip(
+            "Automatic Mixed Precision: berechnet in float16 wo möglich.\n"
+            "Nur auf NVIDIA-GPUs mit Tensor Cores (RTX/Ampere+) sinnvoll.\n"
+            "Vorteil: ~1,5–2× schneller, weniger GPU-Speicher.\n"
+            "Nachteil: marginale Präzisionsverluste (normalerweise unkritisch)."
+        )
         form.addRow("", self.amp_cb)
 
         # Split
@@ -155,11 +232,21 @@ class TrainingPage(QWidget):
         self.train_split.setRange(0.1, 0.9)
         self.train_split.setValue(0.7)
         self.train_split.setSingleStep(0.05)
+        self.train_split.setToolTip(
+            "Anteil der Bilder für das Training (0.7 = 70%).\n"
+            "Rest wird auf Validation + Test aufgeteilt.\n"
+            "Bei wenig Daten (<200 Bilder): 0.8 empfohlen."
+        )
         sf.addRow("Train:", self.train_split)
         self.val_split = QDoubleSpinBox()
         self.val_split.setRange(0.05, 0.5)
         self.val_split.setValue(0.2)
         self.val_split.setSingleStep(0.05)
+        self.val_split.setToolTip(
+            "Anteil der Bilder für die Validation (0.2 = 20%).\n"
+            "Wird nach jeder Epoche ausgewertet — steuert Early Stopping\n"
+            "und LR-Scheduler. Nicht für das Training verwendet."
+        )
         sf.addRow("Validation:", self.val_split)
         form.addRow(split_box)
 
@@ -168,12 +255,37 @@ class TrainingPage(QWidget):
         ab = QVBoxLayout(aug_box)
         self.aug_flip = QCheckBox("Flip (horizontal + vertikal)")
         self.aug_flip.setChecked(True)
+        self.aug_flip.setToolTip(
+            "Spiegelt Bilder zufällig horizontal und/oder vertikal.\n"
+            "Günstig wenn Ausrichtung keine Rolle spielt (z. B. Qualitätskontrolle).\n"
+            "Deaktivieren wenn Orientierung wichtig ist (z. B. Schriften, Pfeile)."
+        )
         self.aug_rotation = QCheckBox("Rotation (±15°)")
         self.aug_rotation.setChecked(True)
+        self.aug_rotation.setToolTip(
+            "Dreht Bilder zufällig um bis zu ±15° (per Editor anpassbar).\n"
+            "Hilft gegen Rotation der Kamera / des Objekts.\n"
+            "Intensität im Augmentierungs-Editor einstellen."
+        )
         self.aug_brightness = QCheckBox("Helligkeit / Kontrast")
         self.aug_brightness.setChecked(True)
+        self.aug_brightness.setToolTip(
+            "Variiert Helligkeit und Kontrast zufällig.\n"
+            "Macht das Modell robuster gegen unterschiedliche Beleuchtung.\n"
+            "Intensität im Augmentierungs-Editor einstellen."
+        )
         self.aug_scale = QCheckBox("Skalierung (Random Crop)")
+        self.aug_scale.setToolTip(
+            "Schneidet einen zufälligen Bildausschnitt aus und skaliert ihn.\n"
+            "Hilft gegen leichte Positionsänderungen des Objekts im Bild.\n"
+            "Intensität (min. Crop-Anteil) im Augmentierungs-Editor einstellen."
+        )
         self.aug_blur = QCheckBox("Blur (Gaussian)")
+        self.aug_blur.setToolTip(
+            "Unscharfe Bilder durch Gaussian-Blur simulieren.\n"
+            "Gut gegen Unschärfe durch Kamerabewegung oder Defokus.\n"
+            "Radius im Augmentierungs-Editor einstellen."
+        )
         for cb in [self.aug_flip, self.aug_rotation, self.aug_brightness,
                    self.aug_scale, self.aug_blur]:
             ab.addWidget(cb)
@@ -190,6 +302,11 @@ class TrainingPage(QWidget):
 
         self.use_rois_cb = QCheckBox("ROI-Bereiche verwenden")
         self.use_rois_cb.setChecked(True)
+        self.use_rois_cb.setToolTip(
+            "Wenn Bilder ROIs (Regions of Interest) haben, wird nur der\n"
+            "ROI-Bereich für das Training ausgeschnitten.\n"
+            "Nützlich um irrelevante Bildbereiche auszublenden."
+        )
         form.addRow("", self.use_rois_cb)
 
         self.class_balance_cb = QCheckBox("Klassenausgleich (WeightedSampler)")
@@ -205,8 +322,14 @@ class TrainingPage(QWidget):
 
         # Resume
         self.resume_cb = QCheckBox("Training fortsetzen (Resume)")
+        self.resume_cb.setToolTip(
+            "Setzt ein unterbrochenes Training ab einem gespeicherten\n"
+            "Checkpoint fort. Checkpoint unten auswählen.\n"
+            "Architektur und Bildgröße müssen mit dem Checkpoint übereinstimmen."
+        )
         form.addRow("", self.resume_cb)
         resume_btn = QPushButton("Checkpoint wählen…")
+        resume_btn.setToolTip("PyTorch-Checkpoint (.pth) für Resume-Training laden")
         resume_btn.clicked.connect(self._pick_checkpoint)
         form.addRow(resume_btn)
         self.resume_path_label = QLabel("")

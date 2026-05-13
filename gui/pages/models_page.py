@@ -73,6 +73,11 @@ class ModelsPage(QWidget):
         lv.addWidget(self.table)
 
         btn_row = QHBoxLayout()
+        _btn_tips = {
+            "Aktualisieren": "Modellliste aus dem Projekt neu laden",
+            "Als Best markieren": "Dieses Modell als Standard für das Projekt setzen.\nWird beim nächsten Öffnen automatisch geladen.",
+            "In Inferenz laden": "Modell auf die Klassifikations-Seite laden\num neue Bilder damit zu bewerten.",
+        }
         for label, slot in [
             ("Aktualisieren", self.refresh),
             ("Als Best markieren", self._mark_best),
@@ -80,6 +85,8 @@ class ModelsPage(QWidget):
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
+            if label in _btn_tips:
+                btn.setToolTip(_btn_tips[label])
             btn_row.addWidget(btn)
         lv.addLayout(btn_row)
         splitter.addWidget(left)
@@ -93,6 +100,21 @@ class ModelsPage(QWidget):
         self.detail_text.setFont(QFont("Courier New", 9))
         rv.addWidget(self.detail_text)
 
+        _action_tips = {
+            "Als ONNX exportieren": (
+                "Exportiert das Modell als ONNX (Opset 17).\n"
+                "Einsetzbar in: ONNX Runtime, OpenCV DNN, TensorRT,\n"
+                "C++, C#, JavaScript (ONNX.js) und vielen anderen Frameworks."
+            ),
+            "Als TorchScript exportieren": (
+                "Exportiert als TorchScript (.pt).\n"
+                "Für PyTorch C++ API oder mobile Apps (Android/iOS).\n"
+                "Kein Python-Import nötig zur Laufzeit."
+            ),
+            "Umbenennen": "Modell-Alias im Projekt umbenennen (Dateiname bleibt gleich).",
+            "Archivieren": "Modell in Unterordner 'archive' verschieben — bleibt erhalten aber\nerscheint nicht mehr in der Hauptliste.",
+            "Löschen": "Modell dauerhaft löschen (kann nicht rückgängig gemacht werden).",
+        }
         for label, slot in [
             ("Als ONNX exportieren", self._export_onnx),
             ("Als TorchScript exportieren", self._export_torchscript),
@@ -102,10 +124,16 @@ class ModelsPage(QWidget):
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
+            if label in _action_tips:
+                btn.setToolTip(_action_tips[label])
             rv.addWidget(btn)
 
         rv.addWidget(QLabel("Modell vergleichen:"))
         self.compare_btn = QPushButton("Ausgewählte vergleichen")
+        self.compare_btn.setToolTip(
+            "Mehrere Modelle auswählen (Strg+Klick in der Tabelle)\n"
+            "und Accuracy, F1 sowie Architektur nebeneinander vergleichen."
+        )
         self.compare_btn.clicked.connect(self._compare_models)
         rv.addWidget(self.compare_btn)
         splitter.addWidget(right)

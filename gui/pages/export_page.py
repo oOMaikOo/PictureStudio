@@ -39,6 +39,10 @@ class ExportPage(QWidget):
         self.count_label = QLabel("Keine Ergebnisse vorhanden.")
         sv.addWidget(self.count_label)
         load_btn = QPushButton("Ergebnisse aus letzter Inferenz laden")
+        load_btn.setToolTip(
+            "Übernimmt die Klassifikationsergebnisse der letzten\n"
+            "Batch-Klassifikation von der Inferenz-Seite."
+        )
         load_btn.clicked.connect(self._load_from_project)
         sv.addWidget(load_btn)
         layout.addWidget(src_group)
@@ -65,6 +69,10 @@ class ExportPage(QWidget):
         self.sheet_edit.setFixedWidth(160)
         ov.addWidget(self.sheet_edit)
         self.append_cb = QCheckBox("Anhängen (nicht überschreiben)")
+        self.append_cb.setToolTip(
+            "Aktiviert: neue Zeilen werden unterhalb vorhandener Daten eingefügt.\n"
+            "Deaktiviert: Datei wird neu erstellt / Tabellenblatt überschrieben."
+        )
         ov.addWidget(self.append_cb)
         ov.addStretch()
         layout.addWidget(opt_group)
@@ -82,6 +90,10 @@ class ExportPage(QWidget):
         # Export button
         exp_btn = QPushButton("Excel exportieren")
         exp_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
+        exp_btn.setToolTip(
+            "Exportiert die Klassifikationsergebnisse in die gewählte Excel-Datei.\n"
+            "Benötigt: pip install openpyxl"
+        )
         exp_btn.clicked.connect(self._export)
         layout.addWidget(exp_btn)
 
