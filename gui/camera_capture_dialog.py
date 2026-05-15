@@ -91,6 +91,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_score_streak = 0      # consecutive anomaly frames (for smoothing)
         self._recon_frame: Optional[np.ndarray] = None   # last reconstruction BGR
         self._last_heatmap: Optional[np.ndarray] = None  # last heatmap overlay BGR
+        self._motion_prev_frame: Optional[np.ndarray] = None  # grayscale prev frame for motion filter
 
         # ROI state (normalized 0–1 relative to frame): (x1, y1, x2, y2) or None
         self._roi: Optional[tuple[float, float, float, float]] = None
@@ -487,6 +488,39 @@ class CameraCaptureDialog(QDialog):
         self._ae_save_anomaly_cb.setToolTip("Speichert jeden Frame bei dem der Score den Schwellwert überschreitet.")
         sl.addWidget(self._ae_save_anomaly_cb)
 
+        # Motion filter
+        motion_row = QHBoxLayout()
+        self._motion_filter_cb = QCheckBox("Nur bei Bewegung prüfen")
+        self._motion_filter_cb.setToolTip(
+            "Frames ohne Bewegung werden übersprungen — der Anomalie-Detektor\n"
+            "läuft nur wenn sich etwas im Bild verändert hat.\n"
+            "Spart CPU und verhindert Fehlalarme bei statischen Szenen."
+        )
+        self._motion_filter_cb.toggled.connect(self._on_motion_filter_toggled)
+        motion_row.addWidget(self._motion_filter_cb)
+        self._motion_sens_spin = QSpinBox()
+        self._motion_sens_spin.setRange(1, 100)
+        self._motion_sens_spin.setValue(15)
+        self._motion_sens_spin.setSuffix(" %")
+        self._motion_sens_spin.setToolTip(
+            "Bewegungssensitivität: minimaler Unterschied (in % der Pixel)\n"
+            "zwischen zwei Frames, der als Bewegung gilt.\n"
+            "Klein = sehr sensitiv, Groß = nur grobe Bewegungen."
+        )
+        self._motion_sens_spin.setEnabled(False)
+        self._motion_sens_lbl = QLabel("Sens.:")
+        self._motion_sens_lbl.setEnabled(False)
+        motion_row.addWidget(self._motion_sens_lbl)
+        motion_row.addWidget(self._motion_sens_spin)
+        motion_row.addStretch()
+        sl.addLayout(motion_row)
+
+        self._motion_status_lbl = QLabel("")
+        self._motion_status_lbl.setAlignment(Qt.AlignCenter)
+        self._motion_status_lbl.setStyleSheet("font-size:10px;color:#7F8C8D;")
+        self._motion_status_lbl.setVisible(False)
+        sl.addWidget(self._motion_status_lbl)
+
         calib_btn = QPushButton("📊 Schwellwert kalibrieren…")
         calib_btn.setToolTip("Score-Verteilung der letzten Frames anzeigen und Schwellwert anpassen.")
         calib_btn.clicked.connect(self._open_calibration)
@@ -640,8 +674,34 @@ class CameraCaptureDialog(QDialog):
                 self._ae_collect_btn.setEnabled(True)
                 self._ae_train_btn.setEnabled(True)
 
+        # ── Motion filter (optional pre-check before anomaly scoring) ────────
+        motion_detected = True
+        if self._motion_filter_cb.isChecked():
+            gray = cv2.cvtColor(analysis_frame, cv2.COLOR_BGR2GRAY)
+            if self._motion_prev_frame is not None:
+                prev_gray = cv2.resize(
+                    self._motion_prev_frame,
+                    (gray.shape[1], gray.shape[0]),
+                    interpolation=cv2.INTER_AREA,
+                )
+                diff = cv2.absdiff(gray, prev_gray)
+                changed_pct = float(np.count_nonzero(diff > 25)) / diff.size * 100
+                threshold_pct = self._motion_sens_spin.value()
+                motion_detected = changed_pct >= threshold_pct
+                status = (
+                    f"Bewegung: {changed_pct:.1f}% {'▶ Prüfung' if motion_detected else '⏸ übersprungen'}"
+                )
+                self._motion_status_lbl.setText(status)
+                self._motion_status_lbl.setStyleSheet(
+                    f"font-size:10px;color:{'#3FB950' if motion_detected else '#7F8C8D'};"
+                )
+            else:
+                motion_detected = False  # no prev frame yet → skip first frame
+                self._motion_status_lbl.setText("Bewegung: warte auf 2. Frame…")
+            self._motion_prev_frame = gray
+
         # ── Anomaly scoring (every 3rd frame to reduce CPU load) ──────────────
-        if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained:
+        if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained and motion_detected:
             self._ae_score_counter += 1
             if self._ae_score_counter % 3 == 0:
                 score, recon_bgr, heatmap_overlay, anomaly_bbox = self._detector.score_detailed(analysis_frame)
@@ -965,6 +1025,12 @@ class CameraCaptureDialog(QDialog):
     def _on_threshold_changed(self, value: float) -> None:
         if self._detector:
             self._detector.threshold = value
+
+    def _on_motion_filter_toggled(self, checked: bool) -> None:
+        self._motion_sens_spin.setEnabled(checked)
+        self._motion_sens_lbl.setEnabled(checked)
+        self._motion_status_lbl.setVisible(checked)
+        self._motion_prev_frame = None  # reset prev frame on toggle
 
     def _open_event_log(self) -> None:
         if self._event_logger is None:
