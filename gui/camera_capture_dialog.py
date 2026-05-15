@@ -846,18 +846,13 @@ class CameraCaptureDialog(QDialog):
         save_frame = self._apply_timestamp(frame) if self._ts_save_cb.isChecked() else frame.copy()
         if bbox is not None:
             bx, by, bw, bh = bbox
-            # Adjust bbox if analysis was on an ROI crop — map back to full frame coords
+            # bbox is in ROI-crop pixel coords — just shift by the ROI origin to get full-frame coords
             if self._roi is not None:
                 fh, fw = save_frame.shape[:2]
-                rx1 = int(self._roi[0] * fw); ry1 = int(self._roi[1] * fh)
-                rx2 = int(self._roi[2] * fw); ry2 = int(self._roi[3] * fh)
-                rw, rh = max(1, rx2 - rx1), max(1, ry2 - ry1)
-                # bbox is in 128×128 detector space → scale to ROI pixel space → shift to full frame
-                scale_x = rw / 128; scale_y = rh / 128
-                bx = rx1 + int(bx * scale_x)
-                by = ry1 + int(by * scale_y)
-                bw = int(bw * scale_x)
-                bh = int(bh * scale_y)
+                rx1 = int(self._roi[0] * fw)
+                ry1 = int(self._roi[1] * fh)
+                bx += rx1
+                by += ry1
             # Red border, 3 px thick — no overlay, no blending
             cv2.rectangle(save_frame, (bx, by), (bx + bw, by + bh), (0, 0, 255), 3)
             cv2.putText(
