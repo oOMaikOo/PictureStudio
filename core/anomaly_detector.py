@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
+from typing import Optional
 
 _IMG = 128  # all frames resized to _IMG × _IMG before encode/decode
 
@@ -160,17 +161,20 @@ class AnomalyDetector:
 
     def score_detailed(
         self, frame: np.ndarray
-    ) -> tuple[float, np.ndarray, np.ndarray]:
+    ) -> tuple[float, np.ndarray, np.ndarray, Optional[tuple[int, int, int, int]]]:
         """
-        Return (score, reconstruction_bgr, heatmap_overlay_bgr).
+        Return (score, reconstruction_bgr, heatmap_overlay_bgr, anomaly_bbox).
 
-        reconstruction_bgr: model's 128×128 reconstruction in BGR.
+        reconstruction_bgr : model's 128×128 reconstruction in BGR.
         heatmap_overlay_bgr: per-pixel error heatmap blended onto original frame.
-        Falls back to (0.0, frame copy, frame copy) when not trained.
+        anomaly_bbox       : (x, y, w, h) of the largest anomalous region in the
+                             original frame's coordinate space, or None if no
+                             region was detected.
+        Falls back to (0.0, frame copy, frame copy, None) when not trained.
         """
         if not self._trained:
             fc = frame.copy()
-            return 0.0, fc, fc
+            return 0.0, fc, fc, None
 
         t = self._preprocess(frame).unsqueeze(0).to(self._device)
         with torch.no_grad():
@@ -194,6 +198,7 @@ class AnomalyDetector:
         overlay = cv2.addWeighted(frame, 0.55, heatmap_full, 0.45, 0)
 
         # Bounding box around the hottest anomaly region (top 15% of pixels)
+        anomaly_bbox: Optional[tuple[int, int, int, int]] = None
         if peak > 0:
             thresh = float(np.percentile(diff, 85))
             mask = ((diff > thresh) * 255).astype(np.uint8)
@@ -201,13 +206,14 @@ class AnomalyDetector:
             contours, _ = cv2.findContours(mask_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 bx, by, bw, bh = cv2.boundingRect(max(contours, key=cv2.contourArea))
+                anomaly_bbox = (bx, by, bw, bh)
                 color = (0, 0, 255) if score > self._threshold else (0, 200, 255)
                 cv2.rectangle(overlay, (bx, by), (bx + bw, by + bh), color, 2)
                 label = "ANOMALIE" if score > self._threshold else "Hotspot"
                 cv2.putText(overlay, label, (bx, max(by - 6, 12)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1, cv2.LINE_AA)
 
-        return score, rec_bgr, overlay
+        return score, rec_bgr, overlay, anomaly_bbox
 
     # ------------------------------------------------------------------ threshold
 

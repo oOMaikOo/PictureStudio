@@ -383,7 +383,7 @@ class CameraCaptureDialog(QDialog):
         cnt_row = QHBoxLayout()
         cnt_row.addWidget(QLabel("Anzahl:"))
         self._ae_collect_n = QSpinBox()
-        self._ae_collect_n.setRange(20, 2000)
+        self._ae_collect_n.setRange(20, 25000)
         self._ae_collect_n.setValue(150)
         self._ae_collect_n.setSuffix(" Frames")
         cnt_row.addWidget(self._ae_collect_n)
@@ -644,7 +644,7 @@ class CameraCaptureDialog(QDialog):
         if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained:
             self._ae_score_counter += 1
             if self._ae_score_counter % 3 == 0:
-                score, recon_bgr, heatmap_overlay = self._detector.score_detailed(analysis_frame)
+                score, recon_bgr, heatmap_overlay, anomaly_bbox = self._detector.score_detailed(analysis_frame)
                 self._score_history.append(score)
                 if len(self._score_history) > 2000:
                     self._score_history = self._score_history[-2000:]
@@ -663,7 +663,7 @@ class CameraCaptureDialog(QDialog):
                 if smoothed_alarm:
                     saved_path = ""
                     if self._ae_save_anomaly_cb.isChecked():
-                        saved_path = self._save_frame(frame) or ""
+                        saved_path = self._save_anomaly_frame(frame, anomaly_bbox) or ""
                         if saved_path:
                             self._add_to_list(saved_path)
                     if self._event_logger is not None:
@@ -768,6 +768,43 @@ class CameraCaptureDialog(QDialog):
         filename = f"capture_{int(time.time())}_{self._capture_index:04d}.png"
         path = os.path.join(self._save_dir, filename)
         save_frame = self._apply_timestamp(frame) if self._ts_save_cb.isChecked() else frame
+        if not cv2.imwrite(path, save_frame):
+            QMessageBox.critical(self, "Speicherfehler", f"Konnte nicht speichern:\n{path}")
+            return None
+        return path
+
+    def _save_anomaly_frame(
+        self,
+        frame: np.ndarray,
+        bbox: Optional[tuple],
+    ) -> Optional[str]:
+        """Save frame with a plain bounding-box border around the anomalous region."""
+        os.makedirs(self._save_dir, exist_ok=True)
+        self._capture_index += 1
+        filename = f"anomaly_{int(time.time())}_{self._capture_index:04d}.png"
+        path = os.path.join(self._save_dir, filename)
+        save_frame = self._apply_timestamp(frame) if self._ts_save_cb.isChecked() else frame.copy()
+        if bbox is not None:
+            bx, by, bw, bh = bbox
+            # Adjust bbox if analysis was on an ROI crop — map back to full frame coords
+            if self._roi is not None:
+                fh, fw = save_frame.shape[:2]
+                rx1 = int(self._roi[0] * fw); ry1 = int(self._roi[1] * fh)
+                rx2 = int(self._roi[2] * fw); ry2 = int(self._roi[3] * fh)
+                rw, rh = max(1, rx2 - rx1), max(1, ry2 - ry1)
+                # bbox is in 128×128 detector space → scale to ROI pixel space → shift to full frame
+                scale_x = rw / 128; scale_y = rh / 128
+                bx = rx1 + int(bx * scale_x)
+                by = ry1 + int(by * scale_y)
+                bw = int(bw * scale_x)
+                bh = int(bh * scale_y)
+            # Red border, 3 px thick — no overlay, no blending
+            cv2.rectangle(save_frame, (bx, by), (bx + bw, by + bh), (0, 0, 255), 3)
+            cv2.putText(
+                save_frame, "ANOMALIE",
+                (bx, max(by - 8, 14)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA,
+            )
         if not cv2.imwrite(path, save_frame):
             QMessageBox.critical(self, "Speicherfehler", f"Konnte nicht speichern:\n{path}")
             return None
