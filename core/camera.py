@@ -101,6 +101,25 @@ class CameraFrameThread(QThread):
             return
 
         try:
+            # Some devices (e.g. iPhone Continuity Camera) need up to ~1 s to
+            # deliver the first frame after open() — retry before giving up.
+            ret, frame = False, None
+            for _ in range(30):
+                ret, frame = cap.read()
+                if ret:
+                    break
+                time.sleep(0.05)
+
+            if not ret:
+                self.error.emit(
+                    "Kamera geöffnet, aber kein Bild empfangen.\n"
+                    "Bitte prüfen ob das Gerät bereit ist und Kamera-Zugriff erteilt wurde."
+                )
+                return
+
+            # emit the already-read first frame, then continue normally
+            self.frame_ready.emit(frame)
+
             while self._running:
                 t0 = time.perf_counter()
                 ret, frame = cap.read()
