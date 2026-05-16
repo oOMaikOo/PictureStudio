@@ -13,9 +13,9 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
 
-# Use AVFoundation explicitly on macOS — required for Continuity Camera (iPhone)
-# and for correct device naming via system_profiler.
-_BACKEND = cv2.CAP_AVFOUNDATION if platform.system() == "Darwin" else cv2.CAP_ANY
+# On macOS, CAP_ANY automatically selects AVFoundation — do NOT pass
+# CAP_AVFOUNDATION explicitly as OpenCV 4.x rejects integer-index captures with it.
+_BACKEND = cv2.CAP_ANY
 
 
 def _macos_camera_names() -> list[str]:
