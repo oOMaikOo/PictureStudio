@@ -6,6 +6,7 @@ the model sees something it has never learned to reconstruct → anomaly.
 """
 import cv2
 import numpy as np
+import os
 import torch
 import torch.nn as nn
 from datetime import datetime, timezone
@@ -109,6 +110,7 @@ class AnomalyDetector:
         epochs: int = 20,
         batch_size: int = 16,
         progress_cb=None,
+        seed: int = 42,
     ) -> float:
         """
         Train on collected frames (blocking).
@@ -123,6 +125,10 @@ class AnomalyDetector:
         n_frames = len(self._train_frames)
         trained_at = datetime.now(timezone.utc).isoformat()
         t0 = _time.perf_counter()
+
+        # Fix random seed for reproducibility
+        torch.manual_seed(seed)
+        np.random.seed(seed)
 
         data = torch.tensor(np.stack(self._train_frames), dtype=torch.float32)
         loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True, drop_last=False)
@@ -170,6 +176,7 @@ class AnomalyDetector:
             "torch_version":   str(torch.__version__),
             "model_img_size":  _IMG,
             "device":          str(self._device),
+            "random_seed":     seed,
         })
         return self._threshold
 
@@ -289,13 +296,38 @@ class AnomalyDetector:
         self._model.to(self._device)
 
     def save(self, path: str) -> None:
+        import hashlib, json as _json
         torch.save({
             "model":     self._model.state_dict(),
             "threshold": self._threshold,
             "metadata":  self._metadata,
         }, path)
+        # Write SHA256 checksum sidecar so integrity can be verified on load
+        sha = hashlib.sha256(open(path, "rb").read()).hexdigest()
+        checksum_path = path + ".sha256"
+        with open(checksum_path, "w", encoding="utf-8") as f:
+            _json.dump({"sha256": sha, "file": os.path.basename(path)}, f)
+
+    def verify_checksum(self, path: str) -> tuple[bool, str]:
+        """Return (ok, message). ok=True means file matches stored checksum."""
+        import hashlib, json as _json
+        checksum_path = path + ".sha256"
+        if not os.path.exists(checksum_path):
+            return True, "Keine Prüfsumme vorhanden (altes Modell)"
+        try:
+            stored = _json.load(open(checksum_path, encoding="utf-8"))["sha256"]
+            actual = hashlib.sha256(open(path, "rb").read()).hexdigest()
+            if actual == stored:
+                return True, f"SHA256 OK: {actual[:16]}…"
+            return False, f"PRÜFSUMME UNGÜLTIG!\nErwartet: {stored[:16]}…\nGefunden:  {actual[:16]}…"
+        except Exception as e:
+            return False, f"Prüfsummen-Fehler: {e}"
 
     def load(self, path: str) -> None:
+        # Verify checksum before loading
+        ok, msg = self.verify_checksum(path)
+        if not ok:
+            raise RuntimeError(f"Integritätsprüfung fehlgeschlagen:\n{msg}")
         # Always load to CPU first to avoid cross-device errors.
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
         self._model.load_state_dict(ckpt["model"])
@@ -304,4 +336,5 @@ class AnomalyDetector:
         self._threshold = float(ckpt["threshold"])
         self._metadata = dict(ckpt.get("metadata", {}))  # graceful for old files
         self._metadata["loaded_at"] = datetime.now(timezone.utc).isoformat()
+        self._metadata["sha256_verified"] = msg
         self._trained = True

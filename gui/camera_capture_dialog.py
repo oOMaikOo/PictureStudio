@@ -78,6 +78,82 @@ class _ModelAuditLogger:
 # ── background threads ────────────────────────────────────────────────────────
 
 
+class _VideoFileThread(QThread):
+    """Reads frames from a video file and emits them like a live camera feed."""
+    frame_ready = Signal(object)   # numpy BGR
+    error      = Signal(str)
+    progress   = Signal(int, int)  # current_frame, total_frames
+    finished   = Signal()
+
+    def __init__(self, path: str, fps: float = 0.0, parent=None):
+        super().__init__(parent)
+        self._path = path
+        self._fps = fps        # 0 = use video's native fps
+        self._running = False
+
+    def run(self) -> None:
+        self._running = True
+        cap = cv2.VideoCapture(self._path)
+        if not cap.isOpened():
+            self.error.emit(f"Video konnte nicht geöffnet werden:\n{self._path}")
+            return
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        native_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        interval = 1.0 / (self._fps if self._fps > 0 else native_fps)
+        frame_idx = 0
+        try:
+            while self._running:
+                t0 = time.perf_counter()
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frame_idx += 1
+                self.frame_ready.emit(frame)
+                self.progress.emit(frame_idx, total)
+                wait = interval - (time.perf_counter() - t0)
+                if wait > 0:
+                    time.sleep(wait)
+        finally:
+            cap.release()
+            self.finished.emit()
+
+    def stop(self) -> None:
+        self._running = False
+        self.wait(3000)
+
+
+class _BatchAnalysisThread(QThread):
+    """Runs the trained anomaly detector over a list of image files."""
+    result   = Signal(str, float, bool)   # path, score, is_anomaly
+    progress = Signal(int, int)           # current, total
+    finished = Signal()
+
+    def __init__(self, detector, paths: list, parent=None):
+        super().__init__(parent)
+        self._detector = detector
+        self._paths = paths
+        self._running = False
+
+    def run(self) -> None:
+        self._running = True
+        total = len(self._paths)
+        for i, path in enumerate(self._paths):
+            if not self._running:
+                break
+            frame = cv2.imread(path)
+            if frame is None:
+                self.result.emit(path, 0.0, False)
+            else:
+                score, _, _, _ = self._detector.score_detailed(frame)
+                self.result.emit(path, score, score > self._detector.threshold)
+            self.progress.emit(i + 1, total)
+        self.finished.emit()
+
+    def stop(self) -> None:
+        self._running = False
+        self.wait(5000)
+
+
 class _UsbScanThread(QThread):
     """Enumerates USB cameras in background (may take a second)."""
     finished = Signal(list)
@@ -137,6 +213,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_thread: Optional[_AETrainThread] = None
         self._ae_score_counter = 0     # skip counter so we score every 3rd frame
         self._ae_score_streak = 0      # consecutive anomaly frames (for smoothing)
+        self._dedup_last_alarm_t: float = 0.0  # timestamp of last alarm (deduplication)
         self._recon_frame: Optional[np.ndarray] = None   # last reconstruction BGR
         self._last_heatmap: Optional[np.ndarray] = None  # last heatmap overlay BGR
         self._motion_prev_frame: Optional[np.ndarray] = None  # grayscale prev frame for motion filter
@@ -152,6 +229,13 @@ class CameraCaptureDialog(QDialog):
         self._mqtt_client = None                   # MQTTAlarmClient, injected via set_mqtt_client
         self._ae_model_path: Optional[str] = None  # last saved/loaded model path
         self._api_server = None                    # RestApiServer, injected via set_api_server
+        self._video_file_path: Optional[str] = None
+        self._video_thread: Optional[_VideoFileThread] = None
+        self._batch_paths: list[str] = []
+        self._batch_thread: Optional[_BatchAnalysisThread] = None
+        self._batch_results: list[tuple] = []  # (path, score, is_anomaly)
+        self._video_writer: Optional[cv2.VideoWriter] = None
+        self._recording_path: Optional[str] = None
         _audit_dir = os.path.join(self._save_dir, "audit")
         self._audit_log = _ModelAuditLogger(_audit_dir)
 
@@ -215,6 +299,38 @@ class CameraCaptureDialog(QDialog):
         ip_l.addWidget(examples)
         ip_l.addStretch()
         self._src_tabs.addTab(ip_w, "IP Kamera")
+
+        # Video-Datei tab
+        vid_w = QWidget()
+        vid_l = QVBoxLayout(vid_w)
+        vid_pick_row = QHBoxLayout()
+        self._vid_path_lbl = QLabel("Keine Datei gewählt")
+        self._vid_path_lbl.setWordWrap(True)
+        self._vid_path_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        vid_pick_btn = QPushButton("Datei wählen…")
+        vid_pick_btn.clicked.connect(self._pick_video_file)
+        vid_pick_row.addWidget(vid_pick_btn)
+        vid_l.addLayout(vid_pick_row)
+        vid_l.addWidget(self._vid_path_lbl)
+        fps_row = QHBoxLayout()
+        fps_row.addWidget(QLabel("Wiedergabe:"))
+        self._vid_fps_spin = QDoubleSpinBox()
+        self._vid_fps_spin.setRange(0.0, 120.0)
+        self._vid_fps_spin.setValue(0.0)
+        self._vid_fps_spin.setDecimals(1)
+        self._vid_fps_spin.setSuffix(" fps")
+        self._vid_fps_spin.setToolTip("0 = originale Videogeschwindigkeit")
+        self._vid_fps_spin.setSpecialValueText("Original fps")
+        fps_row.addWidget(self._vid_fps_spin)
+        fps_row.addStretch()
+        vid_l.addLayout(fps_row)
+        self._vid_progress = QProgressBar()
+        self._vid_progress.setVisible(False)
+        self._vid_progress.setFormat("%v / %m Frames")
+        vid_l.addWidget(self._vid_progress)
+        vid_l.addStretch()
+        self._src_tabs.addTab(vid_w, "Video-Datei")
+
         lv.addWidget(self._src_tabs)
 
         # ── Connect / status ─────────────────────────────────────────────────
@@ -258,6 +374,21 @@ class CameraCaptureDialog(QDialog):
         self._burst_progress = QProgressBar()
         self._burst_progress.setVisible(False)
         cg.addWidget(self._burst_progress)
+
+        rec_row = QHBoxLayout()
+        self._rec_btn = QPushButton("⏺ Aufnahme starten")
+        self._rec_btn.setToolTip("Live-Stream als MP4 aufzeichnen")
+        self._rec_btn.clicked.connect(self._toggle_recording)
+        self._rec_fps_spin = QSpinBox()
+        self._rec_fps_spin.setRange(1, 60)
+        self._rec_fps_spin.setValue(15)
+        self._rec_fps_spin.setSuffix(" fps")
+        rec_row.addWidget(self._rec_btn)
+        rec_row.addWidget(self._rec_fps_spin)
+        cg.addLayout(rec_row)
+        self._rec_lbl = QLabel("")
+        self._rec_lbl.setStyleSheet("color:#E74C3C; font-size:10px;")
+        cg.addWidget(self._rec_lbl)
         lv.addWidget(cap_group)
 
         # ── Timestamp ────────────────────────────────────────────────────────
@@ -293,6 +424,8 @@ class CameraCaptureDialog(QDialog):
         lg = QVBoxLayout(list_group)
         self._captured_list = QListWidget()
         self._captured_list.setMaximumHeight(130)
+        self._captured_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._captured_list.customContextMenuRequested.connect(self._on_captured_list_menu)
         lg.addWidget(self._captured_list)
         del_btn = QPushButton("Markierte entfernen")
         del_btn.clicked.connect(self._delete_selected)
@@ -356,6 +489,45 @@ class CameraCaptureDialog(QDialog):
         self._recon_info.setStyleSheet("color:#7F8C8D; font-size:10px; padding:2px;")
         model_l.addWidget(self._recon_info)
         self._preview_tabs.addTab(model_w, "🔮  Modell")
+
+        # Batch-Analyse tab
+        batch_w = QWidget()
+        batch_l = QVBoxLayout(batch_w)
+        batch_pick_row = QHBoxLayout()
+        pick_folder_btn = QPushButton("Ordner wählen…")
+        pick_folder_btn.clicked.connect(self._batch_pick_folder)
+        pick_files_btn = QPushButton("Dateien wählen…")
+        pick_files_btn.clicked.connect(self._batch_pick_files)
+        batch_pick_row.addWidget(pick_folder_btn)
+        batch_pick_row.addWidget(pick_files_btn)
+        batch_l.addLayout(batch_pick_row)
+        self._batch_file_lbl = QLabel("Keine Dateien ausgewählt")
+        self._batch_file_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        batch_l.addWidget(self._batch_file_lbl)
+        batch_ctrl_row = QHBoxLayout()
+        self._batch_start_btn = QPushButton("Analyse starten")
+        self._batch_start_btn.clicked.connect(self._batch_start)
+        self._batch_stop_btn = QPushButton("Stopp")
+        self._batch_stop_btn.clicked.connect(self._batch_stop)
+        self._batch_stop_btn.setEnabled(False)
+        self._batch_export_btn = QPushButton("CSV exportieren")
+        self._batch_export_btn.clicked.connect(self._batch_export_csv)
+        self._batch_export_btn.setEnabled(False)
+        batch_ctrl_row.addWidget(self._batch_start_btn)
+        batch_ctrl_row.addWidget(self._batch_stop_btn)
+        batch_ctrl_row.addWidget(self._batch_export_btn)
+        batch_l.addLayout(batch_ctrl_row)
+        self._batch_progress = QProgressBar()
+        self._batch_progress.setVisible(False)
+        batch_l.addWidget(self._batch_progress)
+        from PySide6.QtWidgets import QTableWidget, QTableWidgetItem, QHeaderView
+        self._batch_table = QTableWidget(0, 4)
+        self._batch_table.setHorizontalHeaderLabels(["Datei", "Score", "Anomalie", "Schwellwert"])
+        self._batch_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._batch_table.setSelectionBehavior(QTableWidget.SelectRows)
+        batch_l.addWidget(self._batch_table, stretch=1)
+        self._preview_tabs.addTab(batch_w, "📁  Batch")
 
         rv.addWidget(self._preview_tabs, stretch=1)
 
@@ -511,6 +683,21 @@ class CameraCaptureDialog(QDialog):
         smooth_row.addStretch()
         sl.addLayout(smooth_row)
 
+        dedup_row = QHBoxLayout()
+        dedup_row.addWidget(QLabel("Alarm-Pause:"))
+        self._dedup_spin = QSpinBox()
+        self._dedup_spin.setRange(0, 3600)
+        self._dedup_spin.setValue(30)
+        self._dedup_spin.setSuffix(" s")
+        self._dedup_spin.setToolTip(
+            "Mindestabstand zwischen zwei Alarm-Events in Sekunden.\n"
+            "Verhindert dass derselbe Anomaliebereich hunderte Einträge erzeugt.\n"
+            "0 = kein Deduplication-Filter."
+        )
+        dedup_row.addWidget(self._dedup_spin)
+        dedup_row.addStretch()
+        sl.addLayout(dedup_row)
+
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Schwellwert:"))
         self._ae_threshold_spin = QDoubleSpinBox()
@@ -661,21 +848,50 @@ class CameraCaptureDialog(QDialog):
 
     # ================================================================== CONNECTION
 
+    def _pick_video_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Video-Datei wählen", "",
+            "Videos (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;Alle Dateien (*)"
+        )
+        if path:
+            self._video_file_path = path
+            self._vid_path_lbl.setText(os.path.basename(path))
+            self._vid_path_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
+
     def _toggle_connection(self) -> None:
-        if self._frame_thread and self._frame_thread.isRunning():
+        is_running = (
+            (self._frame_thread and self._frame_thread.isRunning()) or
+            (self._video_thread and self._video_thread.isRunning())
+        )
+        if is_running:
             self._disconnect()
         else:
             self._connect()
 
     def _connect(self) -> None:
-        source = self._resolve_source()
-        if source is None:
-            return
-        self._frame_thread = CameraFrameThread(source, fps=15.0, parent=self)
-        self._frame_thread.frame_ready.connect(self._on_frame)
-        self._frame_thread.error.connect(self._on_camera_error)
-        self._frame_thread.start()
-        self._connect_btn.setText("Trennen")
+        tab = self._src_tabs.currentIndex()
+        if tab == 2:  # Video-Datei
+            if not self._video_file_path or not os.path.isfile(self._video_file_path):
+                QMessageBox.warning(self, "Keine Datei", "Bitte zuerst eine Video-Datei auswählen.")
+                return
+            fps = self._vid_fps_spin.value()
+            self._video_thread = _VideoFileThread(self._video_file_path, fps=fps, parent=self)
+            self._video_thread.frame_ready.connect(self._on_frame)
+            self._video_thread.error.connect(self._on_camera_error)
+            self._video_thread.progress.connect(self._on_video_progress)
+            self._video_thread.finished.connect(self._on_video_finished)
+            self._video_thread.start()
+            self._vid_progress.setValue(0)
+            self._vid_progress.setVisible(True)
+        else:
+            source = self._resolve_source()
+            if source is None:
+                return
+            self._frame_thread = CameraFrameThread(source, fps=15.0, parent=self)
+            self._frame_thread.frame_ready.connect(self._on_frame)
+            self._frame_thread.error.connect(self._on_camera_error)
+            self._frame_thread.start()
+        self._connect_btn.setText("Stopp")
         self._connect_btn.setStyleSheet("background:#E74C3C;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Verbinde…")
         self._status_lbl.setStyleSheet("color:#F39C12;")
@@ -684,6 +900,12 @@ class CameraCaptureDialog(QDialog):
         if self._frame_thread:
             self._frame_thread.stop()
             self._frame_thread = None
+        if self._video_thread:
+            self._video_thread.stop()
+            self._video_thread = None
+            self._vid_progress.setVisible(False)
+        if self._video_writer is not None:
+            self._stop_recording()
         if self._detector and self._detector.trained:
             self._audit_log.log_unloaded("Kamera getrennt")
         self._connect_btn.setText("Verbinden")
@@ -692,6 +914,20 @@ class CameraCaptureDialog(QDialog):
         self._status_lbl.setStyleSheet("color:#E74C3C;")
         self._preview_lbl.setText("Kein Signal")
         self._current_frame = None
+
+    @Slot(int, int)
+    def _on_video_progress(self, current: int, total: int) -> None:
+        self._vid_progress.setRange(0, total)
+        self._vid_progress.setValue(current)
+
+    @Slot()
+    def _on_video_finished(self) -> None:
+        self._video_thread = None
+        self._vid_progress.setVisible(False)
+        self._connect_btn.setText("Verbinden")
+        self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
+        self._status_lbl.setText("Video fertig analysiert")
+        self._status_lbl.setStyleSheet("color:#3FB950;")
 
     def _resolve_source(self):
         if self._src_tabs.currentIndex() == 0:
@@ -713,6 +949,10 @@ class CameraCaptureDialog(QDialog):
         self._current_frame = frame
         h, w = frame.shape[:2]
         self._frame_shape = (h, w)
+
+        # ── Live recording ────────────────────────────────────────────────────
+        if self._video_writer is not None and self._video_writer.isOpened():
+            self._video_writer.write(frame)
 
         # Region used for anomaly detection (full frame or ROI crop)
         analysis_frame = self._crop_roi(frame)
@@ -777,21 +1017,27 @@ class CameraCaptureDialog(QDialog):
                 if self._api_server is not None:
                     self._api_server.push_score(score, self._detector.threshold)
                 if smoothed_alarm:
+                    # Alarm-Deduplication: suppress if within cooldown window
+                    now = time.time()
+                    dedup_s = self._dedup_spin.value()
+                    dedup_ok = dedup_s == 0 or (now - self._dedup_last_alarm_t) >= dedup_s
+                    if dedup_ok:
+                        self._dedup_last_alarm_t = now
                     saved_path = ""
-                    if self._ae_save_anomaly_cb.isChecked():
+                    if dedup_ok and self._ae_save_anomaly_cb.isChecked():
                         saved_path = self._save_anomaly_frame(
                             frame, anomaly_bbox, score, self._detector.threshold
                         ) or ""
                         if saved_path:
                             self._add_to_list(saved_path)
-                    if self._event_logger is not None:
+                    if dedup_ok and self._event_logger is not None:
                         self._event_logger.log_event(
                             score, self._detector.threshold, saved_path
                         )
                         self._event_log_lbl.setText(
                             f"Events: {self._event_logger.event_count}"
                         )
-                    if self._mqtt_client is not None:
+                    if dedup_ok and self._mqtt_client is not None:
                         self._mqtt_client.publish_alarm(
                             score, self._detector.threshold, saved_path, alarm=True
                         )
@@ -954,6 +1200,152 @@ class CameraCaptureDialog(QDialog):
 
         return path
 
+    # ================================================================== BATCH ANALYSIS
+
+    def _batch_pick_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
+        if not folder:
+            return
+        exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
+        self._batch_paths = sorted(
+            p for p in (os.path.join(folder, f) for f in os.listdir(folder))
+            if os.path.splitext(p)[1].lower() in exts
+        )
+        self._batch_file_lbl.setText(
+            f"{len(self._batch_paths)} Bilder aus: {os.path.basename(folder)}"
+        )
+        self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
+
+    def _batch_pick_files(self) -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Bilder wählen", "",
+            "Bilder (*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp);;Alle (*)"
+        )
+        if paths:
+            self._batch_paths = sorted(paths)
+            self._batch_file_lbl.setText(f"{len(self._batch_paths)} Bilder gewählt")
+            self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
+
+    def _batch_start(self) -> None:
+        self._ensure_detector()
+        if not self._detector.trained:
+            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren oder laden.")
+            return
+        if not self._batch_paths:
+            QMessageBox.warning(self, "Keine Bilder", "Bitte zuerst Bilder oder Ordner wählen.")
+            return
+        self._batch_results.clear()
+        self._batch_table.setRowCount(0)
+        self._batch_progress.setRange(0, len(self._batch_paths))
+        self._batch_progress.setValue(0)
+        self._batch_progress.setVisible(True)
+        self._batch_start_btn.setEnabled(False)
+        self._batch_stop_btn.setEnabled(True)
+        self._batch_export_btn.setEnabled(False)
+        self._batch_thread = _BatchAnalysisThread(self._detector, self._batch_paths, parent=self)
+        self._batch_thread.result.connect(self._on_batch_result)
+        self._batch_thread.progress.connect(self._batch_progress.setValue)
+        self._batch_thread.finished.connect(self._on_batch_finished)
+        self._batch_thread.start()
+        self._preview_tabs.setCurrentIndex(2)  # switch to Batch tab
+
+    def _batch_stop(self) -> None:
+        if self._batch_thread:
+            self._batch_thread.stop()
+            self._batch_thread = None
+        self._batch_progress.setVisible(False)
+        self._batch_start_btn.setEnabled(True)
+        self._batch_stop_btn.setEnabled(False)
+        self._batch_export_btn.setEnabled(bool(self._batch_results))
+
+    @Slot(str, float, bool)
+    def _on_batch_result(self, path: str, score: float, is_anomaly: bool) -> None:
+        from PySide6.QtWidgets import QTableWidgetItem
+        self._batch_results.append((path, score, is_anomaly))
+        thr = self._detector.threshold
+        row = self._batch_table.rowCount()
+        self._batch_table.insertRow(row)
+        self._batch_table.setItem(row, 0, QTableWidgetItem(os.path.basename(path)))
+        self._batch_table.setItem(row, 1, QTableWidgetItem(f"{score:.5f}"))
+        anomaly_item = QTableWidgetItem("JA" if is_anomaly else "nein")
+        if is_anomaly:
+            from PySide6.QtGui import QColor
+            anomaly_item.setBackground(QColor(120, 30, 30))
+        self._batch_table.setItem(row, 2, anomaly_item)
+        self._batch_table.setItem(row, 3, QTableWidgetItem(f"{thr:.5f}"))
+        self._batch_table.scrollToBottom()
+
+    @Slot()
+    def _on_batch_finished(self) -> None:
+        self._batch_thread = None
+        self._batch_progress.setVisible(False)
+        self._batch_start_btn.setEnabled(True)
+        self._batch_stop_btn.setEnabled(False)
+        self._batch_export_btn.setEnabled(bool(self._batch_results))
+        n_anom = sum(1 for _, _, a in self._batch_results if a)
+        self._batch_file_lbl.setText(
+            f"Fertig: {len(self._batch_results)} Bilder — {n_anom} Anomalien gefunden"
+        )
+
+    def _batch_export_csv(self) -> None:
+        if not self._batch_results:
+            return
+        import csv
+        path, _ = QFileDialog.getSaveFileName(self, "CSV exportieren", "", "CSV (*.csv)")
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["Datei", "Score", "Anomalie", "Schwellwert"])
+                thr = self._detector.threshold
+                for img_path, score, is_anomaly in self._batch_results:
+                    w.writerow([img_path, f"{score:.6f}", "JA" if is_anomaly else "nein", f"{thr:.6f}"])
+            QMessageBox.information(self, "Exportiert", f"CSV gespeichert:\n{path}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Fehler", str(exc))
+
+    # ================================================================== RECORDING
+
+    def _toggle_recording(self) -> None:
+        if self._video_writer is not None:
+            self._stop_recording()
+        else:
+            self._start_recording()
+
+    def _start_recording(self) -> None:
+        if self._current_frame is None:
+            QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Video speichern unter", self._save_dir,
+            "MP4 Video (*.mp4);;AVI Video (*.avi)"
+        )
+        if not path:
+            return
+        h, w = self._current_frame.shape[:2]
+        fps = self._rec_fps_spin.value()
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v") if path.endswith(".mp4") else cv2.VideoWriter_fourcc(*"XVID")
+        self._video_writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
+        if not self._video_writer.isOpened():
+            QMessageBox.critical(self, "Fehler", "VideoWriter konnte nicht initialisiert werden.")
+            self._video_writer = None
+            return
+        self._recording_path = path
+        self._rec_btn.setText("⏹ Aufnahme stoppen")
+        self._rec_btn.setStyleSheet("background:#E74C3C;color:white;")
+        self._rec_lbl.setText(f"REC  {os.path.basename(path)}")
+
+    def _stop_recording(self) -> None:
+        if self._video_writer:
+            self._video_writer.release()
+            self._video_writer = None
+        self._rec_btn.setText("⏺ Aufnahme starten")
+        self._rec_btn.setStyleSheet("")
+        path = self._recording_path or ""
+        self._rec_lbl.setText(f"Gespeichert: {os.path.basename(path)}" if path else "")
+        self._recording_path = None
+
     def _add_to_list(self, path: str) -> None:
         self.captured_paths.append(path)
         item = QListWidgetItem(os.path.basename(path))
@@ -962,6 +1354,49 @@ class CameraCaptureDialog(QDialog):
         self._captured_list.scrollToBottom()
         self._accept_btn.setText(f"In Projekt übernehmen ({len(self.captured_paths)})")
         self._accept_btn.setEnabled(True)
+
+    def _on_captured_list_menu(self, pos) -> None:
+        item = self._captured_list.itemAt(pos)
+        if not item:
+            return
+        path = item.data(Qt.UserRole)
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        fp_action  = menu.addAction("Als Fehlalarm markieren")
+        ok_action  = menu.addAction("Markierung entfernen")
+        menu.addSeparator()
+        del_action = menu.addAction("Aus Liste entfernen")
+        action = menu.exec(self._captured_list.mapToGlobal(pos))
+        if action == fp_action:
+            self._mark_false_positive(path, item, is_fp=True)
+        elif action == ok_action:
+            self._mark_false_positive(path, item, is_fp=False)
+        elif action == del_action:
+            row = self._captured_list.row(item)
+            self._captured_list.takeItem(row)
+            if path in self.captured_paths:
+                self.captured_paths.remove(path)
+
+    def _mark_false_positive(self, path: str, item: QListWidgetItem, is_fp: bool) -> None:
+        """Update JSON sidecar with false-positive flag and recolor list entry."""
+        import json
+        from PySide6.QtGui import QColor
+        json_path = os.path.splitext(path)[0] + ".json"
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                data["false_positive"] = is_fp
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+        if is_fp:
+            item.setBackground(QColor(60, 60, 20))
+            item.setText(os.path.basename(path) + "  [FP]")
+        else:
+            item.setBackground(QColor(0, 0, 0, 0))
+            item.setText(os.path.basename(path))
 
     # ================================================================== BURST
 
