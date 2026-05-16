@@ -27,6 +27,54 @@ log = get_logger()
 _PREVIEW_W = 640
 _PREVIEW_H = 480
 
+# ── audit logger ─────────────────────────────────────────────────────────────
+
+class _ModelAuditLogger:
+    """Append-only JSONL audit log for model lifecycle events (TRAINED/LOADED/UNLOADED)."""
+
+    def __init__(self, log_dir: str) -> None:
+        import json
+        self._json = json
+        os.makedirs(log_dir, exist_ok=True)
+        self._path = os.path.join(log_dir, "model_audit.jsonl")
+
+    def _write(self, event: str, extra: dict) -> None:
+        from datetime import datetime, timezone
+        record = {"event": event,
+                  "timestamp_utc": datetime.now(timezone.utc).isoformat()}
+        record.update(extra)
+        try:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(self._json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+    def log_trained(self, metadata: dict) -> None:
+        self._write("TRAINED", {k: metadata.get(k) for k in (
+            "n_frames", "train_epochs", "train_duration_s", "threshold",
+            "camera_source", "roi", "opencv_version", "torch_version", "device",
+        )})
+
+    def log_loaded(self, path: str, metadata: dict) -> None:
+        self._write("LOADED", {"model_file": os.path.basename(path),
+                               "trained_at": metadata.get("trained_at"),
+                               "description": metadata.get("description"),
+                               "n_frames": metadata.get("n_frames"),
+                               "threshold": metadata.get("threshold")})
+
+    def log_saved(self, path: str, metadata: dict) -> None:
+        self._write("SAVED", {"model_file": os.path.basename(path),
+                               "description": metadata.get("description"),
+                               "threshold": metadata.get("threshold")})
+
+    def log_unloaded(self, reason: str = "") -> None:
+        self._write("UNLOADED", {"reason": reason})
+
+    @property
+    def log_path(self) -> str:
+        return self._path
+
+
 # ── background threads ────────────────────────────────────────────────────────
 
 
@@ -104,6 +152,8 @@ class CameraCaptureDialog(QDialog):
         self._mqtt_client = None                   # MQTTAlarmClient, injected via set_mqtt_client
         self._ae_model_path: Optional[str] = None  # last saved/loaded model path
         self._api_server = None                    # RestApiServer, injected via set_api_server
+        _audit_dir = os.path.join(self._save_dir, "audit")
+        self._audit_log = _ModelAuditLogger(_audit_dir)
 
         self._build_ui()
         self._scan_usb_cameras()
@@ -555,8 +605,12 @@ class CameraCaptureDialog(QDialog):
         save_ae_btn.clicked.connect(self._save_ae_model)
         load_ae_btn = QPushButton("Laden…")
         load_ae_btn.clicked.connect(self._load_ae_model)
+        info_ae_btn = QPushButton("ℹ Info")
+        info_ae_btn.setToolTip("Trainings-Metadaten des geladenen Modells anzeigen")
+        info_ae_btn.clicked.connect(self._show_model_info)
         btn_row1.addWidget(save_ae_btn)
         btn_row1.addWidget(load_ae_btn)
+        btn_row1.addWidget(info_ae_btn)
         il.addLayout(btn_row1)
         btn_row2 = QHBoxLayout()
         export_onnx_btn = QPushButton("→ ONNX")
@@ -630,6 +684,8 @@ class CameraCaptureDialog(QDialog):
         if self._frame_thread:
             self._frame_thread.stop()
             self._frame_thread = None
+        if self._detector and self._detector.trained:
+            self._audit_log.log_unloaded("Kamera getrennt")
         self._connect_btn.setText("Verbinden")
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Nicht verbunden")
@@ -723,7 +779,9 @@ class CameraCaptureDialog(QDialog):
                 if smoothed_alarm:
                     saved_path = ""
                     if self._ae_save_anomaly_cb.isChecked():
-                        saved_path = self._save_anomaly_frame(frame, anomaly_bbox) or ""
+                        saved_path = self._save_anomaly_frame(
+                            frame, anomaly_bbox, score, self._detector.threshold
+                        ) or ""
                         if saved_path:
                             self._add_to_list(saved_path)
                     if self._event_logger is not None:
@@ -837,23 +895,29 @@ class CameraCaptureDialog(QDialog):
         self,
         frame: np.ndarray,
         bbox: Optional[tuple],
+        score: float = 0.0,
+        threshold: float = 0.0,
     ) -> Optional[str]:
-        """Save frame with a plain bounding-box border around the anomalous region."""
+        """Save frame with bounding-box border + JSON sidecar with full provenance."""
+        import json
+        from datetime import datetime, timezone
         os.makedirs(self._save_dir, exist_ok=True)
         self._capture_index += 1
-        filename = f"anomaly_{int(time.time())}_{self._capture_index:04d}.png"
+        ts = int(time.time())
+        filename = f"anomaly_{ts}_{self._capture_index:04d}.png"
         path = os.path.join(self._save_dir, filename)
         save_frame = self._apply_timestamp(frame) if self._ts_save_cb.isChecked() else frame.copy()
+
+        full_bbox = None
         if bbox is not None:
             bx, by, bw, bh = bbox
-            # bbox is in ROI-crop pixel coords — just shift by the ROI origin to get full-frame coords
             if self._roi is not None:
                 fh, fw = save_frame.shape[:2]
                 rx1 = int(self._roi[0] * fw)
                 ry1 = int(self._roi[1] * fh)
                 bx += rx1
                 by += ry1
-            # Red border, 3 px thick — no overlay, no blending
+            full_bbox = [bx, by, bw, bh]
             cv2.rectangle(save_frame, (bx, by), (bx + bw, by + bh), (0, 0, 255), 3)
             cv2.putText(
                 save_frame, "ANOMALIE",
@@ -863,6 +927,31 @@ class CameraCaptureDialog(QDialog):
         if not cv2.imwrite(path, save_frame):
             QMessageBox.critical(self, "Speicherfehler", f"Konnte nicht speichern:\n{path}")
             return None
+
+        # ── JSON sidecar: full provenance record ─────────────────────────────
+        cam_name = self._usb_combo.currentText() if self._src_tabs.currentIndex() == 0 \
+                   else self._ip_edit.text().strip()
+        model_meta = self._detector.metadata if self._detector else {}
+        sidecar = {
+            "timestamp_utc":   datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(),
+            "image_file":      filename,
+            "score":           round(score, 6),
+            "threshold":       round(threshold, 6),
+            "anomaly_bbox_px": full_bbox,
+            "roi":             list(self._roi) if self._roi else None,
+            "camera_source":   cam_name,
+            "model_file":      os.path.basename(self._ae_model_path) if self._ae_model_path else None,
+            "model_trained_at": model_meta.get("trained_at"),
+            "model_n_frames":  model_meta.get("n_frames"),
+            "model_description": model_meta.get("description"),
+        }
+        json_path = os.path.splitext(path)[0] + ".json"
+        try:
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(sidecar, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass  # sidecar is optional — don't block frame save
+
         return path
 
     def _add_to_list(self, path: str) -> None:
@@ -971,6 +1060,13 @@ class CameraCaptureDialog(QDialog):
                                 "Bitte mindestens 10 Normalframes sammeln.")
             return
         epochs = self._ae_epochs.value()
+
+        # Inject context metadata before training starts
+        cam_name = self._usb_combo.currentText() if self._src_tabs.currentIndex() == 0 \
+                   else self._ip_edit.text().strip()
+        self._detector.set_meta("camera_source", cam_name)
+        self._detector.set_meta("roi", list(self._roi) if self._roi else None)
+
         self._ae_train_btn.setEnabled(False)
         self._ae_collect_btn.setEnabled(False)
         self._ae_train_bar.setRange(0, epochs)
@@ -1008,6 +1104,7 @@ class CameraCaptureDialog(QDialog):
             "Modell trainiert — Live-Scoring starten\num die Rekonstruktion zu sehen."
         )
         log.info(f"Autoencoder trained, threshold={threshold:.5f}")
+        self._audit_log.log_trained(self._detector.metadata)
 
     @Slot(str)
     def _on_ae_error(self, msg: str) -> None:
@@ -1064,12 +1161,21 @@ class CameraCaptureDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(
             self, "Autoencoder-Modell speichern", self._save_dir, "PyTorch (*.pth)"
         )
-        if path:
-            self._detector.save(path)
-            self._ae_model_path = path
-            # Save ROI alongside model so it can be restored on load
-            self._save_model_meta(path)
-            QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
+        if not path:
+            return
+        # Optional description
+        from PySide6.QtWidgets import QInputDialog
+        desc, ok = QInputDialog.getText(
+            self, "Modell-Beschreibung",
+            "Kurze Beschreibung (optional, z.B. 'Linie A – Normalzustand'):",
+        )
+        if ok and desc.strip():
+            self._detector.set_meta("description", desc.strip())
+        self._detector.save(path)
+        self._ae_model_path = path
+        self._save_model_meta(path)
+        self._audit_log.log_saved(path, self._detector.metadata)
+        QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
 
     def _load_ae_model(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -1082,8 +1188,52 @@ class CameraCaptureDialog(QDialog):
             self._detector.load(path)
             self._ae_model_path = path
             self._load_model_meta(path)
+            self._audit_log.log_loaded(path, self._detector.metadata)
+            self._show_model_info(loaded_from=path)
         except Exception as exc:
             QMessageBox.critical(self, "Ladefehler", str(exc))
+
+    def _show_model_info(self, loaded_from: str = "") -> None:
+        """Show a dialog with the model's training metadata."""
+        meta = self._detector.metadata
+        if not meta:
+            QMessageBox.information(self, "Modell-Info", "Keine Metadaten verfügbar (altes Modell).")
+            return
+        lines = []
+        if loaded_from:
+            lines.append(f"Datei:        {os.path.basename(loaded_from)}")
+        if "description" in meta:
+            lines.append(f"Beschreibung: {meta['description']}")
+        if "trained_at" in meta:
+            ts = meta["trained_at"].replace("T", "  ").replace("+00:00", " UTC")
+            lines.append(f"Trainiert am: {ts}")
+        if "n_frames" in meta:
+            lines.append(f"Trainingsframes: {meta['n_frames']}")
+        if "train_epochs" in meta:
+            lines.append(f"Epochen:      {meta['train_epochs']}")
+        if "train_duration_s" in meta:
+            lines.append(f"Dauer:        {meta['train_duration_s']} s")
+        if "threshold" in meta:
+            lines.append(f"Schwellwert:  {meta['threshold']:.5f}")
+        if "camera_source" in meta:
+            lines.append(f"Kameraquelle: {meta['camera_source'] or '–'}")
+        if "roi" in meta:
+            roi = meta["roi"]
+            lines.append(f"ROI:          {roi if roi else 'Kein ROI (ganzes Bild)'}")
+        if "device" in meta:
+            lines.append(f"Gerät:        {meta['device']}")
+        if "opencv_version" in meta:
+            lines.append(f"OpenCV:       {meta['opencv_version']}")
+        if "torch_version" in meta:
+            lines.append(f"PyTorch:      {meta['torch_version']}")
+        if "loaded_at" in meta:
+            ts = meta["loaded_at"].replace("T", "  ").replace("+00:00", " UTC")
+            lines.append(f"Geladen am:   {ts}")
+        dlg = QMessageBox(self)
+        dlg.setWindowTitle("Modell-Info")
+        dlg.setText("Modell-Metadaten")
+        dlg.setDetailedText("\n".join(lines))
+        dlg.exec()
 
     def _export_ae_onnx(self) -> None:
         self._ensure_detector()

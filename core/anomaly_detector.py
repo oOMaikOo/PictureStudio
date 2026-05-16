@@ -8,8 +8,10 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
+from datetime import datetime, timezone
 from torch.utils.data import DataLoader, TensorDataset
 from typing import Optional
+import time as _time
 
 _IMG = 128  # all frames resized to _IMG × _IMG before encode/decode
 
@@ -68,6 +70,18 @@ class AnomalyDetector:
         self._trained = False
         self._threshold: float = 0.02
         self._train_frames: list[np.ndarray] = []  # stored as numpy float32 C×H×W
+        self._metadata: dict = {}
+
+    # ------------------------------------------------------------------ metadata
+
+    @property
+    def metadata(self) -> dict:
+        """Read-only copy of the model metadata dict."""
+        return dict(self._metadata)
+
+    def set_meta(self, key: str, value) -> None:
+        """Set an arbitrary metadata field (e.g. camera_source, roi, description)."""
+        self._metadata[key] = value
 
     # ------------------------------------------------------------------ collection
 
@@ -106,6 +120,10 @@ class AnomalyDetector:
         if not self._train_frames:
             raise ValueError("Keine Frames gesammelt – zuerst Normalframes aufnehmen.")
 
+        n_frames = len(self._train_frames)
+        trained_at = datetime.now(timezone.utc).isoformat()
+        t0 = _time.perf_counter()
+
         data = torch.tensor(np.stack(self._train_frames), dtype=torch.float32)
         loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True, drop_last=False)
 
@@ -139,8 +157,20 @@ class AnomalyDetector:
 
         arr = np.array(errors)
         self._threshold = float(arr.mean() + 2.5 * arr.std())
-        self._model.eval()   # einmalig setzen, nicht bei jedem score()-Aufruf
         self._trained = True
+
+        # Record training provenance — preserves user-set fields (camera_source etc.)
+        self._metadata.update({
+            "trained_at":      trained_at,
+            "n_frames":        n_frames,
+            "train_epochs":    epochs,
+            "train_duration_s": round(_time.perf_counter() - t0, 1),
+            "threshold":       self._threshold,
+            "opencv_version":  str(cv2.__version__),
+            "torch_version":   str(torch.__version__),
+            "model_img_size":  _IMG,
+            "device":          str(self._device),
+        })
         return self._threshold
 
     # ------------------------------------------------------------------ scoring
@@ -259,14 +289,19 @@ class AnomalyDetector:
         self._model.to(self._device)
 
     def save(self, path: str) -> None:
-        torch.save({"model": self._model.state_dict(), "threshold": self._threshold}, path)
+        torch.save({
+            "model":     self._model.state_dict(),
+            "threshold": self._threshold,
+            "metadata":  self._metadata,
+        }, path)
 
     def load(self, path: str) -> None:
-        # Immer erst auf CPU laden, dann auf Zielgerät verschieben —
-        # vermeidet Cross-Device-Fehler bei load_state_dict.
+        # Always load to CPU first to avoid cross-device errors.
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
         self._model.load_state_dict(ckpt["model"])
         self._model.to(self._device)
         self._model.eval()
         self._threshold = float(ckpt["threshold"])
+        self._metadata = dict(ckpt.get("metadata", {}))  # graceful for old files
+        self._metadata["loaded_at"] = datetime.now(timezone.utc).isoformat()
         self._trained = True
