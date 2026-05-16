@@ -41,10 +41,9 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     found = []
     for i in range(max_index):
         try:
-            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
-            # Skip virtual devices that OpenCV cannot reliably connect to
-            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
-                continue
+            # Try to open FIRST — name lookup uses sys_names only for display,
+            # not for pre-filtering, to avoid index mismatches when virtual
+            # devices (e.g. iPhone) shift the AVFoundation numbering.
             cap = cv2.VideoCapture(i, _BACKEND)
             if not cap.isOpened():
                 cap.release()
@@ -57,6 +56,10 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
                 time.sleep(0.05)
             cap.release()
             if not ret:
+                continue
+            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+            # Filter out known-unreliable virtual devices AFTER confirming open
+            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
                 continue
             found.append((i, name))
         except Exception:
