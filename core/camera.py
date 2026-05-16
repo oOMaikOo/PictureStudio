@@ -38,16 +38,22 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     for i in range(max_index):
         try:
             cap = cv2.VideoCapture(i, _BACKEND)
-            if cap.isOpened():
-                # Try reading one frame to confirm the device is actually usable
+            if not cap.isOpened():
+                cap.release()
+                continue
+            # Some devices (e.g. iPhone Continuity Camera) need a moment to
+            # initialise before the first frame is available — retry briefly.
+            ret = False
+            for _ in range(5):
                 ret, _ = cap.read()
-                cap.release()
-                if not ret:
-                    continue
-                name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
-                found.append((i, name))
-            else:
-                cap.release()
+                if ret:
+                    break
+                time.sleep(0.05)
+            cap.release()
+            if not ret:
+                continue
+            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+            found.append((i, name))
         except Exception:
             pass
     return found
