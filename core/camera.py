@@ -1,6 +1,9 @@
 """
 Camera capture backend: USB cameras and IP camera streams via OpenCV.
 """
+import json
+import platform
+import subprocess
 import time
 from datetime import datetime
 from typing import Union
@@ -10,16 +13,41 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
 
+# Use AVFoundation explicitly on macOS — required for Continuity Camera (iPhone)
+# and for correct device naming via system_profiler.
+_BACKEND = cv2.CAP_AVFOUNDATION if platform.system() == "Darwin" else cv2.CAP_ANY
 
-def list_usb_cameras(max_index: int = 8) -> list[tuple[int, str]]:
-    """Return (index, label) pairs for every responsive USB camera."""
+
+def _macos_camera_names() -> list[str]:
+    """Return camera display names in AVFoundation order via system_profiler."""
+    try:
+        out = subprocess.run(
+            ["system_profiler", "SPCameraDataType", "-json"],
+            capture_output=True, text=True, timeout=6,
+        )
+        data = json.loads(out.stdout)
+        return [cam.get("_name", "") for cam in data.get("SPCameraDataType", [])]
+    except Exception:
+        return []
+
+
+def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
+    """Return (index, label) pairs for every responsive camera device."""
+    sys_names = _macos_camera_names() if platform.system() == "Darwin" else []
     found = []
     for i in range(max_index):
         try:
-            cap = cv2.VideoCapture(i)
+            cap = cv2.VideoCapture(i, _BACKEND)
             if cap.isOpened():
-                found.append((i, f"USB Kamera {i}"))
-            cap.release()
+                # Try reading one frame to confirm the device is actually usable
+                ret, _ = cap.read()
+                cap.release()
+                if not ret:
+                    continue
+                name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+                found.append((i, name))
+            else:
+                cap.release()
         except Exception:
             pass
     return found
@@ -60,7 +88,8 @@ class CameraFrameThread(QThread):
 
     def run(self) -> None:
         self._running = True
-        cap = cv2.VideoCapture(self.source)
+        backend = _BACKEND if isinstance(self.source, int) else cv2.CAP_ANY
+        cap = cv2.VideoCapture(self.source, backend)
         if not cap.isOpened():
             self.error.emit(f"Kamera konnte nicht geöffnet werden: {self.source}")
             return
