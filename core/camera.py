@@ -31,18 +31,24 @@ def _macos_camera_names() -> list[str]:
         return []
 
 
+# Virtual camera names that are known to be unreliable with OpenCV on macOS.
+_EXCLUDED_NAME_PATTERNS = ("iphone", "continuity camera", "ipad")
+
+
 def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     """Return (index, label) pairs for every responsive camera device."""
     sys_names = _macos_camera_names() if platform.system() == "Darwin" else []
     found = []
     for i in range(max_index):
         try:
+            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+            # Skip virtual devices that OpenCV cannot reliably connect to
+            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
+                continue
             cap = cv2.VideoCapture(i, _BACKEND)
             if not cap.isOpened():
                 cap.release()
                 continue
-            # Some devices (e.g. iPhone Continuity Camera) need a moment to
-            # initialise before the first frame is available — retry briefly.
             ret = False
             for _ in range(5):
                 ret, _ = cap.read()
@@ -52,7 +58,6 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
             cap.release()
             if not ret:
                 continue
-            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
             found.append((i, name))
         except Exception:
             pass
