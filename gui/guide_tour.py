@@ -292,144 +292,230 @@ TOUR_STEPS = {
          "Excel exportieren"),
     ],
     7: [  # Einstellungen
-        ("Einstellungen",
+        ("Einstellungen – Überblick",
          "Alle Einstellungen werden automatisch\n"
          "gespeichert (QSettings) und beim\n"
-         "nächsten Start wiederhergestellt.",
+         "nächsten Start wiederhergestellt.\n\n"
+         "Nach Änderungen immer\n"
+         "'Einstellungen speichern' klicken.",
          None),
         ("Theme & Darstellung",
-         "Theme: Dunkel (Standard) oder Hell\n"
-         "Schriftgröße: 7–16 pt\n"
-         "Thumbnail-Größe: kleinere Werte\n"
-         "beschleunigen das Laden im Editor",
+         "Design: 'dark' (Empfehlung) oder 'light'\n"
+         "→ sofort wirksam.\n\n"
+         "Schriftgröße: 7–16 pt\n\n"
+         "Thumbnail-Größe: 60–240 px\n"
+         "Kleinere Werte = schnelleres Laden\n"
+         "bei vielen Bildern im Editor.\n\n"
+         "'ROI-Labels im Editor anzeigen'\n"
+         "blendet Label-Texte auf ROI-Rahmen ein.",
          None),
         ("Autosave & Backup",
-         "Autosave-Intervall: Standard 5 Minuten\n"
-         "Deaktivieren → manuell Strg+S nutzen.\n\n"
-         "Backup aktivieren: erstellt bei jedem\n"
-         "Speichern eine Sicherungskopie (.bak)\n"
-         "im Projektverzeichnis.",
+         "Autosave aktivieren + Intervall setzen\n"
+         "(Standard: 300 s = 5 Minuten).\n"
+         "Deaktiviert → manuell Strg+S nutzen.\n\n"
+         "'Backup vor Speichern' erstellt bei\n"
+         "jedem Speichern eine .bak-Kopie\n"
+         "im Projektverzeichnis.\n\n"
+         "Im Fehlerfall: .bak → .json umbenennen.",
          None),
         ("REST-API & Web-Dashboard",
-         "REST-Server: Einstellungen → API starten\n"
-         "(Standard-Port: 8765)\n\n"
-         "Endpunkte:\n"
-         "GET  /api/status   → Projektstatus\n"
-         "GET  /api/labels   → Klassenliste\n"
-         "POST /api/classify → Bild bewerten\n"
-         "GET  /api/scores   → Live Score-Puffer\n"
-         "GET  /api/events   → Anomalie-Events\n"
-         "GET  /dashboard    → Live-Dashboard\n\n"
-         "'📊 Dashboard' → öffnet Browser-Dashboard\n"
-         "mit Live-Monitoring (aktualisiert alle 3 s).",
-         "Dashboard"),
+         "REST-Server starten:\n"
+         "Port einstellen (Standard: 8765)\n"
+         "→ 'API starten' klicken\n\n"
+         "Verfügbare Endpunkte:\n"
+         "GET  /api/status    → Projektstatus\n"
+         "GET  /api/labels    → Klassenliste\n"
+         "GET  /api/images    → Bilder + Labels\n"
+         "POST /api/images/label → Label setzen\n"
+         "GET  /api/scores    → Score-Puffer\n"
+         "GET  /api/events    → Alarm-Events\n\n"
+         "'📊 Dashboard' → öffnet Browser-\n"
+         "Dashboard (aktualisiert alle 3 s).",
+         "API starten"),
+        ("MQTT-Alarm konfigurieren",
+         "MQTT sendet bei jedem Anomalie-Alarm\n"
+         "ein JSON-Event an einen Broker.\n\n"
+         "Einrichten:\n"
+         "1. 'MQTT-Publishing aktiviert' ✓\n"
+         "2. Broker-Host eintragen\n"
+         "   (z. B. 'localhost' oder IP)\n"
+         "3. Port: Standard 1883\n"
+         "4. Topic: 'picture_studio/anomaly'\n"
+         "5. User/Passwort: nur wenn Broker\n"
+         "   Authentifizierung erfordert\n"
+         "6. 'Einstellungen speichern' klicken\n\n"
+         "Voraussetzung: pip install paho-mqtt",
+         None),
         ("SSH-Profile anlegen",
          "'Profil hinzufügen' für SSH-Ferntraining:\n"
-         "• Name (frei wählbar)\n"
-         "• Host / IP-Adresse\n"
-         "• Benutzername\n"
+         "• Profilname (frei wählbar)\n"
+         "• Host / IP-Adresse des Servers\n"
+         "• Benutzername (SSH-Login)\n"
          "• SSH-Key-Pfad (empfohlen)\n"
-         "• Port (Standard: 22)\n\n"
-         "Profil auf der Trainingsseite auswählen.",
+         "  z. B. ~/.ssh/id_rsa\n\n"
+         "Profil auf der Training-Seite wählen.\n\n"
+         "SSH-Key erstellen:\n"
+         "ssh-keygen -t ed25519 -f ~/.ssh/gpu_key",
          "Profil hinzufügen"),
     ],
-    8: [  # Live & Anomalie (Videoprojekte, Stack-Index 8)
-        ("Live & Anomalie – Überblick",
-         "Diese Seite ist der Kern des Videoprojekts:\n"
-         "Live-Kamerabild + Anomalieerkennung\n"
-         "in einem Workflow.\n\n"
-         "Ablauf:\n"
-         "1. Kamera verbinden\n"
-         "2. Normalframes aufnehmen\n"
-         "3. Autoencoder trainieren\n"
-         "4. Live-Scoring aktivieren",
+    8: [  # Kamera & Videoanalyse (Dialog, kein eigener Stack-Index)
+        ("Kamera & Videoanalyse – Überblick",
+         "Datei → Kamera aufnehmen… (Strg+K)\n\n"
+         "Drei Quelltypen stehen zur Wahl:\n"
+         "• USB Kamera – direkt angeschlossene Kamera\n"
+         "• IP Kamera – RTSP/HTTP-Netzwerkkamera\n"
+         "• Video-Datei – MP4, AVI, MOV, MKV…\n\n"
+         "Typischer Anomalie-Ablauf:\n"
+         "1. Quelle wählen & verbinden\n"
+         "2. ROI setzen (optional)\n"
+         "3. Normalframes aufnehmen\n"
+         "4. Autoencoder trainieren\n"
+         "5. Live-Scoring aktivieren",
          None),
-        ("Kamera verbinden",
-         "Kamera-Index wählen:\n"
-         "• 0 = erste USB-Kamera\n"
-         "• 1, 2 … = weitere Kameras\n\n"
-         "Klicke '▶ Kamera starten'.\n"
-         "Der Live-Stream erscheint im Vorschaubereich.\n\n"
-         "Kamera wechseln: erst stoppen,\n"
-         "dann Index ändern und neu starten.",
-         "Kamera starten"),
+        ("Kameraquelle verbinden",
+         "USB Kamera-Tab:\n"
+         "Kamera im Dropdown wählen\n"
+         "(Systemname wird automatisch erkannt)\n"
+         "→ 'Verbinden' klicken.\n\n"
+         "IP Kamera-Tab:\n"
+         "URL eingeben, z. B.:\n"
+         "rtsp://user:pass@192.168.1.100:554/stream\n"
+         "→ 'Verbinden' klicken.\n\n"
+         "Video-Datei-Tab:\n"
+         "'Datei wählen…' → Video öffnen.\n"
+         "FPS = 0 → originale Geschwindigkeit.",
+         "Verbinden"),
+        ("ROI – Analysebereich setzen",
+         "'ROI aufziehen' klicken, dann im\n"
+         "Vorschaubild ein Rechteck ziehen.\n\n"
+         "Nur dieser Bereich wird für Training\n"
+         "und Scoring verwendet — Hintergrund-\n"
+         "bewegungen werden ignoriert.\n\n"
+         "Empfehlung: ROI immer setzen wenn\n"
+         "der Prozess lokal begrenzt ist\n"
+         "(z. B. Fließband, Bauteil, Maschine).\n\n"
+         "'ROI löschen' → ganzes Bild analysieren.",
+         "ROI aufziehen"),
         ("Normalframes aufnehmen",
          "Normalprozess vor die Kamera bringen.\n\n"
-         "'⚙ Aufnahme & Anomalie-Erkennung…' öffnen.\n\n"
-         "'Normalframes aufnehmen' starten:\n"
-         "• Mindestens 100 Frames (besser: 200–300)\n"
-         "• Kamera NICHT bewegen während Aufnahme\n"
+         "Anzahl einstellen:\n"
+         "• Minimum: 50–100 Frames\n"
+         "• Empfehlung: 150–300 Frames\n"
+         "• Maximum: 25.000 Frames\n\n"
+         "'Aufnehmen starten' → Frames werden\n"
+         "automatisch gesammelt.\n\n"
+         "Wichtig:\n"
+         "• Alle Varianten des Normalzustands\n"
+         "  abdecken (Werkstücke, Winkel, Licht)\n"
+         "• Kamera NICHT bewegen\n"
          "• Beleuchtung konstant halten\n\n"
-         "Kein Beispiel einer Anomalie nötig —\n"
-         "nur normale Frames!",
-         "Aufnahme"),
+         "Kein Anomalie-Beispiel nötig!",
+         "Aufnehmen starten"),
         ("Autoencoder trainieren",
-         "'→ Trainieren' klicken (Standard: 40 Epochen).\n\n"
-         "Der Autoencoder lernt den Normalzustand.\n"
+         "Epochen einstellen (Standard: 40).\n"
+         "Mehr Epochen = besser, aber langsamer.\n\n"
+         "'Training starten' klicken.\n"
+         "Loss und Fortschritt werden live angezeigt.\n\n"
+         "Nach dem Training:\n"
          "Schwellwert wird automatisch berechnet:\n"
          "Mittelwert + 2,5 × Standardabweichung\n"
          "der Trainings-Rekonstruktionsfehler.\n\n"
-         "Nach dem Training: Schwellwert kalibrieren\n"
-         "mit '📊 Schwellwert kalibrieren…'.",
-         None),
+         "→ Danach Schwellwert kalibrieren!",
+         "Training starten"),
         ("Schwellwert kalibrieren",
-         "'📊 Schwellwert kalibrieren…' öffnet ein\n"
-         "Histogramm der Score-Verteilung.\n\n"
+         "'📊 Schwellwert kalibrieren…' klicken.\n\n"
+         "Histogramm der Score-Verteilung zeigt\n"
+         "wo normaler vs. anomaler Bereich liegt.\n\n"
          "Vorschläge:\n"
-         "• µ+1σ → sehr sensitiv (wenige Abweichungen)\n"
+         "• µ+1σ → sehr sensitiv\n"
          "• µ+2σ → ausgewogen (Empfehlung)\n"
          "• µ+3σ → nur grobe Abweichungen\n\n"
-         "Für Fertigungsüberwachung: mit µ+2σ\n"
-         "starten und bei Bedarf anpassen.",
+         "Für Fertigungsüberwachung mit µ+2σ\n"
+         "starten und dann beobachten:\n"
+         "• Zu viele Alarme → Schwellwert erhöhen\n"
+         "• Anomalien werden nicht erkannt\n"
+         "  → Schwellwert senken",
          None),
-        ("Live-Scoring aktivieren",
-         "'→ Live-Scoring' einschalten.\n\n"
-         "Anzeige im Live-Bild:\n"
-         "✅ Grüner Rahmen = Normalzustand\n"
-         "🔴 Roter Rahmen + Alarm = Abweichung\n\n"
-         "Heatmap zeigt WELCHER Bereich abweicht.\n"
-         "Bounding Box markiert die auffälligste Zone.\n\n"
-         "Optional: 'Anomalie-Frames automatisch\n"
-         "speichern' zur Dokumentation aktivieren.",
+        ("Live-Scoring & Bewegungsfilter",
+         "'Scoring aktiv' Button aktivieren.\n\n"
+         "Score-Anzeige:\n"
+         "Grün = Normalzustand\n"
+         "Rot = Anomalie erkannt\n\n"
+         "Glättung (Standard: 5 Frames):\n"
+         "Alarm erst nach N Frames über Schwellwert.\n"
+         "Verhindert Fehlalarme durch Einzelstörer.\n\n"
+         "Bewegungsfilter:\n"
+         "'Nur bei Bewegung prüfen' aktivieren.\n"
+         "Frames ohne Bewegung werden übersprungen\n"
+         "→ spart CPU, weniger Fehlalarme bei\n"
+         "statischer Kamera ohne Aktivität.\n"
+         "Sensitivität: % der Pixel die sich\n"
+         "ändern müssen.",
          None),
-        ("Modell sichern & exportieren",
-         "Trainiertes Modell sichern:\n"
-         "'Modell speichern' → .pth-Datei\n"
-         "'Modell laden' → bei nächster Sitzung\n"
-         "sofort einsatzbereit ohne Neutraining.\n\n"
-         "Für Deployment in anderen Systemen:\n"
-         "'ONNX exportieren' → .onnx\n"
-         "'TorchScript exportieren' → .pt\n\n"
-         "ONNX läuft in ONNX Runtime, OpenCV,\n"
-         "TensorRT und vielen anderen Frameworks.",
+        ("Alarm-Pause & automatisch speichern",
+         "Alarm-Pause (Standard: 30 s):\n"
+         "Mindestabstand zwischen zwei Events.\n"
+         "Verhindert hunderte Duplikate wenn\n"
+         "eine Anomalie länger anhält.\n"
+         "0 = kein Filter (alle Frames gespeichert).\n\n"
+         "'Anomalie-Frames automatisch speichern':\n"
+         "Jeder Alarm-Frame wird als PNG gespeichert\n"
+         "mit rotem Bounding-Box-Rahmen um die\n"
+         "anomale Region.\n\n"
+         "Eine JSON-Sidecar-Datei enthält:\n"
+         "Score, Schwellwert, Zeitstempel.\n\n"
+         "False Positive: Rechtsklick auf Event\n"
+         "in der Ereignis-Liste markieren.",
          None),
-        ("Monitoring-Profil exportieren",
-         "Für 24/7-Betrieb ohne GUI:\n\n"
-         "1. Modell trainieren und speichern\n"
-         "2. '📋 Profil exportieren…' klicken\n"
-         "3. JSON-Datei speichern\n\n"
-         "Das Profil enthält:\n"
-         "• Modellpfad + Format\n"
-         "• Schwellwert & Glättung\n"
-         "• Kameraquelle & Speicherordner\n"
-         "• ROI-Koordinaten\n"
-         "• MQTT-Konfiguration\n\n"
-         "Dann headless starten:\n"
-         "python scripts/monitor_daemon.py\n"
-         "  --profile monitor_profile.json",
-         "Profil exportieren"),
-        ("Event-Log & MQTT-Alarm",
-         "Während Live-Scoring:\n\n"
-         "Event-Log (CSV): Jeder Alarm wird\n"
-         "automatisch geloggt:\n"
-         "• Zeitstempel, Score, Schwellwert\n"
-         "• Pfad zum gespeicherten Frame\n"
-         "'Log öffnen' → CSV in Standardprogramm\n\n"
-         "MQTT: Einstellungen → MQTT konfigurieren\n"
-         "Jeder Alarm wird als JSON-Payload\n"
-         "an den Broker publiziert.\n\n"
-         "pip install paho-mqtt",
+        ("MQTT-Alarm & Event-Log",
+         "Bei jedem Alarm:\n\n"
+         "Event-Log (CSV): automatisch geloggt\n"
+         "mit Zeitstempel, Score, Frame-Pfad.\n"
+         "'Log öffnen' → CSV im Standardprogramm.\n\n"
+         "MQTT: wenn in Einstellungen konfiguriert,\n"
+         "wird ein JSON-Payload an den Broker\n"
+         "publiziert:\n"
+         "{\n"
+         "  event: 'anomaly',\n"
+         "  score: 0.042,\n"
+         "  threshold: 0.025,\n"
+         "  timestamp_utc: '...'\n"
+         "}\n\n"
+         "Voraussetzung: pip install paho-mqtt\n"
+         "MQTT in Einstellungen konfigurieren.",
          "Log öffnen"),
+        ("Modell sichern & exportieren",
+         "'Speichern…' → .pth-Datei sichern.\n"
+         "SHA256-Prüfsumme wird automatisch\n"
+         "erstellt und beim Laden verifiziert.\n\n"
+         "'Laden…' → gespeichertes Modell laden.\n"
+         "Kein Neutraining nötig.\n\n"
+         "'ℹ Info' → Metadaten anzeigen:\n"
+         "Trainingszeit, Frames, Epochen,\n"
+         "Gerät, Schwellwert, SHA256.\n\n"
+         "Für andere Systeme exportieren:\n"
+         "'ONNX exportieren' → .onnx (Opset 17)\n"
+         "Einsatz in: ONNX Runtime, OpenCV DNN,\n"
+         "TensorRT, C++, Edge-Geräten\n\n"
+         "'TorchScript exportieren' → .pt\n"
+         "Einsatz in: PyTorch C++ API",
+         None),
+        ("Batch-Analyse & Live-Aufzeichnung",
+         "Batch-Analyse (Tab 📁 Batch):\n"
+         "'Ordner wählen…' oder 'Dateien wählen…'\n"
+         "→ 'Batch starten'\n"
+         "Alle Bilder werden mit dem Autoencoder\n"
+         "bewertet. 'CSV exportieren' → Ergebnisse.\n\n"
+         "Live-Aufzeichnung:\n"
+         "'⏺ Aufnahme starten' → laufendes MP4\n"
+         "wird gespeichert.\n"
+         "FPS daneben einstellen (Standard: 15).\n"
+         "'Aufnahme stoppen' → Datei finalisiert.\n\n"
+         "Audit-Log:\n"
+         "Alle Modell-Aktionen (TRAINED/SAVED/\n"
+         "LOADED/UNLOADED) werden protokolliert\n"
+         "in audit/model_audit.jsonl.",
+         None),
     ],
     9: [  # Batch-Inferenz
         ("Batch-Inferenz",
