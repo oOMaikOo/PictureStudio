@@ -640,8 +640,47 @@ class CameraPage(QWidget):
         dlg = CameraCaptureDialog(save_dir=save_dir, parent=self)
         dlg.exec()
 
+        # If a model was trained during the session, offer to load it here
+        model_path = dlg.trained_model_path
+        if model_path and os.path.exists(model_path):
+            reply = QMessageBox.question(
+                self,
+                "Modell in Live-Monitoring laden?",
+                f"Ein Autoencoder wurde trainiert und gespeichert:\n"
+                f"{os.path.basename(model_path)}\n\n"
+                f"Jetzt ins Live-Monitoring laden?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self._load_model_from_path(model_path)
+
         if was_streaming:
             QTimer.singleShot(600, lambda: self._connect_btn.setChecked(True))
+
+    def _load_model_from_path(self, path: str) -> None:
+        """Load a model directly by path (no file dialog)."""
+        try:
+            det = AnomalyDetector()
+            det.load(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            return
+        self._detector = det
+        self._model_path = path
+        name = os.path.basename(path)
+        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f})")
+        self._model_lbl.setStyleSheet("color:#2ECC71;")
+        self._thr_spin.blockSignals(True)
+        self._thr_spin.setValue(det.threshold)
+        self._thr_spin.blockSignals(False)
+        self._thr_spin.setEnabled(True)
+        self._model_info_btn.setEnabled(True)
+        if self._camera_thread:
+            self._scoring_btn.setEnabled(True)
+        self._status_bar.setText(
+            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}"
+        )
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

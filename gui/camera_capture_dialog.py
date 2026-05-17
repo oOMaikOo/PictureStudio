@@ -227,7 +227,8 @@ class CameraCaptureDialog(QDialog):
         self._score_history: list[float] = []      # rolling buffer for calibration
         self._event_logger = None                  # AnomalyEventLogger, created on scoring start
         self._mqtt_client = None                   # MQTTAlarmClient, injected via set_mqtt_client
-        self._ae_model_path: Optional[str] = None  # last saved/loaded model path
+        self._ae_model_path: Optional[str] = None       # last saved/loaded model path
+        self._auto_saved_model_path: Optional[str] = None  # auto-saved after training
         self._api_server = None                    # RestApiServer, injected via set_api_server
         self._video_file_path: Optional[str] = None
         self._video_thread: Optional[_VideoFileThread] = None
@@ -1534,18 +1535,35 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.blockSignals(True)
         self._ae_threshold_spin.setValue(threshold)
         self._ae_threshold_spin.blockSignals(False)
-        self._ae_train_lbl.setText(f"Fertig! Schwellwert: {threshold:.5f}")
-        self._ae_score_lbl.setText("Score: – (bereit)")
-        self._ae_score_lbl.setStyleSheet(
-            "font-weight:bold;font-size:12px;padding:5px;"
-            "border-radius:5px;background:#1A252F;color:#58D68D;"
-        )
         self._ae_scoring_btn.setEnabled(True)
         self._recon_lbl.setText(
             "Modell trainiert — Live-Scoring starten\num die Rekonstruktion zu sehen."
         )
         log.info(f"Autoencoder trained, threshold={threshold:.5f}")
         self._audit_log.log_trained(self._detector.metadata)
+
+        # Auto-save to project folder so Live-Monitoring can pick it up
+        auto_path = os.path.join(self._save_dir, "autoencoder_latest.pth")
+        try:
+            os.makedirs(self._save_dir, exist_ok=True)
+            self._detector.save(auto_path)
+            self._auto_saved_model_path = auto_path
+            self._ae_model_path = auto_path
+            self._ae_train_lbl.setText(
+                f"✓ Fertig!  Schwellwert: {threshold:.5f}\n"
+                f"Modell gespeichert → autoencoder_latest.pth\n"
+                f"Im Live-Monitoring direkt verwendbar."
+            )
+            self._ae_train_lbl.setStyleSheet("color:#2ECC71; font-size:10px;")
+            log.info(f"Model auto-saved to {auto_path}")
+        except Exception as exc:
+            self._ae_train_lbl.setText(f"Fertig! Schwellwert: {threshold:.5f}")
+            log.warning(f"Auto-save failed: {exc}")
+
+    @property
+    def trained_model_path(self) -> Optional[str]:
+        """Path to the auto-saved model after training, or None if not trained/saved."""
+        return self._auto_saved_model_path
 
     @Slot(str)
     def _on_ae_error(self, msg: str) -> None:
