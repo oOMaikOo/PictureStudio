@@ -41,17 +41,15 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     found = []
     for i in range(max_index):
         try:
-            # Only check isOpened() — cap.read() from a background thread is
-            # unreliable on macOS (AVFoundation thread constraints). Real frame
-            # delivery is verified by CameraFrameThread with 30 retries.
+            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+            # Filter BEFORE opening — opening an excluded device (e.g. iPhone)
+            # can block AVFoundation and prevent subsequent cameras from opening.
+            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
+                continue
             cap = cv2.VideoCapture(i, _BACKEND)
             opened = cap.isOpened()
             cap.release()
             if not opened:
-                continue
-            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
-            # Filter out known-unreliable virtual devices
-            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
                 continue
             found.append((i, name))
         except Exception:

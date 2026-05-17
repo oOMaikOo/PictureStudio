@@ -262,7 +262,7 @@ class CameraCaptureDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setFixedWidth(360)
+        scroll.setMinimumWidth(320)
         scroll.setStyleSheet("QScrollArea { border: none; }")
 
         left = QWidget()
@@ -354,17 +354,21 @@ class CameraCaptureDialog(QDialog):
         cg.addWidget(self._single_btn)
 
         burst_row = QHBoxLayout()
+        burst_row.setSpacing(4)
         burst_row.addWidget(QLabel("Burst:"))
         self._burst_count = QSpinBox()
         self._burst_count.setRange(2, 500)
         self._burst_count.setValue(10)
+        self._burst_count.setFixedWidth(68)
         burst_row.addWidget(self._burst_count)
         burst_row.addWidget(QLabel("Bilder,"))
         self._burst_interval = QDoubleSpinBox()
         self._burst_interval.setRange(0.1, 10.0)
         self._burst_interval.setValue(0.5)
         self._burst_interval.setSuffix(" s")
+        self._burst_interval.setFixedWidth(76)
         burst_row.addWidget(self._burst_interval)
+        burst_row.addStretch()
         cg.addLayout(burst_row)
 
         self._burst_btn = QPushButton("Burst starten")
@@ -537,7 +541,9 @@ class CameraCaptureDialog(QDialog):
         rv.addWidget(self._frame_info)
 
         splitter.addWidget(right)
-        splitter.setSizes([360, 840])
+        splitter.setSizes([400, 800])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
 
         # ── Bottom buttons ───────────────────────────────────────────────────
         btn_row = QHBoxLayout()
