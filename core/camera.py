@@ -18,8 +18,33 @@ from PySide6.QtGui import QImage
 _BACKEND = cv2.CAP_ANY
 
 
-def _macos_camera_names() -> list[str]:
-    """Return camera display names in AVFoundation order via system_profiler."""
+def _macos_avfoundation_names() -> list[str]:
+    """
+    Return camera display names in exact AVFoundation/OpenCV index order.
+
+    Strategy (first that succeeds wins):
+    1. Swift one-liner — `AVCaptureDevice.devices(for: .video)` returns devices
+       in the same order that AVFoundation (and therefore OpenCV) assigns indices.
+    2. system_profiler SPCameraDataType — used as-is (no reversal); its listing
+       order matches AVFoundation on current macOS versions.
+    """
+    # --- Swift (most reliable) ---
+    try:
+        r = subprocess.run(
+            ["swift", "-e",
+             "import AVFoundation;"
+             "AVCaptureDevice.devices(for:.video)"
+             ".forEach{print($0.localizedName)}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if r.returncode == 0:
+            names = [l.strip() for l in r.stdout.splitlines() if l.strip()]
+            if names:
+                return names
+    except Exception:
+        pass
+
+    # --- system_profiler fallback ---
     try:
         out = subprocess.run(
             ["system_profiler", "SPCameraDataType", "-json"],
@@ -31,36 +56,29 @@ def _macos_camera_names() -> list[str]:
         return []
 
 
-# Virtual camera names that are known to be unreliable with OpenCV on macOS.
-_EXCLUDED_NAME_PATTERNS = ("iphone", "continuity camera", "ipad")
-
-
 def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
-    """Return (index, label) pairs for every responsive camera device."""
-    # On macOS, system_profiler SPCameraDataType lists cameras in reverse
-    # AVFoundation order: sys_names[0] is the LAST AVFoundation device.
-    # Reversing the list aligns it with OpenCV's index assignment.
-    raw_names = _macos_camera_names() if platform.system() == "Darwin" else []
-    sys_names = list(reversed(raw_names))
+    """
+    Return (index, label) pairs for every camera device OpenCV can open.
+
+    All cameras are included — no device type is excluded.  The label is the
+    human-readable name from AVFoundation when available, otherwise "Kamera N".
+    """
+    # names[i] is the display name for OpenCV index i (macOS only).
+    names: list[str] = _macos_avfoundation_names() if platform.system() == "Darwin" else []
 
     found = []
     for i in range(max_index):
         try:
-            candidate_name = sys_names[i] if i < len(sys_names) else ""
-            # Filter BEFORE opening — opening an excluded device (e.g. iPhone)
-            # can block AVFoundation and prevent subsequent cameras from opening.
-            if candidate_name and any(p in candidate_name.lower() for p in _EXCLUDED_NAME_PATTERNS):
-                continue
             cap = cv2.VideoCapture(i, _BACKEND)
             if not cap.isOpened():
                 cap.release()
                 continue
-            # Combine system_profiler name with actual resolution for a clear label.
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cap.release()
             res = f" ({w}×{h})" if w > 0 and h > 0 else ""
-            label = f"{candidate_name}{res}" if candidate_name else f"Kamera {i}{res}"
+            name = names[i] if i < len(names) else ""
+            label = f"{name}{res}" if name else f"Kamera {i}{res}"
             found.append((i, label))
         except Exception:
             pass
