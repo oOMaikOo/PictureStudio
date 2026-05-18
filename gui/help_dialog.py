@@ -731,6 +731,21 @@ Ergebnis: Score, Anomalie ja/nein, farbige Markierung.<br>
   <li>Bewegungsfilter nutzen bei statischer Kamera</li>
   <li>Alarm-Pause auf 30–60 s setzen um Duplikate zu vermeiden</li>
 </ul></div>
+
+<h3>ONNX-Export für Edge-Deployment</h3>
+<p>Ein trainiertes Anomalie-Modell kann als ONNX exportiert werden — damit läuft es auf jedem Gerät <b>ohne PyTorch</b> (z.B. Raspberry Pi, Produktions-PC mit onnxruntime).</p>
+<div class="step">
+<b>1. Modell exportieren</b><br>
+Modell in "Live &amp; Anomalie" laden → Schaltfläche <b>"Als ONNX exportieren"</b> klicken → .onnx und .meta.json werden gespeichert.
+</div>
+<div class="step">
+<b>2. ONNX-Modell mit Monitor-Client verwenden</b><br>
+<code>python monitor.py --model mein_modell.onnx</code><br>
+PyTorch wird nicht benötigt — nur <code>pip install onnxruntime opencv-python numpy</code>.
+</div>
+<div class="tip">
+Die .meta.json Datei enthält Schwellwert und Metadaten und muss neben der .onnx Datei liegen.
+</div>
 """),
 
 # ── 11  Tastenkürzel ──────────────────────────────────────────────────────────
@@ -865,6 +880,7 @@ Kamera, ROI und Schwellwert werden automatisch aus den Modell-Metadaten geladen.
 <table>
 <tr><th>Option</th><th>Standard</th><th>Beschreibung</th></tr>
 <tr><td><code>--model PFAD</code></td><td>–</td><td>Pfad zur .pt-Modelldatei (Pflicht)</td></tr>
+<tr><td><code>--model PFAD.onnx</code></td><td>–</td><td>ONNX-Modell laden (kein PyTorch nötig, nur onnxruntime)</td></tr>
 <tr><td><code>--camera INDEX</code></td><td>auto</td><td>Kamera-Index manuell überschreiben</td></tr>
 <tr><td><code>--threshold WERT</code></td><td>aus Modell</td><td>Anomalie-Schwellwert überschreiben</td></tr>
 <tr><td><code>--output VERZ</code></td><td>monitor_logs</td><td>Ausgabeverzeichnis für Logs und Alarm-Bilder</td></tr>

@@ -510,6 +510,10 @@ TOUR_STEPS = {
          "'TorchScript exportieren' → .pt\n"
          "Einsatz in: PyTorch C++ API",
          None),
+        ("ONNX-Export",
+         "Das geladene Anomalie-Modell kann mit <b>Als ONNX exportieren</b> für den Einsatz ohne PyTorch gespeichert werden. "
+         "Das ONNX-Format läuft auf Raspberry Pi und anderen Edge-Geräten mit <code>pip install onnxruntime</code>.",
+         "Als ONNX exportieren"),
         ("Batch-Analyse & Live-Aufzeichnung",
          "Batch-Analyse (Tab 📁 Batch):\n"
          "'Ordner wählen…' oder 'Dateien wählen…'\n"

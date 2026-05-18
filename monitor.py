@@ -37,6 +37,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.anomaly_detector import AnomalyDetector
 from core.camera import list_usb_cameras
 
+try:
+    from core.onnx_anomaly_scorer import OnnxAnomalyScorer, HAS_ORT
+except ImportError:
+    OnnxAnomalyScorer = None
+    HAS_ORT = False
+
 
 # ---------------------------------------------------------------------------
 # Camera thread (no Qt dependency)
@@ -215,12 +221,19 @@ def run_monitor(model_path: str,
 
     # --- Load model -------------------------------------------------------
     print(f"Lade Modell: {model_path}")
-    det = AnomalyDetector()
-    try:
-        det.load(model_path)
-    except Exception as exc:
-        print(f"Fehler beim Laden des Modells: {exc}")
-        return -1
+    if model_path.lower().endswith(".onnx"):
+        if not HAS_ORT:
+            print("Fehler: onnxruntime nicht installiert. pip install onnxruntime")
+            return -1
+        det = OnnxAnomalyScorer.from_path(model_path)
+        print("ONNX-Modell geladen (kein PyTorch benötigt)")
+    else:
+        det = AnomalyDetector()
+        try:
+            det.load(model_path)
+        except Exception as exc:
+            print(f"Fehler beim Laden des Modells: {exc}")
+            return -1
 
     meta = det.metadata
     camera_source: str  = meta.get("camera_source", "")

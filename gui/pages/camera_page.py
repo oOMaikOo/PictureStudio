@@ -154,6 +154,21 @@ class CameraPage(QWidget):
         self._model_info_btn.setToolTip("Modell-Metadaten anzeigen (Trainingszeit, Frames, SHA256 …)")
         self._model_info_btn.clicked.connect(self._show_model_info)
         model_row.addWidget(self._model_info_btn)
+
+        self._onnx_export_btn = QPushButton("Als ONNX exportieren")
+        self._onnx_export_btn.setEnabled(False)
+        self._onnx_export_btn.setToolTip(
+            "Trainiertes Modell als ONNX exportieren (.onnx + .meta.json)"
+        )
+        self._onnx_export_btn.setStyleSheet(
+            "QPushButton{background:#6A1B9A;color:white;padding:5px 10px;"
+            "border-radius:4px;font-weight:bold;}"
+            "QPushButton:hover:enabled{background:#4A148C;}"
+            "QPushButton:disabled{background:#2C3E50;color:#555;}"
+        )
+        self._onnx_export_btn.clicked.connect(self._export_onnx)
+        model_row.addWidget(self._onnx_export_btn)
+
         root.addLayout(model_row)
 
         # ── Camera row ────────────────────────────────────────────────────────
@@ -704,6 +719,7 @@ class CameraPage(QWidget):
         self._thr_spin.blockSignals(False)
         self._thr_spin.setEnabled(True)
         self._model_info_btn.setEnabled(True)
+        self._onnx_export_btn.setEnabled(True)
 
         # Enable scoring button only when camera is also connected
         if self._camera_thread:
@@ -815,11 +831,33 @@ class CameraPage(QWidget):
         self._thr_spin.blockSignals(False)
         self._thr_spin.setEnabled(True)
         self._model_info_btn.setEnabled(True)
+        self._onnx_export_btn.setEnabled(True)
         if self._camera_thread:
             self._scoring_btn.setEnabled(True)
         self._status_bar.setText(
             f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}{roi_tag}"
         )
+
+    def _export_onnx(self) -> None:
+        """Export the currently loaded model to ONNX format with a metadata sidecar."""
+        if self._detector is None or not self._detector.trained:
+            return
+        base = os.path.splitext(self._model_path or "anomalie_modell")[0]
+        default_path = base + ".onnx"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "ONNX exportieren", default_path, "ONNX (*.onnx)"
+        )
+        if not path:
+            return
+        try:
+            self._detector.export_onnx_with_meta(path)
+            QMessageBox.information(
+                self,
+                "ONNX exportiert",
+                f"Modell exportiert:\n{path}\n\nMetadaten:\n{path}.meta.json",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Fehler", str(exc))
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

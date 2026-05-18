@@ -288,15 +288,45 @@ class AnomalyDetector:
             raise RuntimeError("Autoencoder ist noch nicht trainiert.")
         self._model.eval()
         dummy = torch.randn(1, 3, _IMG, _IMG)
-        torch.onnx.export(
-            self._model.cpu(), dummy, path,
-            export_params=True,
-            opset_version=17,
-            input_names=["input"],
-            output_names=["reconstruction"],
-            dynamic_axes={"input": {0: "batch"}, "reconstruction": {0: "batch"}},
-        )
-        self._model.to(self._device)
+        # Patch _add_onnxscript_fn to tolerate a missing `onnx` package.
+        # The function only modifies bytes when custom opsets are present (none
+        # are used here), so bypassing the onnx import is safe.
+        try:
+            import torch.onnx._internal.torchscript_exporter.onnx_proto_utils as _pu
+            _orig = _pu._add_onnxscript_fn
+            def _noop_add(model_bytes, custom_opsets):  # noqa: E306
+                try:
+                    return _orig(model_bytes, custom_opsets)
+                except Exception:
+                    return model_bytes  # return raw bytes if onnx package absent
+            _pu._add_onnxscript_fn = _noop_add
+            _patched = True
+        except Exception:
+            _patched = False
+        try:
+            torch.onnx.export(
+                self._model.cpu(), dummy, path,
+                dynamo=False,
+                export_params=True,
+                opset_version=17,
+                input_names=["input"],
+                output_names=["reconstruction"],
+                dynamic_axes={"input": {0: "batch"}, "reconstruction": {0: "batch"}},
+            )
+        finally:
+            if _patched:
+                _pu._add_onnxscript_fn = _orig
+            self._model.to(self._device)
+
+    def export_onnx_with_meta(self, path: str) -> str:
+        """Export ONNX + write .meta.json sidecar with threshold and metadata.
+        Returns the onnx_path."""
+        self.export_onnx(path)
+        meta = {"threshold": self._threshold, "metadata": self._metadata}
+        import json as _json
+        with open(path + ".meta.json", "w", encoding="utf-8") as f:
+            _json.dump(meta, f, indent=2, default=str)
+        return path
 
     def export_torchscript(self, path: str) -> None:
         """Export autoencoder as TorchScript (.pt). Model must be trained."""
