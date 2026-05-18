@@ -861,10 +861,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ close
 
     def closeEvent(self, event) -> None:
-        """Save window geometry, stop the REST server, and optionally save the project."""
+        """Save window geometry, stop background threads/servers, optionally save project."""
         self._settings.save_window_geometry(self.saveGeometry())
-        if self._rest_server.is_running:
-            self._rest_server.stop()
+
         if self.project:
             reply = QMessageBox.question(
                 self, "Beenden",
@@ -876,4 +875,29 @@ class MainWindow(QMainWindow):
                 return
             if reply == QMessageBox.Yes:
                 self._save_project()
+
+        # Stop background threads before the Qt event loop exits.
+        # camera_page and multi_camera_page each own CameraFrameThreads.
+        self.camera_page._stop_stream()
+        self.multi_camera_page._on_stop_all()
+
+        # Training thread: request graceful stop, then wait up to 3 s.
+        t = getattr(self.training_page, "_thread", None)
+        if t and t.isRunning():
+            t.request_stop()
+            t.quit()
+            t.wait(3000)
+
+        # Clustering thread: no cancellation flag — just ask it to quit.
+        ct = getattr(self.anomaly_clustering_page, "_thread", None)
+        if ct and ct.isRunning():
+            ct.quit()
+            ct.wait(3000)
+
+        # Industrial notifier background event loop.
+        self._industrial_notifier.disconnect()
+
+        if self._rest_server.is_running:
+            self._rest_server.stop()
+
         event.accept()

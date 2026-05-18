@@ -131,8 +131,18 @@ class Project:
         new fields are initialised to their defaults. Merges training_config
         and ssh_config with current defaults so new keys are always present.
         """
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Projektdatei nicht gefunden: {path}")
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Projektdatei ist beschädigt und kann nicht gelesen werden.\n"
+                f"Datei: {path}\nDetail: {exc}"
+            )
+        except OSError as exc:
+            raise OSError(f"Projektdatei konnte nicht geöffnet werden: {exc}") from exc
 
         project = cls()
         project.project_path = path

@@ -181,6 +181,27 @@ class TestSaveLoad:
         assert "gut" in p2.labels
         assert "color" in p2.labels["gut"]
 
+    def test_load_missing_file_raises_file_not_found(self, tmp_dir):
+        from core.project import Project
+        with pytest.raises(FileNotFoundError, match="nicht gefunden"):
+            Project.load(os.path.join(tmp_dir, "does_not_exist.json"))
+
+    def test_load_corrupt_json_raises_value_error(self, tmp_dir):
+        from core.project import Project
+        bad = os.path.join(tmp_dir, "corrupt.json")
+        with open(bad, "w") as f:
+            f.write("{not valid json{{")
+        with pytest.raises(ValueError, match="beschädigt"):
+            Project.load(bad)
+
+    def test_load_empty_file_raises_value_error(self, tmp_dir):
+        from core.project import Project
+        empty = os.path.join(tmp_dir, "empty.json")
+        with open(empty, "w") as f:
+            f.write("")
+        with pytest.raises(ValueError, match="beschädigt"):
+            Project.load(empty)
+
 
 # ---------------------------------------------------------------------------
 # Backup
