@@ -68,18 +68,29 @@ def _macos_avfoundation_names() -> list[str]:
         return []
 
 
+# Camera names whose devices should not appear in the selection list.
+# Matched case-insensitively against the AVFoundation display name.
+_EXCLUDED_NAME_PATTERNS = ("iphone", "continuity camera", "ipad")
+
+
 def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     """
-    Return (index, label) pairs for every camera device OpenCV can open.
+    Return (index, label) pairs for every camera device OpenCV can open,
+    excluding mobile/continuity cameras (iPhone, iPad).
 
-    All cameras are included — no device type is excluded.  The label is the
-    human-readable name from AVFoundation when available, otherwise "Kamera N".
+    The label is the human-readable name from AVFoundation when available,
+    otherwise "Kamera N".
     """
     # names[i] is the display name for OpenCV index i (macOS only).
     names: list[str] = _macos_avfoundation_names() if platform.system() == "Darwin" else []
 
     found = []
     for i in range(max_index):
+        # Skip excluded devices before opening them — opening an iPhone
+        # Continuity Camera can delay AVFoundation for subsequent devices.
+        name = names[i] if i < len(names) else ""
+        if name and any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
+            continue
         try:
             cap = cv2.VideoCapture(i, _BACKEND)
             if not cap.isOpened():
