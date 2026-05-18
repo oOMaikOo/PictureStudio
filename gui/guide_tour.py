@@ -531,6 +531,23 @@ TOUR_STEPS = {
          "in audit/model_audit.jsonl.",
          None),
     ],
+    10: [  # Multi-Kamera-Monitoring
+        ("Multi-Kamera-Monitoring",
+         "Diese Seite ermöglicht die gleichzeitige Überwachung von bis zu <b>4 Kamera-Quellen</b>. "
+         "Jeder Kanal hat eine eigene Kamera und ein eigenes Anomalie-Modell.",
+         None),
+        ("Kanal konfigurieren",
+         "Klicke <b>⚙ Konfigurieren</b> um Kamera und Modell für diesen Kanal auszuwählen. "
+         "Es werden .pt- und .onnx-Modelle unterstützt.",
+         "⚙ Konfigurieren"),
+        ("Alle starten",
+         "Mit <b>Alle starten</b> werden alle konfigurierten Kanäle gleichzeitig aktiviert. "
+         "Jeder Kanal analysiert das Kamerabild und zeigt Score und Status an.",
+         "Alle starten"),
+        ("Alarm-Protokoll",
+         "Im unteren Bereich erscheinen alle Alarm-Ereignisse aller Kanäle mit Zeitstempel und Score.",
+         None),
+    ],
     9: [  # Batch-Inferenz
         ("Batch-Inferenz",
          "Klassifiziere einen ganzen Ordner\n"

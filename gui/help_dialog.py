@@ -27,10 +27,11 @@ SECTIONS = [
     ("⌨", "Tastenkürzel"),
     ("🔧", "Fehlerbehebung"),
     ("💻", "Monitor-Client"),   # 13
+    ("📹", "Multi-Kamera"),    # 14
 ]
 
 # Map sidebar page index → section index
-PAGE_TO_SECTION = {0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9}
+PAGE_TO_SECTION = {0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 10: 14}
 
 # ---------------------------------------------------------------------------
 # Shared CSS
@@ -912,6 +913,34 @@ Im Ausgabeverzeichnis (Standard: <code>monitor_logs/</code>) werden gespeichert:
 </div>
 <div class="warn">
 <b>Beenden:</b> Im Fenster-Modus Q oder ESC drücken. Im Headless-Modus Strg+C.
+</div>
+"""),
+
+# ── 14  Multi-Kamera-Monitoring ───────────────────────────────────────────────
+14: page("""
+<h2>📹 Multi-Kamera-Monitoring</h2>
+<p>Überwache bis zu <b>4 Kamera-Quellen gleichzeitig</b>, jede mit eigenem Modell und ROI.
+Ideal für Produktionslinien mit mehreren Prüfstationen.</p>
+
+<div class="step">
+<b>Kanal konfigurieren</b><br>
+"⚙ Konfigurieren" klicken → Kamera und Modell (.pt oder .onnx) auswählen → OK.
+Der Kanal zeigt dann Kameraname und Modell an.
+</div>
+<div class="step">
+<b>Starten</b><br>
+"▶ Starten" für einzelne Kanäle oder "Alle starten" für alle konfigurierten Kanäle gleichzeitig.
+</div>
+<div class="step">
+<b>Alarm-Ereignisse</b><br>
+Anomalien jedes Kanals erscheinen im Alarm-Protokoll unten. E-Mail/Webhook-Benachrichtigungen
+aus den Einstellungen gelten für alle Kanäle.
+</div>
+<div class="tip">
+<b>Performance:</b> Jeder Kanal analysiert jeden 3. Frame — bei 4 aktiven Kanälen bleibt die CPU-Last moderat.
+</div>
+<div class="tip">
+<b>ONNX-Modelle:</b> Für geringere Latenz können .onnx-Modelle geladen werden (kein PyTorch nötig).
 </div>
 """),
 

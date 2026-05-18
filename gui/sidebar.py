@@ -36,6 +36,7 @@ _VIDEO_PAGES: List[Tuple[str, str, int]] = [
     ("Dashboard",       "🏠", 0),
     ("Daten",           "📁", 1),
     ("Live & Anomalie", "🎥", 8),
+    ("Multi-Kamera",    "📹", 10),
     ("Modelle",         "📊", 4),
     ("Export",          "📤", 6),
     ("Einstellungen",   "⚙",  7),

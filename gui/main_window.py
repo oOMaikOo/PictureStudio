@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         from gui.pages.export_page          import ExportPage
         from gui.pages.settings_page        import SettingsPage
         from gui.pages.batch_inference_page import BatchInferencePage
+        from gui.pages.multi_camera_page    import MultiCameraPage
 
         self.dashboard_page    = DashboardPage()
         self.data_page         = DataPage()
@@ -115,12 +116,14 @@ class MainWindow(QMainWindow):
         self.export_page       = ExportPage()
         self.settings_page     = SettingsPage()
         self.batch_page        = BatchInferencePage()
+        self.multi_camera_page = MultiCameraPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
             self.training_page, self.models_page, self.inference_page,
             self.export_page, self.settings_page, self.camera_page,
-            self.batch_page,   # index 9
+            self.batch_page,         # index 9
+            self.multi_camera_page,  # index 10
         ]:
             self.stack.addWidget(page)
 
@@ -146,6 +149,8 @@ class MainWindow(QMainWindow):
         self.settings_page.set_notifier(self._notifier)
         self.camera_page.set_rest_server(self._rest_server)
         self.camera_page.set_notifier(self._notifier)
+        self.multi_camera_page.set_rest_server(self._rest_server)
+        self.multi_camera_page.set_notifier(self._notifier)
         self.training_page.set_settings(self._settings)
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)
@@ -263,6 +268,7 @@ class MainWindow(QMainWindow):
             ("Tastenkürzel",            11),
             ("Fehlerbehebung",          12),
             ("Monitor-Client – Hilfe",  13),
+            ("Multi-Kamera – Hilfe",    14),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
