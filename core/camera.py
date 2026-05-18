@@ -20,21 +20,33 @@ _BACKEND = cv2.CAP_ANY
 
 def _macos_avfoundation_names() -> list[str]:
     """
-    Return camera display names in exact AVFoundation/OpenCV index order.
+    Return camera display names in the same index order that OpenCV uses on macOS.
 
-    Strategy (first that succeeds wins):
-    1. Swift one-liner — `AVCaptureDevice.devices(for: .video)` returns devices
-       in the same order that AVFoundation (and therefore OpenCV) assigns indices.
-    2. system_profiler SPCameraDataType — used as-is (no reversal); its listing
-       order matches AVFoundation on current macOS versions.
+    OpenCV orders cameras as: external/non-builtin cameras first (in AVFoundation
+    enumeration order), then built-in cameras (FaceTime etc.) last.
+    This matches `.builtInWideAngleCamera` always coming after `.external` devices
+    in OpenCV's internal AVCaptureDeviceDiscoverySession query.
+
+    Strategy:
+    1. Swift — queries DiscoverySession, splits into external vs built-in, outputs
+       external first then built-in (= OpenCV order).
+    2. system_profiler — plain listing order as fallback (no reversal).
     """
-    # --- Swift (most reliable) ---
+    # --- Swift (most reliable — matches OpenCV's internal enumeration order) ---
+    _swift_script = (
+        "import AVFoundation;"
+        "let s=AVCaptureDevice.DiscoverySession("
+        "deviceTypes:[.builtInWideAngleCamera,.external,.continuityCamera],"
+        "mediaType:.video,position:.unspecified);"
+        "var ext=[String](),bi=[String]();"
+        "for d in s.devices{"
+        "if d.deviceType == .builtInWideAngleCamera{bi.append(d.localizedName)}"
+        "else{ext.append(d.localizedName)}};"
+        "for n in ext+bi{print(n)}"
+    )
     try:
         r = subprocess.run(
-            ["swift", "-e",
-             "import AVFoundation;"
-             "AVCaptureDevice.devices(for:.video)"
-             ".forEach{print($0.localizedName)}"],
+            ["swift", "-e", _swift_script],
             capture_output=True, text=True, timeout=10,
         )
         if r.returncode == 0:
