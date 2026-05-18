@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QRadioButton, QFrame, QToolBar, QSizePolicy, QMenu, QProgressBar,
     QTextEdit, QStackedWidget,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QPoint, QTimer
 from PySide6.QtGui import QColor, QIcon, QPixmap, QKeySequence, QShortcut, QUndoStack
 
 from gui.widgets.thumbnail_list import LazyThumbnailList
@@ -50,6 +50,12 @@ class LabelingPage(QWidget):
         self._audit = None
         self._undo_stack = QUndoStack(self)
         self._undo_stack.setUndoLimit(100)
+        # Debounce stats refreshes: rapid label changes (e.g. bulk-accept) coalesce
+        # into a single _do_update_stats() call 80 ms after the last trigger.
+        self._stats_timer = QTimer(self)
+        self._stats_timer.setSingleShot(True)
+        self._stats_timer.setInterval(80)
+        self._stats_timer.timeout.connect(self._do_update_stats)
         self._build_ui()
         self._setup_shortcuts()
 
@@ -1779,18 +1785,17 @@ class LabelingPage(QWidget):
         )
         if reply != QMessageBox.Yes:
             return
-        from gui.labeling_commands import BulkSetImageLabelCommand
+        from gui.labeling_commands import SetImageLabelCommand
         assignments = {e["path"]: e["predicted_label"] for e in eligible}
-        old_labels = {
-            path: self.project.get_image_label(path) for path in assignments
-        }
-        self._undo_stack.push(
-            BulkSetImageLabelCommand(self, assignments, old_labels)
-        )
+        self._undo_stack.beginMacro(f"Bulk-Accept ({len(eligible)} Bilder)")
+        for path, label in assignments.items():
+            old = self.project.get_image_label(path)
+            self._undo_stack.push(SetImageLabelCommand(self, path, label, old))
+        self._undo_stack.endMacro()
         for path in assignments:
             self.project.remove_from_al_queue(path)
         self.refresh_al_queue_panel()
-        self._refresh_thumb_list()
+        self._do_update_stats()   # thumbnails already updated via update_label(); just refresh stats once
         QMessageBox.information(
             self, "Fertig",
             f"{len(eligible)} Labels übernommen.\n"
@@ -1800,6 +1805,10 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ stats & progress
 
     def _update_stats(self) -> None:
+        """Schedule a stats refresh; rapid calls within 80 ms are coalesced into one."""
+        self._stats_timer.start()
+
+    def _do_update_stats(self) -> None:
         """Recompute labeling progress and refresh the progress bar, count label and per-class bars."""
         if not self.project:
             self.stats_label.setText("–")
