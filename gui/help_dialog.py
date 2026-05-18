@@ -550,6 +550,25 @@ Empfangen: <code>mosquitto_sub -t "picture_studio/#"</code></div>
 
 <hr>
 
+<h3>Alarmierung (E-Mail & Webhook)</h3>
+<p>Bei jeder Anomalie-Erkennung kann automatisch eine Benachrichtigung verschickt werden.</p>
+<div class="step">
+<b>E-Mail konfigurieren</b><br>
+SMTP-Host, Port (587 für TLS), Benutzername und Passwort eintragen. Absender- und Empfängeradressen (kommagetrennt) angeben. Mit "Test-E-Mail senden" prüfen.
+</div>
+<div class="step">
+<b>Webhook konfigurieren</b><br>
+Vollständige URL eintragen (z.B. Teams, Slack, eigene API). Der Alarm-Payload wird als JSON-POST gesendet mit: event, timestamp, score, threshold, score_pct, model, frame_file.
+</div>
+<div class="tip">
+<b>Mindestabstand:</b> Der Cooldown-Wert (Standard: 60 Sek.) verhindert Benachrichtigungs-Spam bei anhaltenden Anomalien.
+</div>
+<div class="tip">
+<b>Anhang:</b> Alarm-JPEG wird automatisch an die E-Mail angehängt (max. 2 MB).
+</div>
+
+<hr>
+
 <h2>SSH-Profile</h2>
 <p>Profile für SSH-Ferntraining auf externen GPU-Servern.</p>
 <div class="step"><b>Profil hinzufügen</b><br>

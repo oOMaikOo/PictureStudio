@@ -209,7 +209,8 @@ def run_monitor(model_path: str,
                 output_dir: str,
                 fps: float,
                 cooldown: float,
-                headless: bool) -> int:
+                headless: bool,
+                no_notify: bool = False) -> int:
     """Run the monitor loop. Returns the number of alarm events logged."""
 
     # --- Load model -------------------------------------------------------
@@ -235,6 +236,20 @@ def run_monitor(model_path: str,
     print(f"  Kamera       : {camera_source or '-'}")
     print(f"  ROI          : {'aktiv ' + str(roi) if roi else 'nein'}")
     print(f"  Schwellwert  : {threshold:.6f}")
+
+    # --- Load alarm notifier ---------------------------------------------
+    from core.alarm_notifier import AlarmNotifier
+    if no_notify:
+        notifier = None
+        print("  Benachrichtigungen: deaktiviert (--no-notify)")
+    else:
+        try:
+            from utils.settings import AppSettings
+            from PySide6.QtCore import QCoreApplication
+            _app = QCoreApplication.instance() or QCoreApplication([])
+            notifier = AlarmNotifier(AppSettings().get_alarm_notifier_config())
+        except Exception:
+            notifier = AlarmNotifier()
 
     # --- Find camera ------------------------------------------------------
     if camera_idx_override is not None:
@@ -292,7 +307,17 @@ def run_monitor(model_path: str,
             if now - last_alarm_t >= cooldown:
                 last_alarm_t = now
                 event_count += 1
-                save_alarm(frame, score, threshold, output_dir, log_path, event_count)
+                fname = save_alarm(frame, score, threshold, output_dir, log_path, event_count)
+                if notifier:
+                    fpath = os.path.join(output_dir, fname) if fname else ""
+                    try:
+                        notifier.notify(
+                            score, threshold,
+                            frame_path=fpath,
+                            model_name=os.path.basename(model_path),
+                        )
+                    except Exception as _notify_exc:
+                        print(f"\n[Warnung] Benachrichtigung fehlgeschlagen: {_notify_exc}")
 
     # --- Start camera thread ----------------------------------------------
     cam = _CameraThread(cam_idx, fps, on_frame)
@@ -381,6 +406,8 @@ Beispiele:
                         help="Mindestabstand zwischen Alarm-Saves in Sekunden (Standard: 10)")
     parser.add_argument("--headless", action="store_true",
                         help="Kein Anzeigefenster — nur Terminal-Ausgabe und CSV-Log")
+    parser.add_argument("--no-notify", action="store_true",
+                        help="E-Mail/Webhook-Benachrichtigungen deaktivieren (Standard: aktiviert)")
     return parser
 
 
@@ -399,6 +426,7 @@ def main() -> None:
         fps=args.fps,
         cooldown=args.cooldown,
         headless=args.headless,
+        no_notify=args.no_notify,
     ) >= 0 else 1)
 
 

@@ -357,6 +357,11 @@ TOUR_STEPS = {
          "SSH-Key erstellen:\n"
          "ssh-keygen -t ed25519 -f ~/.ssh/gpu_key",
          "Profil hinzufügen"),
+        ("Alarmierung",
+         "Im Abschnitt <b>Alarmierung</b> konfigurierst du E-Mail- und Webhook-Benachrichtigungen. "
+         "Bei jeder erkannten Anomalie wird automatisch eine Nachricht verschickt — "
+         "mit Score, Schwellwert und dem Alarm-Bild als Anhang.",
+         None),
         ("Monitor-Client",
          "Das trainierte Modell kann mit <b>monitor.py</b> auch ohne die Studio-Oberfläche genutzt werden. "
          "Starte es im Terminal: <code>python monitor.py --model pfad/zum/modell.pt</code>. "

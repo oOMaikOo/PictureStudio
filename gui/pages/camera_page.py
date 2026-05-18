@@ -17,6 +17,7 @@ import numpy as np
 
 from core.camera import list_usb_cameras, apply_timestamp, CameraFrameThread
 from core.anomaly_detector import AnomalyDetector
+from core.alarm_notifier import AlarmNotifier
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -64,6 +65,7 @@ class CameraPage(QWidget):
         self._model_path: Optional[str] = None
         self._scan_thread: Optional[_ScanThread] = None
         self._rest_server = None
+        self._notifier: Optional[AlarmNotifier] = None
         self._last_frame: Optional[np.ndarray] = None
 
         # Scoring state
@@ -98,6 +100,10 @@ class CameraPage(QWidget):
         if self._log_path:
             server.set_event_log_path(self._log_path)
             server.set_alarm_frame_dir(os.path.dirname(self._log_path))
+
+    def set_notifier(self, notifier: AlarmNotifier) -> None:
+        """Inject the ``AlarmNotifier`` instance for e-mail/webhook alarm notifications."""
+        self._notifier = notifier
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -629,6 +635,14 @@ class CameraPage(QWidget):
                     self._rest_server.push_latest_alarm(frame_path, score, threshold)
             except Exception:
                 frame_filename = ""
+
+        if self._notifier and frame_filename:
+            model_name = os.path.basename(self._model_path) if self._model_path else ""
+            self._notifier.notify(
+                score, threshold,
+                frame_path=os.path.join(log_dir, frame_filename) if frame_filename else "",
+                model_name=model_name,
+            )
 
         score_pct = int(score / threshold * 100) if threshold > 0 else 0
         write_header = not os.path.exists(self._log_path)

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette, QColor
 
+from core.alarm_notifier import AlarmNotifier
+
 
 class SettingsPage(QWidget):
     """
@@ -33,17 +35,23 @@ class SettingsPage(QWidget):
 
     theme_changed = Signal(str)
     autosave_changed = Signal(int, bool)
+    alarm_notifier_config_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._settings = None
         self._api_server = None
+        self._notifier: AlarmNotifier | None = None
         self._build_ui()
 
     def set_settings(self, settings) -> None:
         """Accept the ``AppSettings`` instance and populate all form fields."""
         self._settings = settings
         self._load_values()
+
+    def set_notifier(self, n: AlarmNotifier) -> None:
+        """Inject the ``AlarmNotifier`` instance used by test buttons."""
+        self._notifier = n
 
     # ------------------------------------------------------------------ UI
 
@@ -213,6 +221,88 @@ class SettingsPage(QWidget):
         mf.addRow(mqtt_hint)
         layout.addWidget(mqtt_group)
 
+        # Alarm notifier (E-Mail & Webhook)
+        alarm_group = QGroupBox("Alarmierung (E-Mail & Webhook)")
+        af2 = QFormLayout(alarm_group)
+
+        # --- E-Mail section ---
+        email_lbl = QLabel("<b>E-Mail</b>")
+        af2.addRow(email_lbl)
+
+        self._email_enabled_cb = QCheckBox("E-Mail-Benachrichtigung aktivieren")
+        af2.addRow("", self._email_enabled_cb)
+
+        self._smtp_host_edit = QLineEdit()
+        self._smtp_host_edit.setPlaceholderText("smtp.gmail.com")
+        af2.addRow("SMTP-Host:", self._smtp_host_edit)
+
+        self._smtp_port_spin = QSpinBox()
+        self._smtp_port_spin.setRange(1, 65535)
+        self._smtp_port_spin.setValue(587)
+        af2.addRow("SMTP-Port:", self._smtp_port_spin)
+
+        self._smtp_user_edit = QLineEdit()
+        af2.addRow("Benutzername:", self._smtp_user_edit)
+
+        self._smtp_pass_edit = QLineEdit()
+        self._smtp_pass_edit.setEchoMode(QLineEdit.Password)
+        af2.addRow("Passwort:", self._smtp_pass_edit)
+
+        self._smtp_tls_cb = QCheckBox("TLS verwenden")
+        self._smtp_tls_cb.setChecked(True)
+        af2.addRow("", self._smtp_tls_cb)
+
+        self._email_from_edit = QLineEdit()
+        af2.addRow("Absender:", self._email_from_edit)
+
+        self._email_to_edit = QLineEdit()
+        self._email_to_edit.setPlaceholderText("emp1@domain.de, emp2@domain.de")
+        af2.addRow("Empfänger:", self._email_to_edit)
+
+        test_email_btn = QPushButton("Test-E-Mail senden")
+        test_email_btn.clicked.connect(self._test_email)
+        af2.addRow("", test_email_btn)
+
+        # --- Webhook section ---
+        webhook_lbl = QLabel("<b>Webhook</b>")
+        af2.addRow(webhook_lbl)
+
+        self._webhook_enabled_cb = QCheckBox("Webhook aktivieren")
+        af2.addRow("", self._webhook_enabled_cb)
+
+        self._webhook_url_edit = QLineEdit()
+        self._webhook_url_edit.setPlaceholderText("https://hooks.example.com/...")
+        af2.addRow("URL:", self._webhook_url_edit)
+
+        test_webhook_btn = QPushButton("Test-Webhook senden")
+        test_webhook_btn.clicked.connect(self._test_webhook)
+        af2.addRow("", test_webhook_btn)
+
+        # --- Cooldown ---
+        cooldown_lbl = QLabel("<b>Allgemein</b>")
+        af2.addRow(cooldown_lbl)
+
+        self._notify_cooldown_spin = QSpinBox()
+        self._notify_cooldown_spin.setRange(10, 3600)
+        self._notify_cooldown_spin.setValue(60)
+        self._notify_cooldown_spin.setSuffix(" s")
+        af2.addRow("Mindestabstand zwischen Alarmen:", self._notify_cooldown_spin)
+
+        layout.addWidget(alarm_group)
+
+        # Connect live-save signals for all new alarm widgets
+        self._email_enabled_cb.toggled.connect(self._save_alarm_notifier_settings)
+        self._smtp_host_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._smtp_port_spin.valueChanged.connect(self._save_alarm_notifier_settings)
+        self._smtp_user_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._smtp_pass_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._smtp_tls_cb.toggled.connect(self._save_alarm_notifier_settings)
+        self._email_from_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._email_to_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._webhook_enabled_cb.toggled.connect(self._save_alarm_notifier_settings)
+        self._webhook_url_edit.editingFinished.connect(self._save_alarm_notifier_settings)
+        self._notify_cooldown_spin.valueChanged.connect(self._save_alarm_notifier_settings)
+
         # SSH profiles
         ssh_group = QGroupBox("SSH-Profile")
         ssh_v = QVBoxLayout(ssh_group)
@@ -259,7 +349,76 @@ class SettingsPage(QWidget):
         if not HAS_MQTT:
             self.mqtt_status_lbl.setText("paho-mqtt nicht installiert")
             self.mqtt_status_lbl.setStyleSheet("color:#F85149;font-size:10px;")
+        self._load_alarm_notifier_settings()
         self._refresh_ssh_list()
+
+    def _load_alarm_notifier_settings(self) -> None:
+        """Populate alarm notifier UI fields from AppSettings."""
+        if not self._settings:
+            return
+        cfg = self._settings.get_alarm_notifier_config()
+        # Block signals to avoid triggering auto-save during load
+        for w in [self._email_enabled_cb, self._smtp_tls_cb, self._webhook_enabled_cb]:
+            w.blockSignals(True)
+        self._email_enabled_cb.setChecked(bool(cfg.get("email_enabled", False)))
+        self._smtp_host_edit.setText(cfg.get("smtp_host", ""))
+        self._smtp_port_spin.setValue(int(cfg.get("smtp_port", 587)))
+        self._smtp_user_edit.setText(cfg.get("smtp_user", ""))
+        self._smtp_pass_edit.setText(cfg.get("smtp_pass", ""))
+        self._smtp_tls_cb.setChecked(bool(cfg.get("smtp_tls", True)))
+        self._email_from_edit.setText(cfg.get("email_from", ""))
+        self._email_to_edit.setText(cfg.get("email_to", ""))
+        self._webhook_enabled_cb.setChecked(bool(cfg.get("webhook_enabled", False)))
+        self._webhook_url_edit.setText(cfg.get("webhook_url", ""))
+        self._notify_cooldown_spin.setValue(int(cfg.get("cooldown", 60)))
+        for w in [self._email_enabled_cb, self._smtp_tls_cb, self._webhook_enabled_cb]:
+            w.blockSignals(False)
+
+    def _save_alarm_notifier_settings(self) -> None:
+        """Read alarm notifier UI fields, persist via AppSettings, and emit signal."""
+        if not self._settings:
+            return
+        cfg = {
+            "email_enabled":  self._email_enabled_cb.isChecked(),
+            "smtp_host":      self._smtp_host_edit.text().strip(),
+            "smtp_port":      self._smtp_port_spin.value(),
+            "smtp_user":      self._smtp_user_edit.text().strip(),
+            "smtp_pass":      self._smtp_pass_edit.text(),
+            "smtp_tls":       self._smtp_tls_cb.isChecked(),
+            "email_from":     self._email_from_edit.text().strip(),
+            "email_to":       self._email_to_edit.text().strip(),
+            "webhook_enabled": self._webhook_enabled_cb.isChecked(),
+            "webhook_url":    self._webhook_url_edit.text().strip(),
+            "cooldown":       self._notify_cooldown_spin.value(),
+        }
+        self._settings.save_alarm_notifier_config(cfg)
+        if self._notifier:
+            self._notifier.update_config(cfg)
+        self.alarm_notifier_config_changed.emit(cfg)
+
+    def _test_email(self) -> None:
+        """Send a test e-mail via the notifier and show the result."""
+        if not self._notifier:
+            QMessageBox.warning(self, "Kein Notifier", "Notifier nicht initialisiert.")
+            return
+        self._save_alarm_notifier_settings()
+        success, msg = self._notifier.test_email()
+        if success:
+            QMessageBox.information(self, "Test-E-Mail", "Test-E-Mail erfolgreich gesendet.")
+        else:
+            QMessageBox.critical(self, "Test-E-Mail fehlgeschlagen", msg)
+
+    def _test_webhook(self) -> None:
+        """Send a test webhook call via the notifier and show the result."""
+        if not self._notifier:
+            QMessageBox.warning(self, "Kein Notifier", "Notifier nicht initialisiert.")
+            return
+        self._save_alarm_notifier_settings()
+        success, msg = self._notifier.test_webhook()
+        if success:
+            QMessageBox.information(self, "Test-Webhook", "Test-Webhook erfolgreich gesendet.")
+        else:
+            QMessageBox.critical(self, "Test-Webhook fehlgeschlagen", msg)
 
     def _refresh_ssh_list(self) -> None:
         """Rebuild the SSH profile list widget from saved settings."""

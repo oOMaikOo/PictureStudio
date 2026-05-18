@@ -128,6 +128,11 @@ class MainWindow(QMainWindow):
         from api.rest_server import RestApiServer
         self._rest_server = RestApiServer()
 
+        # Alarm notifier (e-mail / webhook)
+        from core.alarm_notifier import AlarmNotifier
+        self._notifier = AlarmNotifier()
+        self._notifier.update_config(self._settings.get_alarm_notifier_config())
+
         # Cross-page signals
         self.dashboard_page.new_project_requested.connect(self._new_project)
         self.dashboard_page.open_project_requested.connect(self._open_project)
@@ -138,10 +143,13 @@ class MainWindow(QMainWindow):
         self.models_page.model_loaded.connect(self._on_model_loaded_api)
         self.settings_page.set_settings(self._settings)
         self.settings_page.set_api_server(self._rest_server)
+        self.settings_page.set_notifier(self._notifier)
         self.camera_page.set_rest_server(self._rest_server)
+        self.camera_page.set_notifier(self._notifier)
         self.training_page.set_settings(self._settings)
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)
+        self.settings_page.alarm_notifier_config_changed.connect(self._on_notifier_config_changed)
 
         # Active Learning: inference → labeling queue → retrain
         self.inference_page.al_queue_updated.connect(self._on_al_queue_updated)
@@ -535,6 +543,12 @@ class MainWindow(QMainWindow):
             self._autosave_timer.start(interval * 1000)
         else:
             self._autosave_timer.stop()
+
+    @Slot(dict)
+    def _on_notifier_config_changed(self, cfg: dict) -> None:
+        """Update the live notifier config and persist it when settings change."""
+        self._notifier.update_config(cfg)
+        self._settings.save_alarm_notifier_config(cfg)
 
     def _confirm_save(self) -> bool:
         """

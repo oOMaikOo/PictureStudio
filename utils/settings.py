@@ -95,6 +95,13 @@ class AppSettings:
     def set_show_top_k(self, val: int) -> None:
         self._s.setValue("inference/show_top_k", val)
 
+    # ---- alarm notifier ----
+    def get_alarm_notifier_config(self) -> dict:
+        return self._s.value("alarm/notifier_config", {}) or {}
+
+    def save_alarm_notifier_config(self, cfg: dict) -> None:
+        self._s.setValue("alarm/notifier_config", cfg)
+
     # ---- mqtt ----
     def get_mqtt_config(self) -> dict:
         return self._s.value("mqtt/config", {}) or {}
