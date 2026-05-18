@@ -254,6 +254,7 @@ class MainWindow(QMainWindow):
             ("Kamera – Hilfe",          10),
             ("Tastenkürzel",            11),
             ("Fehlerbehebung",          12),
+            ("Monitor-Client – Hilfe",  13),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))

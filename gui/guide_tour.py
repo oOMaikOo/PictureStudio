@@ -357,6 +357,11 @@ TOUR_STEPS = {
          "SSH-Key erstellen:\n"
          "ssh-keygen -t ed25519 -f ~/.ssh/gpu_key",
          "Profil hinzufügen"),
+        ("Monitor-Client",
+         "Das trainierte Modell kann mit <b>monitor.py</b> auch ohne die Studio-Oberfläche genutzt werden. "
+         "Starte es im Terminal: <code>python monitor.py --model pfad/zum/modell.pt</code>. "
+         "Kamera, ROI und Schwellwert werden automatisch aus den Modell-Metadaten geladen.",
+         None),
     ],
     8: [  # Kamera & Videoanalyse (Dialog, kein eigener Stack-Index)
         ("Kamera & Videoanalyse – Überblick",

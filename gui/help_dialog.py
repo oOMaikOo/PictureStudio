@@ -26,6 +26,7 @@ SECTIONS = [
     ("📷", "Kamera & Videoanalyse"),
     ("⌨", "Tastenkürzel"),
     ("🔧", "Fehlerbehebung"),
+    ("💻", "Monitor-Client"),   # 13
 ]
 
 # Map sidebar page index → section index
@@ -827,6 +828,56 @@ Die Vorschau-Checkbox beeinflusst nur das Live-Bild, nicht die gespeicherte Date
 <div class="step">OpenCV muss das Format unterstützen (MP4, AVI, MOV, MKV, WebM).<br>
 Bei Codec-Problemen: Video mit <code>ffmpeg</code> in H.264 MP4 konvertieren:<br>
 <code>ffmpeg -i input.avi -c:v libx264 output.mp4</code></div>
+"""),
+
+# ── 13  Monitor-Client ────────────────────────────────────────────────────────
+13: page("""
+<h2>💻 Monitor-Client</h2>
+<p>Der <b>Monitor-Client</b> ist ein eigenständiges Kommandozeilen-Werkzeug für den Produktionseinsatz.
+Er lädt ein trainiertes Anomalie-Modell und verbindet sich automatisch mit der Kamera, die beim Training verwendet wurde.</p>
+
+<div class="step">
+<b>Schnellstart</b><br>
+<code>python monitor.py --model pfad/zum/modell.pt</code><br>
+Kamera, ROI und Schwellwert werden automatisch aus den Modell-Metadaten geladen.
+</div>
+
+<h3>Alle Optionen</h3>
+<table>
+<tr><th>Option</th><th>Standard</th><th>Beschreibung</th></tr>
+<tr><td><code>--model PFAD</code></td><td>–</td><td>Pfad zur .pt-Modelldatei (Pflicht)</td></tr>
+<tr><td><code>--camera INDEX</code></td><td>auto</td><td>Kamera-Index manuell überschreiben</td></tr>
+<tr><td><code>--threshold WERT</code></td><td>aus Modell</td><td>Anomalie-Schwellwert überschreiben</td></tr>
+<tr><td><code>--output VERZ</code></td><td>monitor_logs</td><td>Ausgabeverzeichnis für Logs und Alarm-Bilder</td></tr>
+<tr><td><code>--fps FPS</code></td><td>15</td><td>Bilder pro Sekunde</td></tr>
+<tr><td><code>--cooldown SEK</code></td><td>10</td><td>Mindestabstand zwischen Alarm-Saves</td></tr>
+<tr><td><code>--headless</code></td><td>aus</td><td>Kein Fenster — nur Terminal + CSV</td></tr>
+</table>
+
+<h3>Ausgabe-Dateien</h3>
+<div class="tip">
+Im Ausgabeverzeichnis (Standard: <code>monitor_logs/</code>) werden gespeichert:<br>
+• <b>monitor_events.csv</b> — Alle Alarm-Events mit Zeitstempel, Score, Schwellwert und Bildname<br>
+• <b>alarm_YYYYMMDDTHHMMSSZ.jpg</b> — Kamera-Schnappschuss bei jedem Alarm
+</div>
+
+<h3>Typische Szenarien</h3>
+<div class="step"><b>Produktionslinie überwachen</b><br>
+<code>python monitor.py --model modelle/linie1.pt --headless --output /var/log/anomalien</code>
+</div>
+<div class="step"><b>Schwellwert anpassen</b><br>
+<code>python monitor.py --model modelle/linie1.pt --threshold 0.0015</code>
+</div>
+<div class="step"><b>Andere Kamera verwenden</b><br>
+<code>python monitor.py --model modelle/linie1.pt --camera 2</code>
+</div>
+
+<div class="tip">
+<b>Tipp:</b> Der Monitor-Client benötigt kein vollständiges PictureStudio — nur Python mit den installierten Abhängigkeiten (PyTorch, OpenCV, NumPy).
+</div>
+<div class="warn">
+<b>Beenden:</b> Im Fenster-Modus Q oder ESC drücken. Im Headless-Modus Strg+C.
+</div>
 """),
 
 }
