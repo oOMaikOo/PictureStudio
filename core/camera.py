@@ -20,29 +20,34 @@ _BACKEND = cv2.CAP_ANY
 
 def _macos_avfoundation_names() -> list[str]:
     """
-    Return camera display names in the same index order that OpenCV uses on macOS.
+    Return camera display names in the exact order OpenCV uses on macOS,
+    with mobile/continuity cameras (iPhone, iPad) already excluded.
 
-    OpenCV orders cameras as: external/non-builtin cameras first (in AVFoundation
-    enumeration order), then built-in cameras (FaceTime etc.) last.
-    This matches `.builtInWideAngleCamera` always coming after `.external` devices
-    in OpenCV's internal AVCaptureDeviceDiscoverySession query.
+    Observed OpenCV ordering on macOS:
+      1. Real USB cameras  — uniqueID starts with "0x" (USB bus address)
+      2. Built-in cameras  — deviceType == .builtInWideAngleCamera (FaceTime etc.)
+      3. Virtual/mobile    — uniqueID is UUID format → EXCLUDED
 
-    Strategy:
-    1. Swift — queries DiscoverySession, splits into external vs built-in, outputs
-       external first then built-in (= OpenCV order).
-    2. system_profiler — plain listing order as fallback (no reversal).
+    The Swift script classifies each device by uniqueID prefix and deviceType,
+    then outputs only groups 1 + 2 in that order (= OpenCV's index order).
+    system_profiler is used as a best-effort fallback when Swift is unavailable.
     """
-    # --- Swift (most reliable — matches OpenCV's internal enumeration order) ---
+    # --- Swift (definitive) ---
     _swift_script = (
         "import AVFoundation;"
         "let s=AVCaptureDevice.DiscoverySession("
         "deviceTypes:[.builtInWideAngleCamera,.external,.continuityCamera],"
         "mediaType:.video,position:.unspecified);"
-        "var ext=[String](),bi=[String]();"
+        "var usb=[String](),bi=[String]();"
         "for d in s.devices{"
+        # Built-in (FaceTime etc.) → group 2
         "if d.deviceType == .builtInWideAngleCamera{bi.append(d.localizedName)}"
-        "else{ext.append(d.localizedName)}};"
-        "for n in ext+bi{print(n)}"
+        # Real USB devices have hex bus-address uniqueIDs like "0x1110000046d0828"
+        # Mobile/virtual devices have UUID-format uniqueIDs — skip them
+        "else if d.uniqueID.lowercased().hasPrefix(\"0x\"){usb.append(d.localizedName)}"
+        "};"
+        # Output: USB cameras first, then built-in — matches OpenCV's index order
+        "for n in usb+bi{print(n)}"
     )
     try:
         r = subprocess.run(
@@ -56,7 +61,7 @@ def _macos_avfoundation_names() -> list[str]:
     except Exception:
         pass
 
-    # --- system_profiler fallback ---
+    # --- system_profiler fallback (ordering may not match OpenCV — best effort) ---
     try:
         out = subprocess.run(
             ["system_profiler", "SPCameraDataType", "-json"],
@@ -68,29 +73,30 @@ def _macos_avfoundation_names() -> list[str]:
         return []
 
 
-# Camera names whose devices should not appear in the selection list.
-# Matched case-insensitively against the AVFoundation display name.
-_EXCLUDED_NAME_PATTERNS = ("iphone", "continuity camera", "ipad")
-
-
 def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     """
-    Return (index, label) pairs for every camera device OpenCV can open,
-    excluding mobile/continuity cameras (iPhone, iPad).
+    Return (index, label) pairs for USB and built-in cameras OpenCV can open.
+    Mobile/continuity cameras (iPhone, iPad) are excluded.
 
-    The label is the human-readable name from AVFoundation when available,
-    otherwise "Kamera N".
+    On macOS, OpenCV always assigns mobile/virtual cameras to the HIGHEST indices
+    (after all real USB and built-in devices). When Swift provides a filtered name
+    list (USB + built-in only), any OpenCV index beyond that list is a mobile device
+    and is skipped without even opening it.
     """
-    # names[i] is the display name for OpenCV index i (macOS only).
+    # names[i] → display name for OpenCV index i.
+    # When Swift succeeds, this list already excludes mobile cameras and is in
+    # the correct OpenCV order: USB cameras first, then built-in.
     names: list[str] = _macos_avfoundation_names() if platform.system() == "Darwin" else []
 
     found = []
     for i in range(max_index):
-        # Skip excluded devices before opening them — opening an iPhone
-        # Continuity Camera can delay AVFoundation for subsequent devices.
         name = names[i] if i < len(names) else ""
-        if name and any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
+
+        # If Swift provided a non-empty list and this index has no entry, it is a
+        # mobile/virtual device at the tail of OpenCV's enumeration — skip it.
+        if names and not name:
             continue
+
         try:
             cap = cv2.VideoCapture(i, _BACKEND)
             if not cap.isOpened():
@@ -100,7 +106,6 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cap.release()
             res = f" ({w}×{h})" if w > 0 and h > 0 else ""
-            name = names[i] if i < len(names) else ""
             label = f"{name}{res}" if name else f"Kamera {i}{res}"
             found.append((i, label))
         except Exception:
