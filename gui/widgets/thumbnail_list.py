@@ -2,6 +2,7 @@
 Lazy-loading thumbnail list using QThreadPool.
 """
 import os
+from collections import OrderedDict
 from typing import Dict, Optional, List
 
 from PySide6.QtWidgets import (
@@ -11,6 +12,34 @@ from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, QSize
 from PySide6.QtGui import QPixmap, QIcon, QColor
 
 from utils.config import IMAGE_FORMATS
+
+
+class _LRUPixmapCache:
+    """OrderedDict-based LRU cache for QPixmap thumbnails with a fixed capacity."""
+
+    def __init__(self, maxsize: int = 500) -> None:
+        self._d: OrderedDict = OrderedDict()
+        self._max = maxsize
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._d
+
+    def __getitem__(self, key: str):
+        self._d.move_to_end(key)
+        return self._d[key]
+
+    def __setitem__(self, key: str, value) -> None:
+        if key in self._d:
+            self._d.move_to_end(key)
+        self._d[key] = value
+        while len(self._d) > self._max:
+            self._d.popitem(last=False)
+
+    def clear(self) -> None:
+        self._d.clear()
+
+    def __len__(self) -> int:
+        return len(self._d)
 
 
 class ThumbnailSignals(QObject):
@@ -68,7 +97,7 @@ class LazyThumbnailList(QListWidget):
         self._pool = QThreadPool.globalInstance()
         self._pool.setMaxThreadCount(4)
         self._items: Dict[str, QListWidgetItem] = {}   # path -> item
-        self._cache: Dict[str, QPixmap] = {}
+        self._cache: _LRUPixmapCache = _LRUPixmapCache(500)
         self._pending: set = set()
 
         self.setIconSize(QSize(thumb_size, thumb_size * 3 // 4))

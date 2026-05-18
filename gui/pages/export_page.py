@@ -99,12 +99,21 @@ class ExportPage(QWidget):
         cv.addWidget(self.col_table)
         layout.addWidget(col_group)
 
-        # Export button
-        exp_btn = QPushButton("Excel exportieren")
+        # Format selector + export button
+        fmt_row = QHBoxLayout()
+        fmt_row.addWidget(QLabel("Format:"))
+        self.fmt_combo = QComboBox()
+        self.fmt_combo.addItems(["Excel (.xlsx)", "CSV (.csv)", "JSON (.json)"])
+        self.fmt_combo.setFixedWidth(160)
+        fmt_row.addWidget(self.fmt_combo)
+        fmt_row.addStretch()
+        layout.addLayout(fmt_row)
+
+        exp_btn = QPushButton("Exportieren")
         exp_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
         exp_btn.setToolTip(
-            "Exportiert die Klassifikationsergebnisse in die gewählte Excel-Datei.\n"
-            "Benötigt: pip install openpyxl"
+            "Exportiert die Klassifikationsergebnisse im gewählten Format.\n"
+            "Excel benötigt: pip install openpyxl"
         )
         exp_btn.clicked.connect(self._export)
         layout.addWidget(exp_btn)
@@ -169,25 +178,33 @@ class ExportPage(QWidget):
         self.count_label.setText(f"{len(self._results)} Ergebnisse geladen")
 
     def _choose_file(self) -> None:
-        """Select an existing Excel file to append data to."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Excel-Datei wählen", "", "Excel (*.xlsx *.xls)"
-        )
-        if path:
-            self.file_label.setText(path)
-            self.append_cb.setChecked(True)
+        """Select an existing file to append data to (format matches combo selection)."""
+        fmt = self.fmt_combo.currentIndex()
+        if fmt == 1:
+            f, _ = QFileDialog.getOpenFileName(self, "CSV-Datei wählen", "", "CSV (*.csv)")
+        elif fmt == 2:
+            f, _ = QFileDialog.getOpenFileName(self, "JSON-Datei wählen", "", "JSON (*.json)")
+        else:
+            f, _ = QFileDialog.getOpenFileName(self, "Excel-Datei wählen", "", "Excel (*.xlsx *.xls)")
+        if f:
+            self.file_label.setText(f)
+            self.append_cb.setChecked(fmt == 0)  # append only makes sense for Excel
 
     def _new_file(self) -> None:
-        """Prompt for a new Excel file path and switch to overwrite mode."""
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Neue Excel-Datei", "ergebnisse.xlsx", "Excel (*.xlsx)"
-        )
-        if path:
-            self.file_label.setText(path)
+        """Prompt for a new file path and switch to overwrite mode."""
+        fmt = self.fmt_combo.currentIndex()
+        if fmt == 1:
+            f, _ = QFileDialog.getSaveFileName(self, "Neue CSV-Datei", "ergebnisse.csv", "CSV (*.csv)")
+        elif fmt == 2:
+            f, _ = QFileDialog.getSaveFileName(self, "Neue JSON-Datei", "ergebnisse.json", "JSON (*.json)")
+        else:
+            f, _ = QFileDialog.getSaveFileName(self, "Neue Excel-Datei", "ergebnisse.xlsx", "Excel (*.xlsx)")
+        if f:
+            self.file_label.setText(f)
             self.append_cb.setChecked(False)
 
     def _export(self) -> None:
-        """Validate inputs, call ``export_results_to_excel``, and log the outcome."""
+        """Validate inputs, call the appropriate export function, and log the outcome."""
         path = self.file_label.text()
         if not path or path == "Keine Datei gewählt":
             QMessageBox.warning(self, "Keine Datei", "Bitte zuerst eine Zieldatei wählen.")
@@ -197,30 +214,34 @@ class ExportPage(QWidget):
             return
 
         col_defs = self._get_col_defs()
-        sheet = self.sheet_edit.text().strip() or "Ergebnisse"
-        append = self.append_cb.isChecked()
+        model_name = os.path.basename(self.project.current_model_path) if self.project else ""
+        fmt = self.fmt_combo.currentIndex()
 
         try:
-            from core.export import export_results_to_excel
-            from core.model_manager import ModelManager
-            model_name = ""
-            if self.project:
-                model_name = os.path.basename(self.project.current_model_path)
-
-            export_results_to_excel(
-                self._results, path,
-                model_name=model_name,
-                column_defs=col_defs,
-                sheet_name=sheet,
-                append_mode=append,
-            )
-            msg = (
-                f"Erfolgreich exportiert:\n"
-                f"  Datei: {path}\n"
-                f"  Blatt: {sheet}\n"
-                f"  Zeilen: {len(self._results)}\n"
-                f"  Modus: {'Anhängen' if append else 'Überschreiben'}"
-            )
+            if fmt == 1:
+                from core.export import export_results_to_csv
+                export_results_to_csv(self._results, path, model_name=model_name, column_defs=col_defs)
+                msg = f"CSV exportiert:\n  Datei: {path}\n  Zeilen: {len(self._results)}"
+            elif fmt == 2:
+                from core.export import export_results_to_json
+                export_results_to_json(self._results, path, model_name=model_name, column_defs=col_defs)
+                msg = f"JSON exportiert:\n  Datei: {path}\n  Einträge: {len(self._results)}"
+            else:
+                from core.export import export_results_to_excel
+                sheet = self.sheet_edit.text().strip() or "Ergebnisse"
+                append = self.append_cb.isChecked()
+                export_results_to_excel(
+                    self._results, path,
+                    model_name=model_name,
+                    column_defs=col_defs,
+                    sheet_name=sheet,
+                    append_mode=append,
+                )
+                msg = (
+                    f"Excel exportiert:\n  Datei: {path}\n"
+                    f"  Blatt: {sheet}\n  Zeilen: {len(self._results)}\n"
+                    f"  Modus: {'Anhängen' if append else 'Überschreiben'}"
+                )
             self.proto_text.append(msg)
             QMessageBox.information(self, "Exportiert", msg)
         except Exception as exc:

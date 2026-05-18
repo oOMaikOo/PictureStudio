@@ -451,6 +451,21 @@ class SettingsPage(QWidget):
         """Read alarm notifier UI fields, persist via AppSettings, and emit signal."""
         if not self._settings:
             return
+
+        webhook_url = self._webhook_url_edit.text().strip()
+        email_to = self._email_to_edit.text().strip()
+
+        # Inline validation: red border when format is wrong
+        _invalid = "border: 1px solid #F85149;"
+        _ok = ""
+        url_ok = not webhook_url or webhook_url.startswith(("http://", "https://"))
+        self._webhook_url_edit.setStyleSheet(_ok if url_ok else _invalid)
+
+        emails_ok = True
+        if email_to:
+            emails_ok = all("@" in e.strip() for e in email_to.split(",") if e.strip())
+        self._email_to_edit.setStyleSheet(_ok if emails_ok else _invalid)
+
         cfg = {
             "email_enabled":  self._email_enabled_cb.isChecked(),
             "smtp_host":      self._smtp_host_edit.text().strip(),
@@ -459,9 +474,9 @@ class SettingsPage(QWidget):
             "smtp_pass":      self._smtp_pass_edit.text(),
             "smtp_tls":       self._smtp_tls_cb.isChecked(),
             "email_from":     self._email_from_edit.text().strip(),
-            "email_to":       self._email_to_edit.text().strip(),
+            "email_to":       email_to,
             "webhook_enabled": self._webhook_enabled_cb.isChecked(),
-            "webhook_url":    self._webhook_url_edit.text().strip(),
+            "webhook_url":    webhook_url,
             "cooldown":       self._notify_cooldown_spin.value(),
         }
         self._settings.save_alarm_notifier_config(cfg)

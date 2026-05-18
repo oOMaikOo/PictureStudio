@@ -195,13 +195,19 @@ class CameraFrameThread(QThread):
             # emit the already-read first frame, then continue normally
             self.frame_ready.emit(frame)
 
+            _consec_fail = 0
             while self._running:
                 t0 = time.perf_counter()
                 ret, frame = cap.read()
                 if not ret:
-                    if self._running:
-                        self.error.emit("Kein Bild empfangen – Verbindung unterbrochen.")
-                    break
+                    _consec_fail += 1
+                    if _consec_fail >= 5:
+                        if self._running:
+                            self.error.emit("Kein Bild empfangen – Verbindung unterbrochen.")
+                        break
+                    time.sleep(0.1)
+                    continue
+                _consec_fail = 0
                 self.frame_ready.emit(frame)
                 wait = self._frame_interval - (time.perf_counter() - t0)
                 if wait > 0:

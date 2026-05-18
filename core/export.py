@@ -1,6 +1,8 @@
 """
 Enhanced Excel export: custom column mapping, append/overwrite mode, protocol.
 """
+import csv
+import json
 import os
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -211,4 +213,45 @@ def export_training_report(run_data: Dict, output_path: str) -> str:
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
     log.info("Trainingsbericht exportiert: %s", output_path)
+    return output_path
+
+
+def export_results_to_csv(
+    results: List[Dict],
+    output_path: str,
+    model_name: str = "",
+    column_defs: List[Dict] = None,
+) -> str:
+    """Export inference results to CSV. Returns the output path."""
+    cols = [c for c in (column_defs or DEFAULT_COLUMNS) if c.get("enabled", True)]
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    with open(output_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([c["header"] for c in cols])
+        for result in results:
+            writer.writerow([
+                _get_cell_value(result, c["key"], model_name, ts) for c in cols
+            ])
+    log.info("CSV exportiert: %s (%d Zeilen)", output_path, len(results))
+    return output_path
+
+
+def export_results_to_json(
+    results: List[Dict],
+    output_path: str,
+    model_name: str = "",
+    column_defs: List[Dict] = None,
+) -> str:
+    """Export inference results to JSON. Returns the output path."""
+    cols = [c for c in (column_defs or DEFAULT_COLUMNS) if c.get("enabled", True)]
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    rows = [
+        {c["header"]: _get_cell_value(result, c["key"], model_name, ts) for c in cols}
+        for result in results
+    ]
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as fh:
+        json.dump(rows, fh, indent=2, ensure_ascii=False)
+    log.info("JSON exportiert: %s (%d Einträge)", output_path, len(rows))
     return output_path

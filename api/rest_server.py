@@ -24,6 +24,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
+from utils.config import APP_VERSION
+
 
 class _ProjectHandler(BaseHTTPRequestHandler):
     """
@@ -113,7 +115,7 @@ class _ProjectHandler(BaseHTTPRequestHandler):
                 "labeled_images": proj.get_labeled_image_count() if proj else 0,
                 "multi_label": proj.config.multi_label if proj else False,
                 "requests_served": _ProjectHandler.request_count,
-                "version": "1.0",
+                "version": APP_VERSION,
             })
             return
 

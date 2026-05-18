@@ -150,6 +150,11 @@ class TestStatusEndpoint:
         data = _get_json(f"http://localhost:{bare_server.port}/api/status")
         assert "version" in data
 
+    def test_status_version_matches_app_version(self, bare_server):
+        from utils.config import APP_VERSION
+        data = _get_json(f"http://localhost:{bare_server.port}/api/status")
+        assert data["version"] == APP_VERSION
+
     def test_status_cors_header_present(self, bare_server):
         _, headers, _ = _get(f"http://localhost:{bare_server.port}/api/status")
         assert headers.get("Access-Control-Allow-Origin") == "*"

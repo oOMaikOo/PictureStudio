@@ -208,3 +208,131 @@ class TestDefaultColumns:
         from core.export import DEFAULT_COLUMNS
         fn_cols = [c for c in DEFAULT_COLUMNS if c["key"] == "filename"]
         assert fn_cols and fn_cols[0]["enabled"] is True
+
+
+# ---------------------------------------------------------------------------
+# export_results_to_csv
+# ---------------------------------------------------------------------------
+
+class TestCsvExport:
+    def test_creates_file(self, tmp_dir):
+        from core.export import export_results_to_csv
+        out = os.path.join(tmp_dir, "results.csv")
+        export_results_to_csv(SAMPLE_RESULTS, out)
+        assert os.path.exists(out)
+
+    def test_row_count(self, tmp_dir):
+        import csv as _csv
+        from core.export import export_results_to_csv
+        out = os.path.join(tmp_dir, "rows.csv")
+        export_results_to_csv(SAMPLE_RESULTS, out)
+        with open(out, encoding="utf-8") as f:
+            rows = list(_csv.reader(f))
+        # 1 header + 2 data rows
+        assert len(rows) == 3
+
+    def test_header_matches_columns(self, tmp_dir):
+        import csv as _csv
+        from core.export import export_results_to_csv, DEFAULT_COLUMNS
+        out = os.path.join(tmp_dir, "header.csv")
+        export_results_to_csv(SAMPLE_RESULTS, out)
+        with open(out, encoding="utf-8") as f:
+            header = next(_csv.reader(f))
+        enabled_headers = [c["header"] for c in DEFAULT_COLUMNS if c.get("enabled", True)]
+        assert header == enabled_headers
+
+    def test_disabled_column_excluded(self, tmp_dir):
+        import csv as _csv
+        from core.export import export_results_to_csv, DEFAULT_COLUMNS
+        col_defs = [dict(c) for c in DEFAULT_COLUMNS]
+        for c in col_defs:
+            if c["key"] == "path":
+                c["enabled"] = False
+        out = os.path.join(tmp_dir, "nocol.csv")
+        export_results_to_csv(SAMPLE_RESULTS, out, column_defs=col_defs)
+        with open(out, encoding="utf-8") as f:
+            header = next(_csv.reader(f))
+        assert not any("pfad" in h.lower() for h in header)
+
+    def test_confidence_value_correct(self, tmp_dir):
+        import csv as _csv
+        from core.export import export_results_to_csv
+        out = os.path.join(tmp_dir, "conf.csv")
+        export_results_to_csv(SAMPLE_RESULTS[:1], out)
+        with open(out, encoding="utf-8") as f:
+            rows = list(_csv.reader(f))
+        header = rows[0]
+        data = rows[1]
+        conf_idx = header.index("Confidence (%)")
+        assert float(data[conf_idx]) == pytest.approx(92.0)
+
+    def test_empty_results_only_header(self, tmp_dir):
+        import csv as _csv
+        from core.export import export_results_to_csv
+        out = os.path.join(tmp_dir, "empty.csv")
+        export_results_to_csv([], out)
+        with open(out, encoding="utf-8") as f:
+            rows = list(_csv.reader(f))
+        assert len(rows) == 1  # only header
+
+
+# ---------------------------------------------------------------------------
+# export_results_to_json
+# ---------------------------------------------------------------------------
+
+class TestJsonExport:
+    def test_creates_file(self, tmp_dir):
+        from core.export import export_results_to_json
+        out = os.path.join(tmp_dir, "results.json")
+        export_results_to_json(SAMPLE_RESULTS, out)
+        assert os.path.exists(out)
+
+    def test_is_valid_json(self, tmp_dir):
+        import json as _json
+        from core.export import export_results_to_json
+        out = os.path.join(tmp_dir, "valid.json")
+        export_results_to_json(SAMPLE_RESULTS, out)
+        with open(out, encoding="utf-8") as f:
+            data = _json.load(f)
+        assert isinstance(data, list)
+
+    def test_entry_count(self, tmp_dir):
+        import json as _json
+        from core.export import export_results_to_json
+        out = os.path.join(tmp_dir, "count.json")
+        export_results_to_json(SAMPLE_RESULTS, out)
+        with open(out, encoding="utf-8") as f:
+            data = _json.load(f)
+        assert len(data) == 2
+
+    def test_entry_has_expected_keys(self, tmp_dir):
+        import json as _json
+        from core.export import export_results_to_json, DEFAULT_COLUMNS
+        out = os.path.join(tmp_dir, "keys.json")
+        export_results_to_json(SAMPLE_RESULTS, out)
+        with open(out, encoding="utf-8") as f:
+            data = _json.load(f)
+        enabled_headers = {c["header"] for c in DEFAULT_COLUMNS if c.get("enabled", True)}
+        assert enabled_headers.issubset(set(data[0].keys()))
+
+    def test_disabled_column_excluded(self, tmp_dir):
+        import json as _json
+        from core.export import export_results_to_json, DEFAULT_COLUMNS
+        col_defs = [dict(c) for c in DEFAULT_COLUMNS]
+        for c in col_defs:
+            if c["key"] == "path":
+                c["enabled"] = False
+        out = os.path.join(tmp_dir, "nopath.json")
+        export_results_to_json(SAMPLE_RESULTS, out, column_defs=col_defs)
+        with open(out, encoding="utf-8") as f:
+            data = _json.load(f)
+        assert not any("pfad" in k.lower() for k in data[0].keys())
+
+    def test_empty_results_is_empty_list(self, tmp_dir):
+        import json as _json
+        from core.export import export_results_to_json
+        out = os.path.join(tmp_dir, "empty.json")
+        export_results_to_json([], out)
+        with open(out, encoding="utf-8") as f:
+            data = _json.load(f)
+        assert data == []
