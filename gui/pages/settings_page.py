@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette, QColor
 
 from core.alarm_notifier import AlarmNotifier
+from core.industrial_notifier import IndustrialNotifier
 
 
 class SettingsPage(QWidget):
@@ -36,12 +37,14 @@ class SettingsPage(QWidget):
     theme_changed = Signal(str)
     autosave_changed = Signal(int, bool)
     alarm_notifier_config_changed = Signal(dict)
+    industrial_config_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._settings = None
         self._api_server = None
         self._notifier: AlarmNotifier | None = None
+        self._industrial_notifier: IndustrialNotifier | None = None
         self._build_ui()
 
     def set_settings(self, settings) -> None:
@@ -52,6 +55,10 @@ class SettingsPage(QWidget):
     def set_notifier(self, n: AlarmNotifier) -> None:
         """Inject the ``AlarmNotifier`` instance used by test buttons."""
         self._notifier = n
+
+    def set_industrial_notifier(self, n: IndustrialNotifier) -> None:
+        """Inject the ``IndustrialNotifier`` instance for OPC-UA / Modbus."""
+        self._industrial_notifier = n
 
     # ------------------------------------------------------------------ UI
 
@@ -290,6 +297,71 @@ class SettingsPage(QWidget):
 
         layout.addWidget(alarm_group)
 
+        # Industrieanbindung (OPC-UA & Modbus)
+        industrial_group = QGroupBox("Industrieanbindung (OPC-UA & Modbus)")
+        ind_f = QFormLayout(industrial_group)
+
+        # OPC-UA section
+        opcua_lbl = QLabel("<b>OPC-UA</b>")
+        ind_f.addRow(opcua_lbl)
+
+        self._opcua_enabled_cb = QCheckBox("OPC-UA aktivieren")
+        ind_f.addRow("", self._opcua_enabled_cb)
+
+        self._opcua_url_edit = QLineEdit()
+        self._opcua_url_edit.setPlaceholderText("opc.tcp://192.168.1.10:4840")
+        ind_f.addRow("Server-URL:", self._opcua_url_edit)
+
+        self._opcua_node_edit = QLineEdit()
+        self._opcua_node_edit.setPlaceholderText("ns=2;i=1001")
+        ind_f.addRow("Node-ID:", self._opcua_node_edit)
+
+        self._test_opcua_btn = QPushButton("Verbindung testen")
+        self._test_opcua_btn.clicked.connect(self._test_opcua_connection)
+        ind_f.addRow("", self._test_opcua_btn)
+
+        # Modbus TCP section
+        modbus_lbl = QLabel("<b>Modbus TCP</b>")
+        ind_f.addRow(modbus_lbl)
+
+        self._modbus_enabled_cb = QCheckBox("Modbus TCP aktivieren")
+        ind_f.addRow("", self._modbus_enabled_cb)
+
+        self._modbus_host_edit = QLineEdit()
+        self._modbus_host_edit.setPlaceholderText("192.168.1.20")
+        ind_f.addRow("Host/IP:", self._modbus_host_edit)
+
+        self._modbus_port_spin = QSpinBox()
+        self._modbus_port_spin.setRange(1, 65535)
+        self._modbus_port_spin.setValue(502)
+        ind_f.addRow("Port:", self._modbus_port_spin)
+
+        self._modbus_coil_spin = QSpinBox()
+        self._modbus_coil_spin.setRange(0, 65535)
+        self._modbus_coil_spin.setValue(0)
+        ind_f.addRow("Coil-Adresse:", self._modbus_coil_spin)
+
+        self._modbus_unit_spin = QSpinBox()
+        self._modbus_unit_spin.setRange(1, 247)
+        self._modbus_unit_spin.setValue(1)
+        ind_f.addRow("Unit-ID:", self._modbus_unit_spin)
+
+        self._test_modbus_btn = QPushButton("Verbindung testen")
+        self._test_modbus_btn.clicked.connect(self._test_modbus_connection)
+        ind_f.addRow("", self._test_modbus_btn)
+
+        layout.addWidget(industrial_group)
+
+        # Connect live-save signals for industrial widgets
+        self._opcua_enabled_cb.toggled.connect(self._save_industrial_settings)
+        self._opcua_url_edit.editingFinished.connect(self._save_industrial_settings)
+        self._opcua_node_edit.editingFinished.connect(self._save_industrial_settings)
+        self._modbus_enabled_cb.toggled.connect(self._save_industrial_settings)
+        self._modbus_host_edit.editingFinished.connect(self._save_industrial_settings)
+        self._modbus_port_spin.valueChanged.connect(self._save_industrial_settings)
+        self._modbus_coil_spin.valueChanged.connect(self._save_industrial_settings)
+        self._modbus_unit_spin.valueChanged.connect(self._save_industrial_settings)
+
         # Connect live-save signals for all new alarm widgets
         self._email_enabled_cb.toggled.connect(self._save_alarm_notifier_settings)
         self._smtp_host_edit.editingFinished.connect(self._save_alarm_notifier_settings)
@@ -350,6 +422,7 @@ class SettingsPage(QWidget):
             self.mqtt_status_lbl.setText("paho-mqtt nicht installiert")
             self.mqtt_status_lbl.setStyleSheet("color:#F85149;font-size:10px;")
         self._load_alarm_notifier_settings()
+        self._load_industrial_settings()
         self._refresh_ssh_list()
 
     def _load_alarm_notifier_settings(self) -> None:
@@ -395,6 +468,73 @@ class SettingsPage(QWidget):
         if self._notifier:
             self._notifier.update_config(cfg)
         self.alarm_notifier_config_changed.emit(cfg)
+
+    def _load_industrial_settings(self) -> None:
+        """Populate industrial notifier UI fields from AppSettings."""
+        if not self._settings:
+            return
+        cfg = self._settings.get_industrial_config()
+        opcua = cfg.get("opcua", {})
+        modbus = cfg.get("modbus", {})
+        for w in [self._opcua_enabled_cb, self._modbus_enabled_cb]:
+            w.blockSignals(True)
+        self._opcua_enabled_cb.setChecked(bool(opcua.get("enabled", False)))
+        self._opcua_url_edit.setText(opcua.get("url", ""))
+        self._opcua_node_edit.setText(opcua.get("node_id", ""))
+        self._modbus_enabled_cb.setChecked(bool(modbus.get("enabled", False)))
+        self._modbus_host_edit.setText(modbus.get("host", ""))
+        self._modbus_port_spin.setValue(int(modbus.get("port", 502)))
+        self._modbus_coil_spin.setValue(int(modbus.get("coil_addr", 0)))
+        self._modbus_unit_spin.setValue(int(modbus.get("unit_id", 1)))
+        for w in [self._opcua_enabled_cb, self._modbus_enabled_cb]:
+            w.blockSignals(False)
+
+    def _save_industrial_settings(self) -> None:
+        """Read industrial UI fields, persist via AppSettings, and emit signal."""
+        if not self._settings:
+            return
+        cfg = {
+            "opcua": {
+                "enabled":   self._opcua_enabled_cb.isChecked(),
+                "url":       self._opcua_url_edit.text().strip(),
+                "node_id":   self._opcua_node_edit.text().strip(),
+            },
+            "modbus": {
+                "enabled":   self._modbus_enabled_cb.isChecked(),
+                "host":      self._modbus_host_edit.text().strip(),
+                "port":      self._modbus_port_spin.value(),
+                "coil_addr": self._modbus_coil_spin.value(),
+                "unit_id":   self._modbus_unit_spin.value(),
+            },
+        }
+        self._settings.save_industrial_config(cfg)
+        if self._industrial_notifier:
+            self._industrial_notifier.update_config(cfg)
+        self.industrial_config_changed.emit(cfg)
+
+    def _test_opcua_connection(self) -> None:
+        """Test the OPC-UA connection and show a QMessageBox with the result."""
+        if not self._industrial_notifier:
+            QMessageBox.warning(self, "Kein Notifier", "Industrial Notifier nicht initialisiert.")
+            return
+        self._save_industrial_settings()
+        success, msg = self._industrial_notifier.test_opcua()
+        if success:
+            QMessageBox.information(self, "OPC-UA Test", "Verbindung erfolgreich.")
+        else:
+            QMessageBox.critical(self, "OPC-UA Test fehlgeschlagen", msg)
+
+    def _test_modbus_connection(self) -> None:
+        """Test the Modbus TCP connection and show a QMessageBox with the result."""
+        if not self._industrial_notifier:
+            QMessageBox.warning(self, "Kein Notifier", "Industrial Notifier nicht initialisiert.")
+            return
+        self._save_industrial_settings()
+        success, msg = self._industrial_notifier.test_modbus()
+        if success:
+            QMessageBox.information(self, "Modbus Test", "Verbindung erfolgreich.")
+        else:
+            QMessageBox.critical(self, "Modbus Test fehlgeschlagen", msg)
 
     def _test_email(self) -> None:
         """Send a test e-mail via the notifier and show the result."""

@@ -136,6 +136,10 @@ class MainWindow(QMainWindow):
         self._notifier = AlarmNotifier()
         self._notifier.update_config(self._settings.get_alarm_notifier_config())
 
+        # Industrial notifier (OPC-UA & Modbus TCP)
+        from core.industrial_notifier import IndustrialNotifier
+        self._industrial_notifier = IndustrialNotifier(self._settings.get_industrial_config())
+
         # Cross-page signals
         self.dashboard_page.new_project_requested.connect(self._new_project)
         self.dashboard_page.open_project_requested.connect(self._open_project)
@@ -147,14 +151,17 @@ class MainWindow(QMainWindow):
         self.settings_page.set_settings(self._settings)
         self.settings_page.set_api_server(self._rest_server)
         self.settings_page.set_notifier(self._notifier)
+        self.settings_page.set_industrial_notifier(self._industrial_notifier)
         self.camera_page.set_rest_server(self._rest_server)
         self.camera_page.set_notifier(self._notifier)
+        self.camera_page.set_industrial_notifier(self._industrial_notifier)
         self.multi_camera_page.set_rest_server(self._rest_server)
         self.multi_camera_page.set_notifier(self._notifier)
         self.training_page.set_settings(self._settings)
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)
         self.settings_page.alarm_notifier_config_changed.connect(self._on_notifier_config_changed)
+        self.settings_page.industrial_config_changed.connect(self._on_industrial_config_changed)
 
         # Active Learning: inference → labeling queue → retrain
         self.inference_page.al_queue_updated.connect(self._on_al_queue_updated)
@@ -555,6 +562,12 @@ class MainWindow(QMainWindow):
         """Update the live notifier config and persist it when settings change."""
         self._notifier.update_config(cfg)
         self._settings.save_alarm_notifier_config(cfg)
+
+    @Slot(dict)
+    def _on_industrial_config_changed(self, cfg: dict) -> None:
+        """Update the industrial notifier config and persist it when settings change."""
+        self._industrial_notifier.update_config(cfg)
+        self._settings.save_industrial_config(cfg)
 
     def _confirm_save(self) -> bool:
         """

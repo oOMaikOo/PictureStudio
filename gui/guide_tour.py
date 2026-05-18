@@ -362,6 +362,11 @@ TOUR_STEPS = {
          "Bei jeder erkannten Anomalie wird automatisch eine Nachricht verschickt — "
          "mit Score, Schwellwert und dem Alarm-Bild als Anhang.",
          None),
+        ("Industrieanbindung",
+         "Im Abschnitt <b>Industrieanbindung</b> verbindest du PictureStudio direkt mit deiner SPS. "
+         "Bei erkannten Anomalien wird ein <b>OPC-UA-Node</b> oder eine <b>Modbus-Coil</b> gesetzt — "
+         "ohne zusätzliche Middleware.",
+         None),
         ("Monitor-Client",
          "Das trainierte Modell kann mit <b>monitor.py</b> auch ohne die Studio-Oberfläche genutzt werden. "
          "Starte es im Terminal: <code>python monitor.py --model pfad/zum/modell.pt</code>. "

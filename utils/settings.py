@@ -102,6 +102,13 @@ class AppSettings:
     def save_alarm_notifier_config(self, cfg: dict) -> None:
         self._s.setValue("alarm/notifier_config", cfg)
 
+    # ---- industrial protocols ----
+    def get_industrial_config(self) -> dict:
+        return self._s.value("industrial/config", {}) or {}
+
+    def save_industrial_config(self, cfg: dict) -> None:
+        self._s.setValue("industrial/config", cfg)
+
     # ---- mqtt ----
     def get_mqtt_config(self) -> dict:
         return self._s.value("mqtt/config", {}) or {}

@@ -570,6 +570,32 @@ Vollständige URL eintragen (z.B. Teams, Slack, eigene API). Der Alarm-Payload w
 
 <hr>
 
+<h3>Industrieanbindung (OPC-UA &amp; Modbus TCP)</h3>
+<p>Sendet bei Anomalie-Erkennung direkt Signale an SPS-Systeme über OPC-UA oder Modbus TCP.</p>
+<table>
+<tr><th>Protokoll</th><th>Typische Anwendung</th><th>Standard-Port</th></tr>
+<tr><td><b>OPC-UA</b></td><td>Siemens S7, Beckhoff, FANUC CNC</td><td>4840</td></tr>
+<tr><td><b>Modbus TCP</b></td><td>Beckhoff, Wago, ältere SPS</td><td>502</td></tr>
+</table>
+<div class="step">
+<b>OPC-UA konfigurieren</b><br>
+Server-URL eingeben (z.B. <code>opc.tcp://192.168.1.10:4840</code>), Node-ID des Boolean-Ausgangs
+angeben (z.B. <code>ns=2;i=1001</code>). Bei Anomalie wird der Node auf <code>True</code> gesetzt.
+</div>
+<div class="step">
+<b>Modbus TCP konfigurieren</b><br>
+Host-IP, Port (Standard 502), Coil-Adresse und Unit-ID eingeben. Bei Anomalie wird
+die Coil auf <code>1</code> (True) geschrieben, bei normalem Betrieb auf <code>0</code>.
+</div>
+<div class="tip">
+<b>Verbindungstest:</b> Mit "Verbindung testen" kann die SPS-Verbindung vor dem Live-Betrieb geprüft werden.
+</div>
+<div class="warn">
+Stellt sicher, dass Firewall-Regeln die entsprechenden Ports freigeben (OPC-UA: 4840, Modbus: 502).
+</div>
+
+<hr>
+
 <h2>SSH-Profile</h2>
 <p>Profile für SSH-Ferntraining auf externen GPU-Servern.</p>
 <div class="step"><b>Profil hinzufügen</b><br>

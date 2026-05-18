@@ -18,6 +18,7 @@ import numpy as np
 from core.camera import list_usb_cameras, apply_timestamp, CameraFrameThread
 from core.anomaly_detector import AnomalyDetector
 from core.alarm_notifier import AlarmNotifier
+from core.industrial_notifier import IndustrialNotifier
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -66,6 +67,7 @@ class CameraPage(QWidget):
         self._scan_thread: Optional[_ScanThread] = None
         self._rest_server = None
         self._notifier: Optional[AlarmNotifier] = None
+        self._industrial_notifier: Optional[IndustrialNotifier] = None
         self._last_frame: Optional[np.ndarray] = None
 
         # Scoring state
@@ -104,6 +106,10 @@ class CameraPage(QWidget):
     def set_notifier(self, notifier: AlarmNotifier) -> None:
         """Inject the ``AlarmNotifier`` instance for e-mail/webhook alarm notifications."""
         self._notifier = notifier
+
+    def set_industrial_notifier(self, notifier: IndustrialNotifier) -> None:
+        """Inject the ``IndustrialNotifier`` instance for OPC-UA / Modbus TCP notifications."""
+        self._industrial_notifier = notifier
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -614,6 +620,9 @@ class CameraPage(QWidget):
             self._rest_server.push_score(score, thr)
 
         self._alarm_banner.setVisible(is_anomaly)
+
+        if self._industrial_notifier:
+            self._industrial_notifier.on_alarm(is_anomaly, avg, thr)
 
         # Log with dedup
         if is_anomaly:
