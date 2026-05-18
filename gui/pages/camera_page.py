@@ -442,6 +442,19 @@ class CameraPage(QWidget):
                 self._connect_btn.setChecked(False)
                 return
             source = url.strip()
+            _valid_schemes = ("rtsp://", "rtsps://", "http://", "https://")
+            if not any(source.lower().startswith(s) for s in _valid_schemes):
+                QMessageBox.warning(
+                    self, "Ungültige URL",
+                    "Die URL hat kein unterstütztes Schema.\n\n"
+                    "Erlaubte Formate:\n"
+                    "  rtsp://user:pass@192.168.1.100:554/stream\n"
+                    "  http://192.168.1.100:8080/video\n"
+                    "  https://...\n\n"
+                    "Bitte URL korrigieren und erneut versuchen."
+                )
+                self._connect_btn.setChecked(False)
+                return
         elif source is None:
             self._connect_btn.setChecked(False)
             return

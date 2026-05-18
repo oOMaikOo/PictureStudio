@@ -178,6 +178,11 @@ class LabelingPage(QWidget):
         self._num_key_filter = _NumKeyFilter(self.thumb_list)
         self.thumb_list.installEventFilter(self._num_key_filter)
 
+        shortcut_hint = QLabel("1–9: Label  ·  Space: weiter  ·  Entf: löschen")
+        shortcut_hint.setAlignment(Qt.AlignCenter)
+        shortcut_hint.setStyleSheet("color:#444D56; font-size:9px;")
+        v.addWidget(shortcut_hint)
+
         # ── Labeling progress bar ────────────────────────────────────────────
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, 100)
@@ -959,6 +964,15 @@ class LabelingPage(QWidget):
             self.uncertain_only_cb.setChecked(False)
             self.uncertain_only_cb.blockSignals(False)
         self._filter_list()
+
+    def filter_by_label(self, label_name: str) -> None:
+        """Activate the chip filter for `label_name` and clear all other filters."""
+        self._reset_filters()
+        if label_name in self._label_chip_btns:
+            if hasattr(self, '_all_chip'):
+                self._all_chip.setChecked(False)
+            self._label_chip_btns[label_name].setChecked(True)
+            self._filter_list()
 
     # ------------------------------------------------------------------ image selection
 

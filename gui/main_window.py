@@ -147,6 +147,7 @@ class MainWindow(QMainWindow):
         self.dashboard_page.new_project_requested.connect(self._new_project)
         self.dashboard_page.open_project_requested.connect(self._open_project)
         self.dashboard_page.open_recent_requested.connect(self._open_recent)
+        self.dashboard_page.navigate_to_label_requested.connect(self._navigate_to_label)
         self.data_page.images_loaded.connect(self._on_images_loaded)
         self.training_page.training_finished.connect(self._on_training_finished)
         self.models_page.model_loaded.connect(self.inference_page.load_model_path)
@@ -836,6 +837,11 @@ class MainWindow(QMainWindow):
             self._load_project(Project.load(path))
         except Exception as exc:
             QMessageBox.critical(self, "Ladefehler", str(exc))
+
+    def _navigate_to_label(self, label_name: str) -> None:
+        """Navigate to the labeling page filtered to the given label."""
+        self._switch_page(2)
+        self.labeling_page.filter_by_label(label_name)
 
     # ------------------------------------------------------------------ status
 

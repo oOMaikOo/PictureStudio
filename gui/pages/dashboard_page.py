@@ -73,6 +73,7 @@ class DashboardPage(QWidget):
     open_project_requested = Signal()
     new_project_requested = Signal()
     open_recent_requested = Signal(str)   # emits file path
+    navigate_to_label_requested = Signal(str)  # emits label name
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -275,6 +276,11 @@ class DashboardPage(QWidget):
 
             container_w = QWidget()
             container_w.setLayout(row)
+            container_w.setCursor(Qt.PointingHandCursor)
+            container_w.setToolTip(f"Klick: Beschriftungsseite auf '{lbl}' filtern")
+            container_w.mousePressEvent = (
+                lambda _e, lb=lbl: self.navigate_to_label_requested.emit(lb)
+            )
             self._class_layout.addWidget(container_w)
 
         # Warnings
