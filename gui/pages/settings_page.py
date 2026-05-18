@@ -12,6 +12,25 @@ from PySide6.QtGui import QPalette, QColor
 
 
 class SettingsPage(QWidget):
+    """
+    Application settings page (stack index 7).
+
+    Groups of settings:
+    - Appearance: dark/light theme toggle and font size.
+    - Project & Autosave: interval and backup-before-save.
+    - Labeling: thumbnail size and ROI-label display.
+    - Inference: low-confidence threshold and default Top-K.
+    - REST API: start/stop, port, URL copy, live dashboard link.
+    - MQTT: broker connection details for anomaly alarm publishing.
+    - SSH profiles: add/remove profiles used by remote training.
+
+    Signals
+    -------
+    theme_changed    : Emitted immediately when the theme combo changes.
+    autosave_changed : Emitted when "Einstellungen speichern" is clicked;
+                       carries (interval_seconds, enabled).
+    """
+
     theme_changed = Signal(str)
     autosave_changed = Signal(int, bool)
 
@@ -22,6 +41,7 @@ class SettingsPage(QWidget):
         self._build_ui()
 
     def set_settings(self, settings) -> None:
+        """Accept the ``AppSettings`` instance and populate all form fields."""
         self._settings = settings
         self._load_values()
 
@@ -217,6 +237,7 @@ class SettingsPage(QWidget):
         layout.addStretch()
 
     def _load_values(self) -> None:
+        """Populate all form widgets from the current ``AppSettings`` values."""
         if not self._settings:
             return
         self.theme_combo.setCurrentText(self._settings.get_theme())
@@ -241,6 +262,7 @@ class SettingsPage(QWidget):
         self._refresh_ssh_list()
 
     def _refresh_ssh_list(self) -> None:
+        """Rebuild the SSH profile list widget from saved settings."""
         self.ssh_list.clear()
         if not self._settings:
             return
@@ -248,9 +270,11 @@ class SettingsPage(QWidget):
             self.ssh_list.addItem(f"{p.get('name', '?')}  —  {p.get('host', '?')}")
 
     def _on_theme_changed(self, theme: str) -> None:
+        """Forward the selected theme to ``MainWindow`` via the ``theme_changed`` signal."""
         self.theme_changed.emit(theme)
 
     def _add_ssh_profile(self) -> None:
+        """Open a dialog to collect SSH profile details and save the new entry."""
         from PySide6.QtWidgets import QDialog, QDialogButtonBox
         if not self._settings:
             return
@@ -282,6 +306,7 @@ class SettingsPage(QWidget):
             self._refresh_ssh_list()
 
     def _del_ssh_profile(self) -> None:
+        """Delete the currently selected SSH profile from settings."""
         if not self._settings:
             return
         row = self.ssh_list.currentRow()
@@ -296,6 +321,7 @@ class SettingsPage(QWidget):
     # ------------------------------------------------------------------ REST API
 
     def set_api_server(self, server) -> None:
+        """Inject the ``RestApiServer`` instance and sync the toggle button state."""
         self._api_server = server
         if server:
             server.set_status_callback(self._on_api_status)
@@ -311,6 +337,7 @@ class SettingsPage(QWidget):
                 self.api_port_spin.setEnabled(False)
 
     def _toggle_api(self) -> None:
+        """Start or stop the REST API server and update button appearance accordingly."""
         if not self._api_server:
             return
         if self._api_server.is_running:
@@ -337,6 +364,7 @@ class SettingsPage(QWidget):
                 self.api_port_spin.setEnabled(False)
 
     def _on_api_status(self, msg: str) -> None:
+        """Update the API status label text and colour (green = running, red = stopped)."""
         self.api_status_label.setText(msg)
         running = self._api_server and self._api_server.is_running
         self.api_status_label.setStyleSheet(
@@ -344,16 +372,19 @@ class SettingsPage(QWidget):
         )
 
     def _copy_api_url(self) -> None:
+        """Copy the running API base URL to the system clipboard."""
         if self._api_server and self._api_server.is_running:
             QApplication.clipboard().setText(self._api_server.url)
 
     def _open_dashboard(self) -> None:
+        """Open the live-monitoring HTML dashboard in the default browser."""
         if self._api_server and self._api_server.is_running:
             import webbrowser
             port = self._api_server.port
             webbrowser.open(f"http://localhost:{port}/dashboard")
 
     def _save(self) -> None:
+        """Persist all settings, emit ``autosave_changed``, and show a confirmation dialog."""
         if not self._settings:
             return
         self._settings.set_theme(self.theme_combo.currentText())

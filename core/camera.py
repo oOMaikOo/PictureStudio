@@ -37,21 +37,31 @@ _EXCLUDED_NAME_PATTERNS = ("iphone", "continuity camera", "ipad")
 
 def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     """Return (index, label) pairs for every responsive camera device."""
-    sys_names = _macos_camera_names() if platform.system() == "Darwin" else []
+    # On macOS, system_profiler SPCameraDataType lists cameras in reverse
+    # AVFoundation order: sys_names[0] is the LAST AVFoundation device.
+    # Reversing the list aligns it with OpenCV's index assignment.
+    raw_names = _macos_camera_names() if platform.system() == "Darwin" else []
+    sys_names = list(reversed(raw_names))
+
     found = []
     for i in range(max_index):
         try:
-            name = sys_names[i] if i < len(sys_names) and sys_names[i] else f"Kamera {i}"
+            candidate_name = sys_names[i] if i < len(sys_names) else ""
             # Filter BEFORE opening — opening an excluded device (e.g. iPhone)
             # can block AVFoundation and prevent subsequent cameras from opening.
-            if any(p in name.lower() for p in _EXCLUDED_NAME_PATTERNS):
+            if candidate_name and any(p in candidate_name.lower() for p in _EXCLUDED_NAME_PATTERNS):
                 continue
             cap = cv2.VideoCapture(i, _BACKEND)
-            opened = cap.isOpened()
-            cap.release()
-            if not opened:
+            if not cap.isOpened():
+                cap.release()
                 continue
-            found.append((i, name))
+            # Combine system_profiler name with actual resolution for a clear label.
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+            res = f" ({w}×{h})" if w > 0 and h > 0 else ""
+            label = f"{candidate_name}{res}" if candidate_name else f"Kamera {i}{res}"
+            found.append((i, label))
         except Exception:
             pass
     return found
@@ -73,24 +83,45 @@ def apply_timestamp(frame: np.ndarray) -> np.ndarray:
 
 
 def frame_to_qimage(bgr: np.ndarray) -> QImage:
+    """
+    Convert a BGR numpy frame to a QImage suitable for display in Qt widgets.
+
+    Returns a deep copy so the numpy buffer can be freed without corrupting the QImage.
+    """
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     h, w, ch = rgb.shape
+    # QImage does not own the buffer — .copy() makes it self-contained
     return QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
 
 
 class CameraFrameThread(QThread):
-    """Background thread that continuously reads frames from a camera source."""
+    """
+    Background QThread that continuously reads frames from a camera source and
+    emits them as numpy BGR arrays.
+
+    Signals
+    -------
+    frame_ready(np.ndarray) : Emitted for every successfully captured frame.
+    error(str)              : Emitted on open/read failure; thread then exits.
+    """
 
     frame_ready = Signal(object)   # numpy BGR array
     error = Signal(str)
 
     def __init__(self, source: Union[int, str], fps: float = 15.0, parent=None):
+        """
+        Parameters
+        ----------
+        source : Integer USB device index or RTSP/HTTP URL string.
+        fps    : Target frame rate; the thread sleeps between reads to match it.
+        """
         super().__init__(parent)
         self.source = source
         self._frame_interval = 1.0 / max(fps, 1.0)
         self._running = False
 
     def run(self) -> None:
+        """Main thread loop: open the device, emit frames, then release on exit."""
         self._running = True
         backend = _BACKEND if isinstance(self.source, int) else cv2.CAP_ANY
         cap = cv2.VideoCapture(self.source, backend)
@@ -133,5 +164,6 @@ class CameraFrameThread(QThread):
             cap.release()
 
     def stop(self) -> None:
+        """Request the thread to stop and wait up to 3 seconds for it to finish."""
         self._running = False
         self.wait(3000)

@@ -14,6 +14,8 @@ from utils.config import IMAGE_FORMATS
 
 
 class ThumbnailSignals(QObject):
+    """Carrier object so ``ThumbnailLoader`` (a QRunnable) can emit Qt signals."""
+
     loaded = Signal(str, QPixmap)  # path, pixmap
 
 
@@ -21,6 +23,12 @@ class ThumbnailLoader(QRunnable):
     """Loads one thumbnail in a background thread."""
 
     def __init__(self, image_path: str, size: int = 100):
+        """
+        Parameters
+        ----------
+        image_path : Absolute path to the image file to load.
+        size       : Maximum width (and 3/4 of that as height) for the scaled thumbnail.
+        """
         super().__init__()
         self.image_path = image_path
         self.size = size
@@ -28,6 +36,7 @@ class ThumbnailLoader(QRunnable):
         self.setAutoDelete(True)
 
     def run(self) -> None:
+        """Load, scale, and emit the thumbnail pixmap; silently skip on error."""
         try:
             pix = QPixmap(self.image_path)
             if not pix.isNull():
@@ -49,6 +58,11 @@ class LazyThumbnailList(QListWidget):
     selection_changed = Signal(list)      # list[str] of all selected paths
 
     def __init__(self, thumb_size: int = 100, parent=None):
+        """
+        Parameters
+        ----------
+        thumb_size : Width in pixels for each thumbnail icon; height is 3/4 of this.
+        """
         super().__init__(parent)
         self.thumb_size = thumb_size
         self._pool = QThreadPool.globalInstance()
@@ -66,6 +80,13 @@ class LazyThumbnailList(QListWidget):
     # ------------------------------------------------------------------ public
 
     def add_image(self, image_path: str, label: str = "", label_color: str = "") -> None:
+        """
+        Add *image_path* to the list, loading its thumbnail asynchronously.
+
+        If the path is already present the call is a no-op. The thumbnail is
+        served from the in-memory cache when available, otherwise a
+        ``ThumbnailLoader`` task is submitted to the global thread pool.
+        """
         if image_path in self._items:
             return
         fname = os.path.basename(image_path)
@@ -86,6 +107,7 @@ class LazyThumbnailList(QListWidget):
             self._pool.start(loader)
 
     def update_label(self, image_path: str, label: str, color: str = "") -> None:
+        """Update the displayed label text and foreground colour for *image_path*."""
         item = self._items.get(image_path)
         if item:
             fname = os.path.basename(image_path)
@@ -95,6 +117,12 @@ class LazyThumbnailList(QListWidget):
                 item.setForeground(QColor(color))
 
     def update_flag(self, image_path: str, uncertain: bool) -> None:
+        """
+        Set or clear the QA-uncertain visual indicator for *image_path*.
+
+        When *uncertain* is True the item background turns dark orange and a
+        tooltip is added; clearing restores a transparent background.
+        """
         item = self._items.get(image_path)
         if item:
             if uncertain:
@@ -105,6 +133,7 @@ class LazyThumbnailList(QListWidget):
                 item.setToolTip("")
 
     def remove_image(self, image_path: str) -> None:
+        """Remove the item for *image_path* from the list. No-op if not present."""
         item = self._items.pop(image_path, None)
         if item:
             row = self.row(item)
@@ -112,6 +141,7 @@ class LazyThumbnailList(QListWidget):
                 self.takeItem(row)
 
     def clear_all(self) -> None:
+        """Remove all items and flush the thumbnail cache and pending-load set."""
         self.clear()
         self._items.clear()
         self._cache.clear()
@@ -168,10 +198,12 @@ class LazyThumbnailList(QListWidget):
                 self.insertItem(i, taken)
 
     def get_selected_path(self) -> str:
+        """Return the image path of the currently focused item, or ``""``."""
         item = self.currentItem()
         return item.data(Qt.UserRole) if item else ""
 
     def get_selected_paths(self) -> List[str]:
+        """Return image paths for all highlighted items (multi-select)."""
         return [
             item.data(Qt.UserRole)
             for item in self.selectedItems()
@@ -179,19 +211,23 @@ class LazyThumbnailList(QListWidget):
         ]
 
     def select_path(self, image_path: str) -> None:
+        """Programmatically focus and select the item for *image_path*."""
         item = self._items.get(image_path)
         if item:
             self.setCurrentItem(item)
 
     def get_all_paths(self) -> List[str]:
+        """Return all image paths currently in the list (visible or hidden)."""
         return list(self._items.keys())
 
     def count_visible(self) -> int:
+        """Return the number of items that are not hidden by the current filter."""
         return sum(1 for i in range(self.count()) if not self.item(i).isHidden())
 
     # ------------------------------------------------------------------ slots
 
     def _on_thumbnail_loaded(self, path: str, pix: QPixmap) -> None:
+        """Store the finished pixmap in the cache and apply it to the list item."""
         self._cache[path] = pix
         self._pending.discard(path)
         item = self._items.get(path)
@@ -199,6 +235,7 @@ class LazyThumbnailList(QListWidget):
             item.setIcon(QIcon(pix))
 
     def _on_selection_changed(self) -> None:
+        """Emit ``selection_changed`` and, for single selections, ``image_selected``."""
         paths = self.get_selected_paths()
         self.selection_changed.emit(paths)
         # Single-selection path: load the image in the editor

@@ -15,14 +15,22 @@ from PySide6.QtGui import QColor, QFont
 
 
 class AnalysisThread(QThread):
+    """Background thread that runs ``core.dataset.analyze_dataset`` without blocking the UI."""
+
     finished = Signal(dict)
     error = Signal(str)
 
     def __init__(self, project):
+        """
+        Parameters
+        ----------
+        project : The ``Project`` instance to analyse.
+        """
         super().__init__()
         self.project = project
 
     def run(self):
+        """Execute the dataset analysis and emit ``finished`` or ``error``."""
         try:
             from core.dataset import analyze_dataset
             result = analyze_dataset(self.project)
@@ -32,7 +40,21 @@ class AnalysisThread(QThread):
 
 
 class DataPage(QWidget):
-    """Dataset analysis and export page."""
+    """
+    Dataset management page (stack index 1).
+
+    Provides:
+    - Image loading from a folder or via drag-and-drop.
+    - Camera-capture dialog and video-frame extraction.
+    - Dataset analysis (class counts, missing files, MD5 duplicates, image sizes)
+      run in a background ``AnalysisThread``.
+    - Export to COCO JSON, YOLO TXT, and CSV formats.
+    - File validation and path-relocation helpers.
+
+    Signals
+    -------
+    images_loaded : Emitted with the count of newly added images after any load operation.
+    """
 
     images_loaded = Signal(int)   # emitted after loading; carries count of added images
 
@@ -48,6 +70,7 @@ class DataPage(QWidget):
         self._drop_filter.files_dropped.connect(self._on_files_dropped)
 
     def set_project(self, project) -> None:
+        """Accept a new project and clear the previous analysis results."""
         self.project = project
         self._clear()
 
@@ -176,6 +199,7 @@ class DataPage(QWidget):
         splitter.setSizes([280, 720])
 
     def _clear(self) -> None:
+        """Reset all analysis result tabs to an empty state."""
         self._summary_text.clear()
         self._missing_list.clear()
         self._dup_list.clear()
@@ -233,6 +257,7 @@ class DataPage(QWidget):
             self.images_loaded.emit(added)
 
     def _on_files_dropped(self, paths: list) -> None:
+        """Handle image files dropped onto the widget; add them to the project."""
         if not self._check_project():
             return
         added = 0
@@ -250,6 +275,7 @@ class DataPage(QWidget):
         self.images_loaded.emit(added)
 
     def _load_images(self) -> None:
+        """Open a folder chooser and add all supported image files to the project."""
         if not self._check_project():
             return
         folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
@@ -271,6 +297,7 @@ class DataPage(QWidget):
     # ------------------------------------------------------------------ analysis
 
     def _run_analysis(self) -> None:
+        """Start the background ``AnalysisThread`` and show the progress bar."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -282,6 +309,7 @@ class DataPage(QWidget):
 
     @Slot(dict)
     def _on_analysis_done(self, result: dict) -> None:
+        """Populate all result tabs with the finished analysis data."""
         self.progress.setVisible(False)
         self._analysis = result
 
@@ -339,6 +367,7 @@ class DataPage(QWidget):
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
+        """Show a critical dialog when the analysis thread reports an error."""
         self.progress.setVisible(False)
         QMessageBox.critical(self, "Analysefehler", msg)
 
@@ -384,6 +413,7 @@ class DataPage(QWidget):
             QMessageBox.critical(self, "Exportfehler", str(exc))
 
     def _check_files(self) -> None:
+        """Validate all image file paths and display a summary message box."""
         if not self._check_project():
             return
         result = self.project.validate_image_files()
@@ -400,6 +430,7 @@ class DataPage(QWidget):
         QMessageBox.information(self, "Datei-Prüfung", msg)
 
     def _fix_paths(self) -> None:
+        """Prompt for an old/new path prefix pair and relocate all matching image paths."""
         if not self._check_project():
             return
         from PySide6.QtWidgets import QInputDialog
@@ -413,6 +444,7 @@ class DataPage(QWidget):
         QMessageBox.information(self, "Erledigt", f"{count} Bildpfade aktualisiert.")
 
     def _check_project(self) -> bool:
+        """Return True if a project is loaded; otherwise show a warning and return False."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return False

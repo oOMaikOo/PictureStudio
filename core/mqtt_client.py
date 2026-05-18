@@ -124,9 +124,11 @@ class MQTTAlarmClient:
     # ------------------------------------------------------------------ callbacks
 
     def _on_connect(self, client, userdata, flags, rc) -> None:
+        """Paho callback: set connected flag; store error message on failure (rc != 0)."""
         self._connected = rc == 0
         if rc != 0:
             self._last_error = f"Verbindungsfehler (rc={rc})"
 
     def _on_disconnect(self, client, userdata, rc) -> None:
+        """Paho callback: clear connected flag on any disconnect."""
         self._connected = False

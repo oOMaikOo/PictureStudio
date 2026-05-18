@@ -19,16 +19,25 @@ from PySide6.QtGui import QColor, QFont
 # ── background thread ──────────────────────────────────────────────────────────
 
 class _BatchThread(QThread):
+    """QThread wrapper that runs ``BatchInferenceWorker`` in the background."""
+
     progress = Signal(int, int)     # current, total
     finished = Signal(list)         # list of result dicts
     error    = Signal(str)
 
     def __init__(self, worker, paths: List[str], parent=None):
+        """
+        Parameters
+        ----------
+        worker : ``BatchInferenceWorker`` instance (model + class names already set).
+        paths  : Ordered list of absolute image file paths to process.
+        """
         super().__init__(parent)
         self._worker = worker
         self._paths = paths
 
     def run(self) -> None:
+        """Run the worker and emit ``finished`` with the result list, or ``error``."""
         try:
             results = self._worker.run(self._paths)
             self.finished.emit(results)
@@ -36,13 +45,27 @@ class _BatchThread(QThread):
             self.error.emit(str(exc))
 
     def cancel(self) -> None:
+        """Forward a cancellation request to the underlying worker."""
         self._worker.cancel()
 
 
 # ── page ───────────────────────────────────────────────────────────────────────
 
 class BatchInferencePage(QWidget):
-    """Folder-level batch classification with CSV export."""
+    """
+    Batch inference page (stack index 9).
+
+    Classifies an entire folder of images (or all project images) using a
+    ``BatchInferenceWorker`` running in a background ``_BatchThread``.
+
+    Features:
+    - Load a model from the project's training runs or from an external .pth file.
+    - Folder selection or use of all project images as input.
+    - Confidence threshold and class-label filter applied to the results table.
+    - Red-highlighted rows for predictions below the warning threshold.
+    - Export all results or only low-confidence results as CSV.
+    - Cancel support: forwards cancellation to the worker's cancel flag.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -57,6 +80,7 @@ class BatchInferencePage(QWidget):
     # ------------------------------------------------------------------ project
 
     def set_project(self, project, audit=None) -> None:
+        """Accept the active project and populate the model combo from its training runs."""
         self.project = project
         self._refresh_model_combo()
 
@@ -233,6 +257,7 @@ class BatchInferencePage(QWidget):
     # ------------------------------------------------------------------ model
 
     def _refresh_model_combo(self) -> None:
+        """Populate the model combo with all training-run checkpoints that exist on disk."""
         self._model_combo.clear()
         if not self.project:
             return
@@ -245,6 +270,7 @@ class BatchInferencePage(QWidget):
             self._model_combo.addItem("Kein trainiertes Modell vorhanden")
 
     def _load_selected_model(self) -> None:
+        """Load the model currently selected in the combo box."""
         path = self._model_combo.currentData()
         if not path:
             QMessageBox.warning(self, "Kein Modell", "Bitte Modell aus Liste wählen.")
@@ -252,6 +278,7 @@ class BatchInferencePage(QWidget):
         self._load_model_from_path(path)
 
     def _load_external_model(self) -> None:
+        """Open a file chooser to load a .pth model from outside the project."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Modell laden", "", "PyTorch (*.pth)"
         )
@@ -259,6 +286,10 @@ class BatchInferencePage(QWidget):
             self._load_model_from_path(path)
 
     def _load_model_from_path(self, path: str) -> None:
+        """
+        Load a checkpoint at *path*, update instance attributes, and refresh the
+        class-filter combo. Shows a critical dialog on failure.
+        """
         try:
             from core.inference import Inferencer
             inf = Inferencer()
@@ -282,11 +313,13 @@ class BatchInferencePage(QWidget):
     # ------------------------------------------------------------------ folder
 
     def _choose_folder(self) -> None:
+        """Open a folder chooser and scan it for supported image files."""
         folder = QFileDialog.getExistingDirectory(self, "Ordner wählen")
         if folder:
             self._set_folder(folder)
 
     def _use_project_images(self) -> None:
+        """Use all images from the currently loaded project as the input list."""
         if not self.project or not self.project.images:
             QMessageBox.information(self, "Kein Projekt", "Kein Projekt mit Bildern geladen.")
             return
@@ -295,6 +328,7 @@ class BatchInferencePage(QWidget):
         self._image_count_lbl.setText(f"{len(self._image_paths)} Bilder bereit")
 
     def _set_folder(self, folder: str) -> None:
+        """Scan *folder* for supported image files and store their paths."""
         exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
         paths = [
             os.path.join(folder, f)
@@ -308,6 +342,7 @@ class BatchInferencePage(QWidget):
     # ------------------------------------------------------------------ batch run
 
     def _start_batch(self) -> None:
+        """Validate model and image list, then start the background batch thread."""
         if self._model is None:
             QMessageBox.warning(self, "Kein Modell", "Bitte zuerst ein Modell laden.")
             return
@@ -339,11 +374,13 @@ class BatchInferencePage(QWidget):
 
     @Slot(int, int)
     def _on_progress(self, current: int, total: int) -> None:
+        """Update the progress bar and status label each time an image is processed."""
         self._progress.setValue(current)
         self._status_lbl.setText(f"Verarbeite {current} / {total} Bilder …")
 
     @Slot(list)
     def _on_finished(self, results: List[Dict]) -> None:
+        """Store results, restore buttons, and populate the results table."""
         self._results = results
         self._progress.setVisible(False)
         self._run_btn.setVisible(True)
@@ -352,12 +389,14 @@ class BatchInferencePage(QWidget):
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
+        """Show a critical dialog and restore the UI after a batch error."""
         self._progress.setVisible(False)
         self._run_btn.setVisible(True)
         self._cancel_btn.setVisible(False)
         QMessageBox.critical(self, "Fehler", msg)
 
     def _cancel_batch(self) -> None:
+        """Request cancellation of the running batch and update the status label."""
         if self._thread:
             self._thread.cancel()
             self._status_lbl.setText("Wird abgebrochen …")
@@ -365,6 +404,7 @@ class BatchInferencePage(QWidget):
     # ------------------------------------------------------------------ display
 
     def _show_results(self, results: List[Dict]) -> None:
+        """Populate the results table applying the current confidence/class filters."""
         min_conf = self._min_conf_spin.value()
         warn_thresh = self._warn_thresh_spin.value()
         cls_filter = self._cls_filter_combo.currentText()
@@ -428,6 +468,7 @@ class BatchInferencePage(QWidget):
         self._status_lbl.setText(f"Fertig — {len(results)} Bilder verarbeitet")
 
     def _export_low_confidence(self) -> None:
+        """Export only results below the warning threshold to a CSV file."""
         if not self._results:
             QMessageBox.information(self, "Keine Daten", "Bitte zuerst Batch starten.")
             return
@@ -460,12 +501,14 @@ class BatchInferencePage(QWidget):
             QMessageBox.critical(self, "Exportfehler", str(exc))
 
     def _apply_filter(self) -> None:
+        """Re-apply the current filter to the stored results and refresh the table."""
         if self._results:
             self._show_results(self._results)
 
     # ------------------------------------------------------------------ export
 
     def _export_csv(self) -> None:
+        """Export all batch results (including per-class probabilities) to a CSV file."""
         if not self._results:
             QMessageBox.information(self, "Keine Daten", "Bitte zuerst Batch starten.")
             return

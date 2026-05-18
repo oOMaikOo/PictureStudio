@@ -15,7 +15,13 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
 
 class _AccuracyChart(QWidget):
-    """Simple bar chart showing validation accuracy per training run."""
+    """
+    Simple bar chart showing validation accuracy per training run.
+
+    Each run is one vertical bar (blue for normal, green for the best model).
+    A thin yellow horizontal line at the top of each bar indicates the F1 score.
+    Rendered with QPainter; no external charting library required.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -23,10 +29,12 @@ class _AccuracyChart(QWidget):
         self.setMinimumHeight(160)
 
     def set_data(self, runs: List[dict]) -> None:
+        """Update the chart data and trigger a repaint."""
         self._data = runs
         self.update()
 
     def paintEvent(self, event) -> None:
+        """Draw bars, axis, labels, and the F1 overlay line."""
         if not self._data:
             return
         painter = QPainter(self)
@@ -113,6 +121,23 @@ class _AccuracyChart(QWidget):
 
 
 class ModelsPage(QWidget):
+    """
+    Model library page (stack index 4).
+
+    Two tabs:
+    - Modellbibliothek: table of registered models with detail panel and action
+      buttons (load, ONNX export, TorchScript export, rename, archive, delete,
+      multi-model comparison).
+    - Run-History: chronological table of all training runs plus an
+      ``_AccuracyChart`` bar chart comparing accuracy across runs.
+
+    Signals
+    -------
+    model_loaded : Emitted with the model file path when the user clicks
+                   "In Inferenz laden". Consumed by ``InferencePage`` and the
+                   REST API server in ``MainWindow``.
+    """
+
     model_loaded = Signal(str)   # model_path
 
     def __init__(self, parent=None):
@@ -122,11 +147,13 @@ class ModelsPage(QWidget):
         self._build_ui()
 
     def set_project(self, project) -> None:
+        """Accept a project, initialise the ``ModelManager``, and refresh the view."""
         self.project = project
         self._init_manager()
         self.refresh()
 
     def _init_manager(self) -> None:
+        """Create a ``ModelManager`` pointing at the project's models directory."""
         if self.project:
             from core.model_manager import ModelManager
             self._manager = ModelManager(self.project.get_models_dir())
@@ -274,6 +301,7 @@ class ModelsPage(QWidget):
     # ------------------------------------------------------------------ refresh
 
     def refresh(self) -> None:
+        """Reload the model table and register any new training runs from the project."""
         if not self._manager:
             return
         models = self._manager.get_all(include_archived=False)
@@ -308,6 +336,7 @@ class ModelsPage(QWidget):
         self._refresh_history()
 
     def _refresh_history(self) -> None:
+        """Repopulate the run-history table and update the accuracy bar chart."""
         if not self._manager:
             return
         all_models = self._manager.get_all(include_archived=True)
@@ -347,6 +376,7 @@ class ModelsPage(QWidget):
             self._history_chart.set_data(chart_data)
 
     def _selected_model_id(self) -> Optional[str]:
+        """Return the model ID stored in ``UserRole`` of the currently focused row."""
         row = self.table.currentRow()
         item = self.table.item(row, 0)
         if item:
@@ -354,9 +384,11 @@ class ModelsPage(QWidget):
         return None
 
     def _on_selection_changed(self) -> None:
+        """Slot for ``itemSelectionChanged``; delegates to ``_on_row_selected``."""
         self._on_row_selected(self.table.currentRow())
 
     def _on_row_selected(self, row: int) -> None:
+        """Populate the detail text area with metadata for the model at *row*."""
         if not self._manager:
             return
         item = self.table.item(row, 0)
@@ -391,6 +423,7 @@ class ModelsPage(QWidget):
     # ------------------------------------------------------------------ actions
 
     def _mark_best(self) -> None:
+        """Mark the selected model as the project's best and update its current model path."""
         mid = self._selected_model_id()
         if mid and self._manager:
             self._manager.mark_as_best(mid)
@@ -401,6 +434,7 @@ class ModelsPage(QWidget):
             self.refresh()
 
     def _load_selected(self) -> None:
+        """Emit ``model_loaded`` with the path of the selected model file."""
         mid = self._selected_model_id()
         if not mid or not self._manager:
             return
@@ -472,6 +506,7 @@ class ModelsPage(QWidget):
             self.refresh()
 
     def _compare_models(self) -> None:
+        """Compare all table-selected models side by side in a message dialog."""
         if not self._manager:
             return
         selected = []

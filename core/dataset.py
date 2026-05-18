@@ -34,7 +34,15 @@ log = get_logger()
 
 
 class ImageROIDataset(Dataset if HAS_TORCH else object):
-    """PyTorch Dataset – yields (tensor, class_idx) from images or ROI crops."""
+    """
+    PyTorch Dataset for single-label classification.
+
+    Each sample is a tuple ``(img_path, roi_or_None, class_idx)``.
+    When *roi* is not None the dataset crops the image to that region before
+    applying transforms, enabling region-level classification without
+    pre-cropping files on disk.
+    Used by create_datasets() and TrainingWorker.
+    """
 
     def __init__(
         self,
@@ -43,6 +51,12 @@ class ImageROIDataset(Dataset if HAS_TORCH else object):
         augment: bool = False,
         augmentation_cfg: Dict = None,
     ):
+        """
+        Build the transform pipeline from *augmentation_cfg* and store samples.
+
+        augmentation_cfg keys: flip, rotation, rotation_degrees, brightness,
+        contrast, brightness_strength, blur, blur_radius, scale, scale_min.
+        """
         self.samples = samples
         aug_cfg = augmentation_cfg or {}
         aug_transforms = []
@@ -96,7 +110,14 @@ class ImageROIDataset(Dataset if HAS_TORCH else object):
 
 
 class MultiLabelImageDataset(Dataset if HAS_TORCH else object):
-    """Dataset for multi-label classification — returns (tensor, float_tensor[num_classes])."""
+    """
+    Dataset for multi-label classification.
+
+    Returns ``(image_tensor, label_vector)`` where *label_vector* is a float32
+    tensor of shape ``(num_classes,)`` with 1.0 at each active class index.
+    Identical augmentation pipeline to ImageROIDataset; uses BCEWithLogitsLoss
+    during training.
+    """
 
     def __init__(
         self,
@@ -168,6 +189,13 @@ class MultiLabelImageDataset(Dataset if HAS_TORCH else object):
 
 
 def build_samples(project, use_rois: bool = True) -> Tuple[List[Tuple], List[str]]:
+    """
+    Build a flat list of (img_path, roi_or_None, class_idx) tuples from the project.
+
+    When *use_rois* is True, ROIs with labels take precedence over the image-level
+    label; unlabelled images and images with no matching label are skipped.
+    Returns (samples, class_names) where class_names is sorted alphabetically.
+    """
     label_names = sorted(project.labels.keys())
     label_to_idx = {l: i for i, l in enumerate(label_names)}
     samples = []
@@ -310,7 +338,15 @@ def create_datasets(project, training_config: Dict, use_rois: bool = True):
 
 
 def analyze_dataset(project) -> Dict:
-    """Return a comprehensive analysis of the project dataset."""
+    """
+    Return a comprehensive analysis dict for the project dataset.
+
+    Checks for missing files, duplicate images (MD5 on first 64 kB),
+    corrupt images, class imbalance, and small classes.
+    Keys: total, labeled, unlabeled, formats, sizes, missing_files,
+          corrupt_files, duplicates, label_counts, roi_counts, warnings,
+          size_stats.
+    """
     result = {
         "total": len(project.images),
         "labeled": project.get_labeled_image_count(),

@@ -84,7 +84,24 @@ Erstellt mit Image Labeling Studio – {generated_at}
 
 
 def generate_html_report(run_data: Dict, output_path: str, project_name: str = "") -> str:
-    """Generate and save an HTML training report. Returns the path."""
+    """
+    Generate and save an HTML training report. Returns the path.
+
+    Parameters
+    ----------
+    run_data     : Dict produced by ``TrainingWorker.run()`` containing keys
+                   ``metrics``, ``history``, ``hyperparameters``, ``class_names``,
+                   ``run_id``, ``timestamp``, ``model_type``, ``device``,
+                   ``train_size``, ``test_size``, and ``software_versions``.
+    output_path  : Absolute path where the HTML file will be written.
+                   Parent directory is created automatically.
+    project_name : Human-readable project name shown in the report header.
+
+    Returns
+    -------
+    str
+        The *output_path* that was written.
+    """
     metrics = run_data.get("metrics", {})
     history = run_data.get("history", {})
     hp = run_data.get("hyperparameters", {})

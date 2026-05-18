@@ -10,6 +10,20 @@ def compute_metrics(
     class_names: List[str],
     pred_probs: Optional[List[List[float]]] = None,
 ) -> Dict:
+    """
+    Compute classification metrics from integer class indices.
+
+    Parameters
+    ----------
+    true_labels : Ground-truth class indices (integers, NOT label strings).
+    pred_labels : Predicted class indices.
+    class_names : Ordered list of class names (index → name mapping).
+    pred_probs  : Optional per-sample probability lists; enables ROC/AUC and top-k.
+
+    Returns a dict with keys: accuracy, macro_precision, macro_recall, macro_f1,
+    weighted_f1, per_class, confusion_matrix, class_names, total_samples.
+    Optionally: roc_auc, roc_curve, top3_accuracy.
+    """
     n = len(class_names)
     if not true_labels:
         return {}
@@ -79,7 +93,7 @@ def compute_metrics(
 
 
 def _compute_binary_roc_auc(true_labels: List[int], scores: List[float]) -> float:
-    """Simple trapezoidal AUC for binary classification."""
+    """Simple trapezoidal AUC for binary classification (positive class = 1)."""
     paired = sorted(zip(scores, true_labels), reverse=True)
     pos = sum(true_labels)
     neg = len(true_labels) - pos
@@ -98,6 +112,7 @@ def _compute_binary_roc_auc(true_labels: List[int], scores: List[float]) -> floa
 
 
 def _compute_roc_curve(true_labels: List[int], scores: List[float]) -> Dict:
+    """Return {tpr, fpr, thresholds} lists for a binary ROC curve."""
     paired = sorted(zip(scores, true_labels), reverse=True)
     pos = sum(true_labels)
     neg = len(true_labels) - pos
@@ -117,6 +132,7 @@ def _compute_roc_curve(true_labels: List[int], scores: List[float]) -> Dict:
 
 
 def _top_k_accuracy(true_labels: List[int], probs: List[List[float]], k: int) -> float:
+    """Return the fraction of samples where the true label appears in the top-k predictions."""
     correct = 0
     for true, prob in zip(true_labels, probs):
         top_k = sorted(range(len(prob)), key=lambda i: prob[i], reverse=True)[:k]
@@ -191,6 +207,7 @@ def compute_multilabel_metrics(
 
 
 def format_metrics_text(metrics: Dict) -> str:
+    """Format a metrics dict (as returned by compute_metrics) as a human-readable string."""
     if not metrics:
         return "Keine Metriken verfügbar."
     lines = [

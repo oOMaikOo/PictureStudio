@@ -26,6 +26,7 @@ DEFAULT_COLUMNS = [
 
 
 def _get_cell_value(result: Dict, key: str, model_name: str, ts: str) -> object:
+    """Resolve one column key to a cell value for an inference result row."""
     if key == "filename":
         return result.get("filename", "")
     if key == "path":

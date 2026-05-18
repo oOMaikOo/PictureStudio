@@ -22,7 +22,22 @@ log = get_logger()
 
 
 class MainWindow(QMainWindow):
-    """Top-level window with sidebar navigation."""
+    """
+    Top-level application window.
+
+    Owns a ``Sidebar`` (navigation) and a ``QStackedWidget`` (10 pages).
+    Responsibilities:
+    - Project lifecycle: new / open / save / save-as / backup / crash-recovery.
+    - Page orchestration: distributes the ``Project`` instance to every page
+      after load via ``_load_project()``.
+    - Autosave: configurable interval via ``AppSettings``; triggered by a
+      ``QTimer``.
+    - Menu bar with Datei / Projekt / Ansicht / Audit / Hilfe menus.
+    - REST API server lifecycle (start/stop, project injection).
+    - Global drag-and-drop fallback for images dropped anywhere in the window.
+    - Active-Learning integration: relays ``al_queue_updated`` and
+      ``labels_applied`` signals from ``InferencePage`` to ``LabelingPage``.
+    """
 
     def __init__(self):
         super().__init__()
@@ -57,6 +72,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:
+        """Construct the central widget: sidebar + stacked page area + REST server."""
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -122,6 +138,7 @@ class MainWindow(QMainWindow):
         self.models_page.model_loaded.connect(self._on_model_loaded_api)
         self.settings_page.set_settings(self._settings)
         self.settings_page.set_api_server(self._rest_server)
+        self.camera_page.set_rest_server(self._rest_server)
         self.training_page.set_settings(self._settings)
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)
@@ -139,6 +156,7 @@ class MainWindow(QMainWindow):
         self._global_drop.files_dropped.connect(self._on_global_drop)
 
     def _build_menu(self) -> None:
+        """Create the top-level menu bar with all menus and actions."""
         mb = self.menuBar()
 
         # File
@@ -255,6 +273,7 @@ class MainWindow(QMainWindow):
         f1.activated.connect(lambda: self._show_help())
 
     def _build_statusbar(self) -> None:
+        """Create the status bar with a project-stats label and an autosave indicator."""
         sb = QStatusBar()
         self.setStatusBar(sb)
         from PySide6.QtWidgets import QLabel
@@ -268,6 +287,7 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _switch_page(self, idx: int) -> None:
+        """Show the stacked-widget page at *idx* and sync the sidebar highlight."""
         self.stack.setCurrentIndex(idx)
         self.sidebar.set_page(idx)
 
@@ -323,6 +343,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ project actions
 
     def _new_project(self) -> None:
+        """Show the new-project dialog, ask for a save path, then load the project."""
         if not self._confirm_save():
             return
         from gui.new_project_dialog import NewProjectDialog
@@ -348,6 +369,7 @@ class MainWindow(QMainWindow):
         log.info("Neues Projekt (%s): %s", project_type, path)
 
     def _open_project(self) -> None:
+        """Open a file-chooser dialog to select and load a project JSON file."""
         if not self._confirm_save():
             return
         path, _ = QFileDialog.getOpenFileName(
@@ -363,6 +385,13 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ladefehler", str(exc))
 
     def _load_project(self, project) -> None:
+        """
+        Wire a freshly-loaded (or newly-created) project into the whole UI.
+
+        Creates a new ``AuditTrail``, unlocks the sidebar, propagates the
+        project to every page, updates the REST API, adds the path to recent
+        projects, and navigates to the Dashboard.
+        """
         self.project = project
         from core.audit import AuditTrail
         self.audit = AuditTrail(project.get_project_dir(), project.config.name)
@@ -392,6 +421,11 @@ class MainWindow(QMainWindow):
         self._switch_page(0)  # Go to dashboard
 
     def _open_camera_dialog(self) -> None:
+        """
+        Open the camera-capture dialog, optionally injecting MQTT and REST clients.
+
+        Captured images are added to the project after the dialog closes.
+        """
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -429,11 +463,13 @@ class MainWindow(QMainWindow):
             )
 
     def _save_project(self) -> None:
+        """Save the current project to its existing path."""
         if not self.project:
             return
         self._sync_and_save()
 
     def _save_project_as(self) -> None:
+        """Prompt for a new path, then save a copy of the project there."""
         if not self.project:
             return
         path, _ = QFileDialog.getSaveFileName(
@@ -443,6 +479,10 @@ class MainWindow(QMainWindow):
             self._sync_and_save(path)
 
     def _sync_and_save(self, path: str = None) -> None:
+        """
+        Flush unsaved ROIs from the labeling page, optionally create a backup,
+        then persist the project. Shows a critical dialog on error.
+        """
         self.labeling_page._save_current_rois()
         try:
             if self._settings.get_backup_enabled() and not path:
@@ -460,6 +500,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Speicherfehler", str(exc))
 
     def _create_backup(self) -> None:
+        """Manually trigger a project backup and notify the user of its path."""
         if not self.project:
             return
         backup = self.project.create_backup()
@@ -467,6 +508,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Backup", f"Backup gespeichert:\n{backup}")
 
     def _autosave(self) -> None:
+        """Timer slot: save the project silently if autosave is enabled in settings."""
         if self.project and self._settings.get_autosave_enabled():
             try:
                 self.labeling_page._save_current_rois()
@@ -481,17 +523,24 @@ class MainWindow(QMainWindow):
                 log.warning("Autosave fehlgeschlagen: %s", exc)
 
     def _reset_autosave_timer(self) -> None:
+        """(Re)start the autosave timer using the interval from settings."""
         interval = self._settings.get_autosave_interval() * 1000
         self._autosave_timer.start(interval)
 
     @Slot(int, bool)
     def _on_autosave_changed(self, interval: int, enabled: bool) -> None:
+        """Update the autosave timer when the user changes settings."""
         if enabled:
             self._autosave_timer.start(interval * 1000)
         else:
             self._autosave_timer.stop()
 
     def _confirm_save(self) -> bool:
+        """
+        Ask the user whether to save before performing a destructive action.
+
+        Returns ``True`` to proceed, ``False`` if the user pressed Cancel.
+        """
         if not self.project:
             return True
         reply = QMessageBox.question(
@@ -508,6 +557,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ label management
 
     def _manage_labels(self) -> None:
+        """Open the label-manager dialog; propagate label changes to affected pages."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -521,7 +571,7 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_images_loaded(self, count: int) -> None:
-        """Called after images are loaded via the Daten page."""
+        """Refresh labeling page and dashboard after new images are added via DataPage."""
         if not self.project:
             return
         self.labeling_page.set_project(self.project)
@@ -529,6 +579,7 @@ class MainWindow(QMainWindow):
         self._update_status()
 
     def _on_training_finished(self, result: dict) -> None:
+        """Persist the training result, refresh models/dashboard, and autosave."""
         if not self.project:
             return
         self.project.add_training_run(result)
@@ -540,6 +591,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ file validation
 
     def _validate_files(self) -> None:
+        """Check all project images for missing/unreadable files and report results."""
         if not self.project:
             return
         v = self.project.validate_image_files()
@@ -557,6 +609,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ audit
 
     def _show_audit(self) -> None:
+        """Open a read-only dialog showing the last 200 audit-trail entries."""
         if not self.audit:
             QMessageBox.information(self, "Audit", "Kein Audit-Trail vorhanden.")
             return
@@ -577,6 +630,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ info / about
 
     def _create_report(self) -> None:
+        """Open the report-generation dialog for the current project."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -585,6 +639,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_project_info(self) -> None:
+        """Display a summary dialog with project metadata and latest training metrics."""
         if not self.project:
             QMessageBox.information(self, "Kein Projekt", "Kein Projekt geladen.")
             return
@@ -613,17 +668,20 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Projektinfo", info)
 
     def _show_help(self, page_idx: int = None) -> None:
+        """Open the help dialog on the page matching *page_idx* (defaults to current page)."""
         from gui.help_dialog import HelpDialog
         idx = page_idx if page_idx is not None else self.stack.currentIndex()
         dlg = HelpDialog(page_index=idx, parent=self)
         dlg.exec()
 
     def _start_tour(self) -> None:
+        """Launch the guided tour overlaid on the currently-visible page."""
         idx = self.stack.currentIndex()
         page_widget = self.stack.currentWidget()
         self._tour.start(idx, page_widget)
 
     def resizeEvent(self, event) -> None:
+        """Keep the floating tour overlay positioned correctly on window resize."""
         super().resizeEvent(event)
         if hasattr(self, "_tour") and self._tour.isVisible():
             self._tour._reposition()
@@ -653,6 +711,7 @@ class MainWindow(QMainWindow):
                         pass
 
     def _show_log_viewer(self) -> None:
+        """Open a scrollable dialog showing the current session log file."""
         from utils.logging_utils import get_log_file, get_log_dir
         log_file = get_log_file()
         log_dir = get_log_dir()
@@ -692,6 +751,7 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_about(self) -> None:
+        """Display the About dialog with application version and library versions."""
         from utils.reproducibility import get_software_versions
         vers = get_software_versions()
         text = f"{APP_NAME} v{APP_VERSION}\n\nBibliotheken:\n"
@@ -702,6 +762,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ theming
 
     def _apply_theme(self, theme: str) -> None:
+        """Switch the application palette between dark and the system default."""
         app = QApplication.instance()
         if theme == "dark":
             from gui.theme import apply_dark_theme
@@ -717,6 +778,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ recent projects
 
     def _refresh_recent_menu(self) -> None:
+        """Rebuild the 'Zuletzt geöffnet' submenu from the recent-projects list."""
         self._recent_menu.clear()
         for path in self._settings.get_recent_projects():
             a = QAction(os.path.basename(path) or path, self)
@@ -725,6 +787,7 @@ class MainWindow(QMainWindow):
             self._recent_menu.addAction(a)
 
     def _open_recent(self, path: str) -> None:
+        """Load a project from the recent-projects list; warn if the file is missing."""
         if not os.path.exists(path):
             QMessageBox.warning(self, "Nicht gefunden", f"Datei nicht gefunden:\n{path}")
             return
@@ -739,6 +802,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ status
 
     def _update_status(self) -> None:
+        """Refresh the status-bar label with current project statistics."""
         if not self.project:
             self._status_label.setText("Bereit – kein Projekt geladen")
             return
@@ -753,6 +817,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ close
 
     def closeEvent(self, event) -> None:
+        """Save window geometry, stop the REST server, and optionally save the project."""
         self._settings.save_window_geometry(self.saveGeometry())
         if self._rest_server.is_running:
             self._rest_server.stop()

@@ -12,9 +12,22 @@ from PySide6.QtGui import QUndoCommand
 # ---------------------------------------------------------------------------
 
 class BulkSetImageLabelCommand(QUndoCommand):
-    """Assign one label to N images in a single undoable step."""
+    """
+    Assign one label to N images in a single undoable step.
+
+    Used by the bulk-labeling panel and the right-click context menu
+    when multiple thumbnails are selected.
+    """
 
     def __init__(self, page, image_paths: list, new_label: str, old_labels: dict):
+        """
+        Parameters
+        ----------
+        page        : LabelingPage instance (provides _do_set_image_label).
+        image_paths : Paths to be labelled.
+        new_label   : Label to assign (empty string = remove label).
+        old_labels  : {path: previous_label} snapshot for undo.
+        """
         n = len(image_paths)
         super().__init__(f"Massen-Label ({n} Bilder → {new_label or '(kein)'})")
         self._page       = page
@@ -32,7 +45,7 @@ class BulkSetImageLabelCommand(QUndoCommand):
 
 
 class SetLabelFlagCommand(QUndoCommand):
-    """Toggle the QA uncertain flag on a single image."""
+    """Toggle the QA 'uncertain' flag and optional comment on a single image."""
 
     def __init__(self, page, image_path: str,
                  new_uncertain: bool, new_comment: str,
@@ -54,7 +67,7 @@ class SetLabelFlagCommand(QUndoCommand):
 
 
 class SetMultiLabelsCommand(QUndoCommand):
-    """Assign a set of labels to one image in multi-label mode."""
+    """Replace the full multi-label set for one image in a single undoable step."""
 
     def __init__(self, page, image_path: str, new_labels: list, old_labels: list):
         new_str = ", ".join(new_labels) if new_labels else "(kein)"
@@ -72,6 +85,8 @@ class SetMultiLabelsCommand(QUndoCommand):
 
 
 class SetImageLabelCommand(QUndoCommand):
+    """Assign a single label to one image; undoable."""
+
     def __init__(self, page, image_path: str, new_label: str, old_label: str):
         lbl_from = old_label or "(kein)"
         lbl_to   = new_label or "(kein)"
@@ -93,6 +108,8 @@ class SetImageLabelCommand(QUndoCommand):
 # ---------------------------------------------------------------------------
 
 class AddROICommand(QUndoCommand):
+    """Add one ROI to an image; undo removes it again."""
+
     def __init__(self, page, image_path: str, roi_data: dict):
         super().__init__(f"ROI hinzufügen ({roi_data.get('type','rect')})")
         self._page       = page
@@ -107,6 +124,8 @@ class AddROICommand(QUndoCommand):
 
 
 class DeleteROICommand(QUndoCommand):
+    """Delete one ROI from an image; undo re-adds it."""
+
     def __init__(self, page, image_path: str, roi_data: dict):
         super().__init__(f"ROI löschen ({roi_data.get('type','rect')})")
         self._page       = page
@@ -125,6 +144,8 @@ class DeleteROICommand(QUndoCommand):
 # ---------------------------------------------------------------------------
 
 class AssignROILabelCommand(QUndoCommand):
+    """Change the label (and colour) of an existing ROI; fully undoable."""
+
     def __init__(self, page, image_path: str, roi_id: str,
                  new_label: str, new_color: str,
                  old_label: str, old_color: str):
@@ -151,6 +172,13 @@ class AssignROILabelCommand(QUndoCommand):
 # ---------------------------------------------------------------------------
 
 class MoveROICommand(QUndoCommand):
+    """
+    Record a ROI move or resize; consecutive moves on the same ROI are merged.
+
+    Uses QUndoCommand.mergeWith() so that dragging a ROI produces a single
+    undo step rather than one per mouse event.
+    """
+
     def __init__(self, page, image_path: str, new_data: dict, old_data: dict):
         super().__init__("ROI verschieben")
         self._page       = page
@@ -163,14 +191,17 @@ class MoveROICommand(QUndoCommand):
         return 1001
 
     def mergeWith(self, other) -> bool:
+        """Merge *other* into this command when both move the same ROI."""
         if not isinstance(other, MoveROICommand):
             return False
         if other._roi_id() != self._roi_id():
             return False
-        self._new = other._new   # keep latest destination, original start stays
+        # Keep the latest position but retain the original starting position for undo
+        self._new = other._new
         return True
 
     def _roi_id(self):
+        """Return the ID of the ROI being moved."""
         return self._new.get("id", "")
 
     def redo(self):

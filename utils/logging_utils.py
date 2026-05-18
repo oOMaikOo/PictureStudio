@@ -1,11 +1,24 @@
+"""
+Logging utilities: configure the application-wide logger and expose helpers
+to retrieve the current log file path for the log viewer dialog.
+"""
 import logging
 import os
 from datetime import datetime
 
+# Module-level reference so get_log_file() can return it without re-querying
 _current_log_file: str = ""
 
 
 def setup_logging(log_dir: str = None, level: int = logging.INFO) -> logging.Logger:
+    """
+    Configure the root application logger.
+
+    Attaches a console handler and, when *log_dir* is given, a rotating file
+    handler writing to a timestamped file inside that directory.
+    Returns the configured Logger instance.
+    Idempotent — calling it a second time returns the already-configured logger.
+    """
     global _current_log_file
     logger = logging.getLogger("ImageLabelingStudio")
     logger.setLevel(level)
@@ -45,4 +58,5 @@ def get_log_dir() -> str:
 
 
 def get_logger(name: str = "ImageLabelingStudio") -> logging.Logger:
+    """Return the named logger (default: the application-wide logger)."""
     return logging.getLogger(name)

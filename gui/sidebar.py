@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont
 
 
 def _ui_font(size: int = 11) -> QFont:
+    """Return a QFont using the platform system UI font at *size* points."""
     f = QFont()
     if platform.system() == "Darwin":
         f.setFamily(".AppleSystemUIFont")
@@ -67,11 +68,18 @@ _BTN_STYLE = """
 
 
 class Sidebar(QWidget):
-    """Vertical navigation sidebar."""
+    """
+    Vertical navigation sidebar with icon+text buttons, a Help button, and
+    a Tour button.
 
-    page_requested = Signal(int)   # emits stack_idx
-    help_requested = Signal()
-    tour_requested = Signal()
+    Emits page_requested(stack_idx) when a navigation button is clicked.
+    The button list is rebuilt when set_project_type() switches between
+    image-project and video-project page configurations.
+    """
+
+    page_requested = Signal(int)   # emits stack_idx of the requested page
+    help_requested = Signal()      # emitted when the Help button is clicked
+    tour_requested = Signal()      # emitted when the Tour button is clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)

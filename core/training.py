@@ -24,6 +24,12 @@ log = get_logger()
 # ------------------------------------------------------------------ epoch helpers
 
 def train_one_epoch(model, loader, criterion, optimizer, device, scaler=None):
+    """
+    Run one training epoch for single-label classification.
+
+    Supports optional GradScaler for mixed-precision (CUDA AMP).
+    Returns (avg_loss, accuracy) as floats.
+    """
     model.train()
     total_loss = correct = total = 0
     for images, labels in loader:
@@ -51,6 +57,11 @@ def train_one_epoch(model, loader, criterion, optimizer, device, scaler=None):
 
 
 def evaluate(model, loader, criterion, device):
+    """
+    Evaluate a single-label classifier on *loader* without updating weights.
+
+    Returns (avg_loss, accuracy, all_predictions, all_true_labels).
+    """
     model.eval()
     total_loss = correct = total = 0
     all_preds, all_labels = [], []
@@ -126,6 +137,14 @@ def evaluate_multilabel(model, loader, criterion, device, threshold: float = 0.5
 # ------------------------------------------------------------------ EarlyStopping
 
 class EarlyStopping:
+    """
+    Monitors a validation metric and signals when training should stop.
+
+    Stops when the metric has not improved by more than *min_delta* for
+    *patience* consecutive epochs. Designed to track validation accuracy
+    (higher is better).
+    """
+
     def __init__(self, patience: int = 5, min_delta: float = 1e-4):
         self.patience = patience
         self.min_delta = min_delta
@@ -149,8 +168,12 @@ class EarlyStopping:
 
 class TrainingWorker:
     """
-    Thread-safe training worker. Designed to run inside a QThread.
-    All Qt imports remain in the GUI layer; this class is Qt-free.
+    Qt-free training worker: builds datasets, runs the training loop, and
+    returns a result dict compatible with TrainingThread.finished.
+
+    Designed to be instantiated inside TrainingThread.run() so that all
+    blocking operations happen off the GUI thread.  Callbacks are used instead
+    of Qt signals to keep this class dependency-free.
     """
 
     def __init__(
@@ -162,6 +185,16 @@ class TrainingWorker:
         log_callback: Callable = None,
         stop_flag: Callable = None,
     ):
+        """
+        Parameters
+        ----------
+        project           : Current Project instance (read-only during training).
+        training_config   : Dict of hyperparameters (matches DEFAULT_TRAIN_CONFIG structure).
+        save_dir          : Directory where checkpoints are saved.
+        progress_callback : Called with (epoch, total, tl, vl, ta, va) each epoch.
+        log_callback      : Called with a log message string each step.
+        stop_flag         : Zero-argument callable; returning True aborts training.
+        """
         self.project = project
         self.cfg = training_config
         self.save_dir = save_dir
@@ -170,15 +203,24 @@ class TrainingWorker:
         self._stop = stop_flag
 
     def _emit_log(self, msg: str) -> None:
+        """Forward a log message to the Python logger and the GUI callback."""
         log.info(msg)
         if self._log:
             self._log(msg)
 
     def _emit_progress(self, *args) -> None:
+        """Forward a progress update to the GUI callback if set."""
         if self._progress:
             self._progress(*args)
 
     def run(self) -> Dict:
+        """
+        Execute the full training pipeline and return the result dict.
+
+        Steps: device selection, dataset creation, model + optimiser + scheduler
+        setup, epoch loop (with optional AMP, early stopping, and checkpoint
+        saving), final test-set evaluation, and dataset snapshot.
+        """
         if not HAS_TORCH:
             raise RuntimeError("PyTorch ist nicht installiert.")
 

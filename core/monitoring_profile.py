@@ -13,6 +13,7 @@ PROFILE_VERSION = 1
 
 
 def default_profile() -> dict:
+    """Return a monitoring profile with safe defaults for all fields."""
     return {
         "version": PROFILE_VERSION,
         "model_path": "",

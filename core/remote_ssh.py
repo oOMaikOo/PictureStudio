@@ -14,7 +14,13 @@ log = get_logger()
 
 
 class SSHManager:
-    """Thin wrapper around paramiko for SSH + SFTP operations."""
+    """
+    Thin wrapper around paramiko providing SSH command execution and SFTP transfers.
+
+    Used by RemoteTrainingThread to connect, upload training bundles, execute
+    remote_train.py, and download the resulting model checkpoint.
+    Authentication supports SSH key files or password; key takes precedence.
+    """
 
     def __init__(self):
         self._client = None
@@ -23,6 +29,12 @@ class SSHManager:
     # ---------------------------------------------------------------- connect
 
     def connect(self, cfg: Dict) -> None:
+        """
+        Open an SSH/SFTP connection using *cfg*.
+
+        Expected keys: host, port (default 22), username, key_path or password.
+        Raises RuntimeError if paramiko is not installed.
+        """
         try:
             import paramiko
         except ImportError:
@@ -49,6 +61,7 @@ class SSHManager:
         log.info("SSH connected: %s@%s:%s", cfg["username"], cfg["host"], kw["port"])
 
     def disconnect(self) -> None:
+        """Close the SFTP channel and SSH connection, suppressing any errors."""
         if self._sftp:
             try:
                 self._sftp.close()
@@ -63,6 +76,11 @@ class SSHManager:
             self._client = None
 
     def test_connection(self, cfg: Dict) -> Tuple[bool, str]:
+        """
+        Attempt a connection, run 'echo OK', disconnect, and return (success, message).
+
+        Used by the SSH settings panel to validate credentials without starting a run.
+        """
         try:
             self.connect(cfg)
             _, stdout, _ = self._client.exec_command("echo OK", timeout=10)
@@ -94,6 +112,7 @@ class SSHManager:
     # ---------------------------------------------------------------- file ops
 
     def mkdir_p(self, remote_dir: str) -> None:
+        """Create *remote_dir* and all parents on the remote host."""
         self.exec_check(f"mkdir -p '{remote_dir}'")
 
     def upload_file(
@@ -102,6 +121,7 @@ class SSHManager:
         remote_path: str,
         progress_cb: Callable[[int, int], None] = None,
     ) -> None:
+        """Upload *local_path* to *remote_path* via SFTP; *progress_cb(sent, total)* is optional."""
         self._sftp.put(local_path, remote_path, callback=progress_cb)
 
     def download_file(
@@ -110,9 +130,11 @@ class SSHManager:
         local_path: str,
         progress_cb: Callable[[int, int], None] = None,
     ) -> None:
+        """Download *remote_path* from the server to *local_path*; *progress_cb* is optional."""
         self._sftp.get(remote_path, local_path, callback=progress_cb)
 
     def file_exists(self, remote_path: str) -> bool:
+        """Return True when *remote_path* exists on the server (uses SFTP stat)."""
         try:
             self._sftp.stat(remote_path)
             return True

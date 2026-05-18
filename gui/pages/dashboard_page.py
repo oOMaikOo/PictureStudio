@@ -13,7 +13,13 @@ from PySide6.QtGui import QFont, QColor
 
 
 class StatCard(QFrame):
-    """Single statistics card widget."""
+    """
+    A compact statistics card with a large coloured value label and a smaller title.
+
+    Used inside ``DashboardPage`` to display counts such as total images,
+    labeled images, ROIs, etc.  The accent colour is applied both to the
+    value text and to the top border of the card frame.
+    """
 
     def __init__(self, title: str, value: str = "–", color: str = "#388BFD", parent=None):
         super().__init__(parent)
@@ -41,11 +47,28 @@ class StatCard(QFrame):
         layout.addWidget(title_label)
 
     def set_value(self, value: str) -> None:
+        """Update the large value text displayed on the card."""
         self._value_label.setText(str(value))
 
 
 class DashboardPage(QWidget):
-    """Project overview page."""
+    """
+    First page shown after application start and after a project is loaded.
+
+    Displays:
+    - Action buttons (new / open project) and a recent-projects list when no
+      project is active.
+    - Six ``StatCard`` widgets showing dataset statistics once a project is loaded.
+    - Last-training metrics (timestamp, accuracy, F1, model name).
+    - A per-class distribution bar chart.
+    - Contextual warnings (unlabeled images, class imbalance, low sample counts).
+
+    Signals
+    -------
+    open_project_requested : Emitted when the user clicks "Projekt öffnen".
+    new_project_requested  : Emitted when the user clicks "+ Neues Projekt".
+    open_recent_requested  : Emitted with the file path when a recent entry is clicked.
+    """
 
     open_project_requested = Signal()
     new_project_requested = Signal()
@@ -157,14 +180,17 @@ class DashboardPage(QWidget):
         layout.addStretch()
 
     def set_project(self, project) -> None:
+        """Accept a new (or newly-loaded) project and refresh the display."""
         self.project = project
         self.refresh()
 
     def set_recent_projects(self, paths: List[str]) -> None:
+        """Update the recent-projects list, filtering out paths that no longer exist."""
         self._recent_projects = [p for p in paths if os.path.exists(p)]
         self._refresh_recent_section()
 
     def _refresh_recent_section(self) -> None:
+        """Rebuild the recent-project button list inside the 'Zuletzt geöffnet' group."""
         # Clear existing buttons
         for i in reversed(range(self._recent_layout.count())):
             w = self._recent_layout.itemAt(i).widget()
@@ -188,6 +214,7 @@ class DashboardPage(QWidget):
             self._recent_layout.addWidget(btn)
 
     def refresh(self) -> None:
+        """Re-read all statistics from the project and repopulate every UI section."""
         if not self.project:
             self._no_project_widget.setVisible(True)
             self._refresh_recent_section()

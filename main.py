@@ -1,5 +1,9 @@
 """
-Image Labeling Studio – Entry point.
+Image Labeling Studio – application entry point.
+
+Configures logging, installs a global exception hook for user-friendly
+crash dialogs, sets the Qt dark theme and system font, then shows the
+main window.
 """
 import sys
 import os
@@ -46,6 +50,12 @@ def _install_exception_hook(log_dir: str) -> None:
 
 
 def main() -> None:
+    """
+    Configure the application and open the main window.
+
+    Initialises logging, sets up the Fusion dark palette, selects the
+    platform-appropriate system font, and starts the Qt event loop.
+    """
     log_dir = _LOG_DIR
     setup_logging(log_dir=log_dir)
     _install_exception_hook(log_dir)

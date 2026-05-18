@@ -25,11 +25,25 @@ class ScoreChart(QWidget):
         self.setMaximumHeight(90)
 
     def update_data(self, scores: List[float], threshold: float) -> None:
+        """
+        Replace the displayed score history and redraw.
+
+        Only the last ``_WINDOW`` scores are kept so the chart never grows
+        unbounded. A ``self.update()`` call queues a repaint.
+        """
         self._scores = scores[-_WINDOW:]
         self._threshold = threshold
         self.update()
 
     def paintEvent(self, _) -> None:
+        """
+        Draw the score chart using QPainter.
+
+        Renders a background fill, a dashed threshold line, and coloured line
+        segments connecting consecutive score samples (green below threshold,
+        red above). The y-axis is scaled to fit both the data range and the
+        threshold with a small margin.
+        """
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
 

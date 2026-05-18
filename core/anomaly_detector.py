@@ -18,6 +18,7 @@ _IMG = 128  # all frames resized to _IMG × _IMG before encode/decode
 
 
 def _best_device() -> torch.device:
+    """Return the fastest available device: MPS (Apple Silicon) > CUDA > CPU."""
     if torch.backends.mps.is_available():
         return torch.device("mps")
     if torch.cuda.is_available():
@@ -26,7 +27,13 @@ def _best_device() -> torch.device:
 
 
 class _ConvAutoencoder(nn.Module):
-    """Small encoder-decoder: 3×128×128 → bottleneck → 3×128×128."""
+    """
+    Small convolutional autoencoder: 3×128×128 → latent bottleneck → 3×128×128.
+
+    The architecture uses three stride-2 Conv2d layers to compress the input
+    and three ConvTranspose2d layers to reconstruct it. A sigmoid output
+    constrains pixel values to [0, 1] for MSE loss computation.
+    """
 
     def __init__(self):
         super().__init__()
@@ -48,6 +55,7 @@ class _ConvAutoencoder(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Encode then decode the input tensor."""
         return self.decoder(self.encoder(x))
 
 
@@ -91,14 +99,17 @@ class AnomalyDetector:
         self._train_frames.append(self._preprocess(frame).numpy())
 
     def clear_frames(self) -> None:
+        """Discard all buffered normal frames (e.g. to start a new collection)."""
         self._train_frames.clear()
 
     def n_collected(self) -> int:
+        """Return the number of frames currently in the training buffer."""
         return len(self._train_frames)
 
     # ------------------------------------------------------------------ preprocessing
 
     def _preprocess(self, frame: np.ndarray) -> torch.Tensor:
+        """Convert BGR frame → normalised float32 tensor of shape (3, _IMG, _IMG)."""
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb = cv2.resize(rgb, (_IMG, _IMG), interpolation=cv2.INTER_AREA)
         return torch.from_numpy(rgb).permute(2, 0, 1).float().div(255.0)
@@ -256,14 +267,17 @@ class AnomalyDetector:
 
     @property
     def threshold(self) -> float:
+        """MSE value above which a frame is classified as an anomaly."""
         return self._threshold
 
     @threshold.setter
     def threshold(self, value: float) -> None:
+        """Set a custom threshold; clipped to a minimum of 1e-6 to avoid division by zero."""
         self._threshold = max(1e-6, float(value))
 
     @property
     def trained(self) -> bool:
+        """True after at least one successful call to train()."""
         return self._trained
 
     # ------------------------------------------------------------------ persistence
@@ -296,6 +310,7 @@ class AnomalyDetector:
         self._model.to(self._device)
 
     def save(self, path: str) -> None:
+        """Persist model weights, threshold, and metadata; also writes a .sha256 sidecar."""
         import hashlib, json as _json
         torch.save({
             "model":     self._model.state_dict(),
@@ -324,6 +339,12 @@ class AnomalyDetector:
             return False, f"Prüfsummen-Fehler: {e}"
 
     def load(self, path: str) -> None:
+        """
+        Load a saved autoencoder checkpoint from *path*.
+
+        Verifies the SHA256 checksum (if present) before loading.
+        Raises RuntimeError when the checksum does not match.
+        """
         # Verify checksum before loading
         ok, msg = self.verify_checksum(path)
         if not ok:

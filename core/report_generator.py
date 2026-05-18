@@ -9,6 +9,7 @@ from typing import Optional
 
 
 def _bar(pct: float, color: str = "#1F6FEB", height: int = 8) -> str:
+    """Return an inline-HTML progress bar div filled to *pct* percent."""
     w = max(0.0, min(100.0, pct))
     return (
         f'<div style="background:#373E47;border-radius:4px;height:{height}px;width:100%;">'

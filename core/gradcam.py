@@ -30,7 +30,14 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def get_target_layer(model, model_type: str):
-    """Return the last convolutional layer suited for Grad-CAM."""
+    """
+    Return the last convolutional layer suited for Grad-CAM.
+
+    Selects a model-type-specific layer by name for known architectures
+    (ResNet-18/50, MobileNetV2, EfficientNet-B0, SimpleCNN). Falls back
+    to scanning all modules for the last ``nn.Conv2d`` when the
+    architecture is not recognised.
+    """
     mt = (model_type or "").lower()
     try:
         if mt in ("resnet18", "resnet50"):
@@ -71,6 +78,7 @@ class GradCAM:
     """
 
     def __init__(self, model, target_layer):
+        """Register forward and backward hooks on *target_layer*."""
         self._model  = model
         self._feats  = None
         self._grads  = None
@@ -78,9 +86,11 @@ class GradCAM:
         self._bwd    = target_layer.register_full_backward_hook(self._hook_bwd)
 
     def _hook_fwd(self, module, inp, out):
+        """Store the forward feature maps produced by the target layer."""
         self._feats = out.detach()
 
     def _hook_bwd(self, module, grad_in, grad_out):
+        """Store the gradients flowing back through the target layer."""
         self._grads = grad_out[0].detach()
 
     def compute(self, input_tensor, class_idx: Optional[int] = None):
@@ -115,6 +125,7 @@ class GradCAM:
         return cam
 
     def remove(self):
+        """Deregister both hooks. Always call this after ``compute()``."""
         self._fwd.remove()
         self._bwd.remove()
 
@@ -140,7 +151,12 @@ def _jet_colormap(value: float) -> Tuple[int, int, int]:
 
 
 def cam_to_heatmap_pil(cam_array) -> "PILImage.Image":
-    """Convert a 2-D [0,1] CAM array to a jet-coloured PIL RGBA image."""
+    """
+    Convert a 2-D [0,1] CAM array to a jet-coloured PIL RGBA image.
+
+    The alpha channel is proportional to activation strength so that
+    low-activation regions remain nearly transparent when composited.
+    """
     h, w = cam_array.shape
     rgba = []
     for row in range(h):
@@ -161,6 +177,7 @@ _TRANSFORM = None
 
 
 def _get_transform(image_size: int):
+    """Return (and cache) the inference pre-processing transform for *image_size*."""
     global _TRANSFORM
     if _TRANSFORM is None or _TRANSFORM.__image_size != image_size:
         _TRANSFORM = transforms.Compose([
@@ -179,16 +196,31 @@ def compute_gradcam_overlay(
     class_idx: Optional[int],
     image_size: int = 224,
     alpha: float = 0.5,
+    roi: Optional[dict] = None,
 ) -> Tuple["PILImage.Image", "PILImage.Image"]:
     """
     Compute Grad-CAM for image_path and return:
         (original_pil, overlay_pil)
-    Both are RGB PIL images at original image resolution.
+    Both are RGB PIL images at the analysis region's resolution.
+
+    If *roi* is provided (dict with x, y, w, h keys in pixel coords) the image
+    is cropped to that region before the CAM is computed.  The model was trained
+    on ROI crops, so passing the matching ROI here ensures the activation map is
+    meaningful.
     """
     if not HAS_TORCH or not HAS_PIL:
         raise RuntimeError("PyTorch und Pillow sind erforderlich.")
 
     original = PILImage.open(image_path).convert("RGB")
+
+    # Crop to the labeling ROI so the model sees the same input it was trained on
+    if roi is not None:
+        x = int(roi.get("x", 0)); y = int(roi.get("y", 0))
+        w = int(roi.get("w", original.width)); h = int(roi.get("h", original.height))
+        x2 = min(original.width, x + w); y2 = min(original.height, y + h)
+        if x2 > x and y2 > y:
+            original = original.crop((x, y, x2, y2))
+
     orig_w, orig_h = original.size
 
     transform = _get_transform(image_size)

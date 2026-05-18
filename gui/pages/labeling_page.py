@@ -21,7 +21,24 @@ from utils.config import DEFAULT_COLORS
 
 
 class LabelingPage(QWidget):
-    """Main labeling workspace."""
+    """Main labeling workspace for the Picture Studio application (stack index 2).
+
+    Presents a three-panel layout (thumbnail list / ROI editor / controls) and
+    wires together all labeling interactions:
+
+    - Lazy thumbnail list with multi-select, search, sort and chip filters.
+    - ROI editor (rect / ellipse / polygon) backed by an undo/redo stack.
+    - Single-label combo and multi-label checkbox mode (switchable at runtime).
+    - Uncertain-flag (QA) toggle with optional free-text comment.
+    - Bulk-label assignment for multiple selected images.
+    - Active Learning (AL) queue panel for reviewing model predictions.
+    - Per-class progress bars and keyboard-shortcut reference.
+
+    Signals:
+        project_changed: Emitted after label changes are saved to the project.
+        al_retrain_requested: Emitted when the user completes the AL queue and
+            requests an immediate retraining run.
+    """
 
     project_changed    = Signal()   # emitted after saving changes
     al_retrain_requested = Signal() # user finished AL queue and wants to retrain
@@ -39,6 +56,7 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:
+        """Create the three-column horizontal splitter and populate each panel."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         splitter = QSplitter(Qt.Horizontal)
@@ -52,6 +70,7 @@ class LabelingPage(QWidget):
     # ---- Left: image list ----
 
     def _build_left_panel(self) -> QGroupBox:
+        """Build the left column: image list, filters, progress bar and AL/bulk panels."""
         box = QGroupBox("Bilder")
         v = QVBoxLayout(box)
 
@@ -281,6 +300,7 @@ class LabelingPage(QWidget):
     # ---- Center: ROI editor + toolbar ----
 
     def _build_center_panel(self) -> QGroupBox:
+        """Build the center column: draw-mode toolbar, ROI editor and mask editor tabs."""
         box = QGroupBox("Bildansicht & ROI-Editor")
         v = QVBoxLayout(box)
 
@@ -373,6 +393,7 @@ class LabelingPage(QWidget):
     # ---- Right: controls ----
 
     def _build_right_panel(self) -> QScrollArea:
+        """Build the right column: label controls, ROI list, navigation and statistics."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -639,6 +660,7 @@ class LabelingPage(QWidget):
         return scroll
 
     def _setup_shortcuts(self) -> None:
+        """Register all page-level keyboard shortcuts (navigation, undo/redo, flag)."""
         # Navigation
         QShortcut(QKeySequence("N"),          self, self._next_image)
         QShortcut(QKeySequence("P"),          self, self._prev_image)
@@ -678,6 +700,12 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ project
 
     def set_project(self, project, audit=None) -> None:
+        """Bind a new project and refresh all UI state.
+
+        Parameters:
+            project: The active ``Project`` instance.
+            audit: Optional ``AuditLog`` used to record label changes.
+        """
         self.project = project
         self._audit = audit
         self._current_image = ""
@@ -696,6 +724,7 @@ class LabelingPage(QWidget):
         self._label_stack.setCurrentIndex(1 if is_ml else 0)
 
     def _refresh_label_combos(self) -> None:
+        """Repopulate the label combo, ROI combo, bulk combo, chips and multi-label checkboxes."""
         labels = list(self.project.labels.keys()) if self.project else []
 
         # img_label_combo: add key hints for 1-9
@@ -722,6 +751,7 @@ class LabelingPage(QWidget):
         self._rebuild_multi_label_cbs(labels)
 
     def _refresh_thumb_list(self) -> None:
+        """Rebuild the thumbnail list from the project's image list, syncing labels and flags."""
         self.thumb_list.clear_all()
         if not self.project:
             return
@@ -739,6 +769,7 @@ class LabelingPage(QWidget):
         self._update_stats()
 
     def on_labels_changed(self) -> None:
+        """Called by MainWindow when the project's label set changes; refreshes all label UI."""
         self._refresh_label_combos()
         self._refresh_thumb_list()
         if self._current_image:
@@ -764,6 +795,7 @@ class LabelingPage(QWidget):
             self._update_stats()
 
     def _load_folder(self) -> None:
+        """Open a folder chooser, scan for images and add new ones to the project."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -788,6 +820,7 @@ class LabelingPage(QWidget):
     from PySide6.QtWidgets import QFileDialog  # needed for _load_folder
 
     def _filter_list(self) -> None:
+        """Re-apply all active filters (search text, label chips, checkboxes, sort order)."""
         if not self.project:
             return
         search = self.search_edit.text()
@@ -850,6 +883,7 @@ class LabelingPage(QWidget):
             self._visible_count_label.hide()
 
     def _rebuild_label_chips(self, labels: List[str]) -> None:
+        """Recreate the horizontal row of toggle-button filter chips above the thumbnail list."""
         while self._chip_hbox.count() > 0:
             item = self._chip_hbox.takeAt(0)
             w = item.widget()
@@ -887,17 +921,20 @@ class LabelingPage(QWidget):
         self._chip_hbox.addStretch()
 
     def _on_all_chip_clicked(self) -> None:
+        """Deselect all individual label chips and show all images."""
         for chip in self._label_chip_btns.values():
             chip.setChecked(False)
         self._all_chip.setChecked(True)
         self._filter_list()
 
     def _on_label_chip_clicked(self) -> None:
+        """Keep the 'Alle' chip state consistent when individual label chips change."""
         any_checked = any(c.isChecked() for c in self._label_chip_btns.values())
         self._all_chip.setChecked(not any_checked)
         self._filter_list()
 
     def _reset_filters(self) -> None:
+        """Clear all filter controls and show the full image list."""
         self.search_edit.blockSignals(True)
         self.search_edit.clear()
         self.search_edit.blockSignals(False)
@@ -929,14 +966,17 @@ class LabelingPage(QWidget):
 
     @Slot(str)
     def _on_image_selected(self, image_path: str) -> None:
+        """Flush ROIs of the previous image then load the newly selected one."""
         self._save_current_rois()
         self._load_image(image_path)
 
     def _on_center_tab_changed(self, idx: int) -> None:
+        """Lazily load the mask editor when the user switches to the segmentation tab."""
         if idx == 1 and self._current_image:
             self.mask_editor.load_image(self._current_image)
 
     def _load_image(self, image_path: str) -> None:
+        """Display an image in the ROI editor, restore its ROIs and sync all label controls."""
         self._current_image = image_path
         self.img_path_label.setText(os.path.basename(image_path))
         self.roi_editor.load_image(image_path)
@@ -965,11 +1005,13 @@ class LabelingPage(QWidget):
             self._uncertain_comment_edit.setText(comment if uncertain else "")
 
     def _save_current_rois(self) -> None:
+        """Write the ROI editor's current state back into ``project.rois`` for the active image."""
         if not self.project or not self._current_image:
             return
         self.project.rois[self._current_image] = self.roi_editor.get_all_roi_data()
 
     def _refresh_roi_list(self) -> None:
+        """Repopulate the ROI list widget for the currently displayed image."""
         self.roi_list.clear()
         if not self.project or not self._current_image:
             return
@@ -1025,6 +1067,7 @@ class LabelingPage(QWidget):
     # --- actual worker called by commands ---
 
     def _do_set_image_label(self, image_path: str, label: str) -> None:
+        """Mutate the project, update the thumbnail and combo; called by SetImageLabelCommand."""
         if not self.project:
             return
         self.project.set_image_label(image_path, label)
@@ -1058,6 +1101,7 @@ class LabelingPage(QWidget):
                 self.refresh_al_queue_panel()
 
     def _do_set_multi_labels(self, image_path: str, labels: list) -> None:
+        """Mutate multi-labels and sync the primary label; called by SetMultiLabelsCommand."""
         if not self.project:
             return
         self.project.set_image_multi_labels(image_path, labels)
@@ -1079,6 +1123,7 @@ class LabelingPage(QWidget):
                 self.refresh_al_queue_panel()
 
     def _rebuild_multi_label_cbs(self, labels: List[str]) -> None:
+        """Recreate the multi-label checkbox list in the right panel for the given label names."""
         while self._multi_label_layout.count() > 0:
             item = self._multi_label_layout.takeAt(0)
             if item.widget():
@@ -1094,6 +1139,7 @@ class LabelingPage(QWidget):
         self._multi_label_layout.addStretch()
 
     def _load_multi_label_checkboxes(self, image_path: str) -> None:
+        """Tick/untick the multi-label checkboxes to reflect the current image's labels."""
         if not self.project:
             return
         active = set(self.project.get_image_multi_labels(image_path))
@@ -1103,6 +1149,7 @@ class LabelingPage(QWidget):
             cb.blockSignals(False)
 
     def _on_multi_label_cb_changed(self) -> None:
+        """Push a SetMultiLabelsCommand when the user ticks/unticks a multi-label checkbox."""
         if not self.project or not self._current_image:
             return
         new_labels = [lbl for lbl, cb in self._multi_label_cbs.items() if cb.isChecked()]
@@ -1117,6 +1164,7 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ QA uncertain flag
 
     def _toggle_uncertain(self, checked: bool) -> None:
+        """Toggle the uncertain QA flag for the current image via the undo stack."""
         if not self.project or not self._current_image:
             self._uncertain_btn.blockSignals(True)
             self._uncertain_btn.setChecked(False)
@@ -1135,6 +1183,7 @@ class LabelingPage(QWidget):
         ))
 
     def _on_comment_changed(self) -> None:
+        """Persist a new uncertain-flag comment when the user finishes editing the field."""
         if not self.project or not self._current_image:
             return
         if not self._uncertain_btn.isChecked():
@@ -1151,6 +1200,7 @@ class LabelingPage(QWidget):
         ))
 
     def _do_set_label_flag(self, image_path: str, uncertain: bool, comment: str) -> None:
+        """Apply an uncertain-flag mutation and refresh the thumbnail; called by SetLabelFlagCommand."""
         if not self.project:
             return
         self.project.set_label_flag(image_path, uncertain, comment)
@@ -1164,6 +1214,7 @@ class LabelingPage(QWidget):
         self._update_stats()
 
     def _open_qa_review(self) -> None:
+        """Open the QA review dialog and refresh the thumbnail list on close."""
         if not self.project:
             return
         from gui.qa_review_dialog import QAReviewDialog
@@ -1181,6 +1232,7 @@ class LabelingPage(QWidget):
             self._uncertain_comment_edit.setText(comment if uncertain else "")
 
     def _toggle_multi_label_mode(self, checked: bool) -> None:
+        """Switch the project between single-label and multi-label mode with user confirmation."""
         if not self.project:
             self._ml_toggle_btn.setChecked(False)
             return
@@ -1276,6 +1328,7 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ label assignment
 
     def _assign_image_label(self, _display_text: str) -> None:
+        """Slot for the single-label combo; extracts the real label from item user data."""
         if not self.project or not self._current_image:
             return
         if self.project.is_multi_label:
@@ -1285,6 +1338,7 @@ class LabelingPage(QWidget):
         self._assign_label_direct(self._current_image, lbl)
 
     def _quick_assign_label(self, index: int) -> None:
+        """Assign the label at *index* (0-based) via keyboard shortcut key 1–9."""
         if not self.project or not self._current_image:
             return
         labels = list(self.project.labels.keys())
@@ -1319,6 +1373,7 @@ class LabelingPage(QWidget):
 
     @Slot(dict)
     def _on_roi_added(self, roi_data: dict) -> None:
+        """Receive a new ROI from the editor, stamp its label/color and push AddROICommand."""
         if not self.project or not self._current_image:
             return
         roi_data["label"] = self.roi_editor.current_label
@@ -1329,6 +1384,7 @@ class LabelingPage(QWidget):
         self._undo_stack.push(AddROICommand(self, self._current_image, roi_data))
 
     def _do_add_roi(self, image_path: str, roi_data: dict) -> None:
+        """Persist a new ROI in the project and add it visually to the editor; called by AddROICommand."""
         if not self.project:
             return
         self.project.add_roi(image_path, roi_data)
@@ -1341,6 +1397,7 @@ class LabelingPage(QWidget):
 
     @Slot(str)
     def _on_roi_deleted(self, roi_id: str) -> None:
+        """Receive a delete request from the editor and push DeleteROICommand onto the undo stack."""
         if not self.project or not self._current_image:
             return
         rois = self.project.get_rois(self._current_image)
@@ -1351,6 +1408,7 @@ class LabelingPage(QWidget):
         self._undo_stack.push(DeleteROICommand(self, self._current_image, roi_data))
 
     def _do_delete_roi(self, image_path: str, roi_id: str) -> None:
+        """Remove an ROI from the project and the editor view; called by DeleteROICommand."""
         if not self.project:
             return
         self.project.remove_roi(image_path, roi_id)
@@ -1363,6 +1421,7 @@ class LabelingPage(QWidget):
 
     @Slot(str)
     def _on_roi_selected(self, roi_id: str) -> None:
+        """Sync the ROI list widget selection when the user clicks an ROI in the editor."""
         for i in range(self.roi_list.count()):
             item = self.roi_list.item(i)
             if item.data(Qt.UserRole) == roi_id:
@@ -1371,6 +1430,7 @@ class LabelingPage(QWidget):
 
     @Slot(dict)
     def _on_roi_moved(self, roi_data: dict) -> None:
+        """Push a MoveROICommand when the user drags an ROI to a new position."""
         if not self.project or not self._current_image:
             return
         rois = self.project.get_rois(self._current_image)
@@ -1381,6 +1441,7 @@ class LabelingPage(QWidget):
         self._undo_stack.push(MoveROICommand(self, self._current_image, roi_data, old_data))
 
     def _do_move_roi(self, image_path: str, roi_data: dict) -> None:
+        """Update the ROI geometry in the project and refresh the editor; called by MoveROICommand."""
         if not self.project:
             return
         self.project.update_roi(image_path, roi_data["id"], roi_data)
@@ -1388,6 +1449,7 @@ class LabelingPage(QWidget):
             self.roi_editor.update_roi_geometry(roi_data)
 
     def _on_roi_list_select(self, row: int) -> None:
+        """Sync the ROI label combo when the user selects a row in the ROI list widget."""
         item = self.roi_list.item(row)
         if not item or not self.project or not self._current_image:
             return
@@ -1402,6 +1464,7 @@ class LabelingPage(QWidget):
             self.roi_label_combo.blockSignals(False)
 
     def _assign_roi_label(self) -> None:
+        """Push AssignROILabelCommand to assign the selected label to the currently chosen ROI."""
         item = self.roi_list.currentItem()
         if not item or not self.project or not self._current_image:
             return
@@ -1426,6 +1489,7 @@ class LabelingPage(QWidget):
 
     def _do_assign_roi_label(self, image_path: str, roi_id: str,
                              label: str, color: str) -> None:
+        """Mutate the ROI label/color in the project and refresh the editor; called by AssignROILabelCommand."""
         if not self.project:
             return
         rois = self.project.get_rois(image_path)
@@ -1442,6 +1506,7 @@ class LabelingPage(QWidget):
         self._update_stats()
 
     def _delete_roi_from_list(self) -> None:
+        """Delete the ROI currently selected in the list widget via the undo stack."""
         item = self.roi_list.currentItem()
         if not item or not self.project or not self._current_image:
             return
@@ -1489,6 +1554,7 @@ class LabelingPage(QWidget):
         )
 
     def _clear_all_rois(self) -> None:
+        """Delete every ROI in the project after user confirmation."""
         if not self.project:
             return
         total = self.project.get_roi_count()
@@ -1508,6 +1574,7 @@ class LabelingPage(QWidget):
         self._update_stats()
 
     def _validate_rois(self) -> None:
+        """Ask the ROI editor to validate bounds and show any warnings in a dialog."""
         warnings = self.roi_editor.validate_rois()
         if warnings:
             QMessageBox.warning(self, "ROI-Validierung", "\n".join(warnings))
@@ -1517,11 +1584,13 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ draw mode
 
     def _set_draw_mode(self, mode: str) -> None:
+        """Switch the ROI editor and the right-panel draw-mode buttons to *mode*."""
         self.roi_editor.set_mode(mode)
         for m, btn in self._right_mode_btns.items():
             btn.setChecked(m == mode)
 
     def _on_mode_changed(self, mode: str) -> None:
+        """Sync the right-panel draw-mode buttons when the editor changes mode internally."""
         for m, btn in self._right_mode_btns.items():
             btn.setChecked(m == mode)
 
@@ -1554,6 +1623,7 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ navigation
 
     def _prev_image(self) -> None:
+        """Navigate to the previous image in the thumbnail list."""
         self._save_current_rois()
         paths = self.thumb_list.get_all_paths()
         if self._current_image in paths:
@@ -1562,6 +1632,7 @@ class LabelingPage(QWidget):
                 self.thumb_list.select_path(paths[idx - 1])
 
     def _next_image(self) -> None:
+        """Navigate to the next image in the thumbnail list."""
         self._save_current_rois()
         paths = self.thumb_list.get_all_paths()
         if self._current_image in paths:
@@ -1656,6 +1727,7 @@ class LabelingPage(QWidget):
                     self.al_retrain_requested.emit()
 
     def _al_clear_queue(self) -> None:
+        """Remove all entries from the AL queue after user confirmation and hide the panel."""
         if not self.project:
             return
         n = len(self.project.get_al_queue())
@@ -1728,6 +1800,7 @@ class LabelingPage(QWidget):
     # ------------------------------------------------------------------ stats & progress
 
     def _update_stats(self) -> None:
+        """Recompute labeling progress and refresh the progress bar, count label and per-class bars."""
         if not self.project:
             self.stats_label.setText("–")
             self._progress_bar.setValue(0)
@@ -1771,6 +1844,7 @@ class LabelingPage(QWidget):
         )
 
     def _render_class_progress_html(self, total: int) -> str:
+        """Return an HTML table with per-class count, inline progress bar and percentage."""
         if not self.project or total == 0:
             return ""
         counts = self.project.get_label_counts(use_rois=False)

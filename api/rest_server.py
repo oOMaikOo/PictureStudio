@@ -26,19 +26,33 @@ from urllib.parse import parse_qs, urlparse
 
 
 class _ProjectHandler(BaseHTTPRequestHandler):
+    """
+    HTTP request handler for the REST API.
+
+    Class-level attributes are shared across all requests (single-threaded
+    serve_forever loop):
+      project        — current Project (set by RestApiServer.set_project).
+      inferencer     — Inferencer for /api/classify, or None.
+      score_buffer   — Rolling list of {ts, score, threshold, alarm} dicts.
+      event_log_path — Path to anomaly_events.csv for /api/events.
+    """
+
     # Shared state injected by RestApiServer before starting
     project = None
     inferencer = None   # core.inference.Inferencer or None
     request_count: int = 0
     score_buffer: list = []          # rolling list of (timestamp, score, threshold)
     event_log_path: str = ""         # path to anomaly_events.csv (set externally)
+    alarm_frame_dir: str = ""        # directory where alarm JPEG snapshots are saved
+    latest_alarm: dict = {}          # most recent alarm: {ts, score, threshold, frame_path}
 
     # ------------------------------------------------------------------ util
 
     def log_message(self, fmt, *args) -> None:
-        pass  # suppress default stdout noise
+        pass  # suppress the default BaseHTTPRequestHandler stdout noise
 
     def _send_json(self, data: dict, status: int = 200) -> None:
+        """Serialise *data* to JSON and send it as the HTTP response with CORS headers."""
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -50,9 +64,11 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _err(self, msg: str, status: int = 400) -> None:
+        """Send a JSON error response with the given HTTP status code."""
         self._send_json({"error": msg}, status)
 
     def _read_body(self) -> Optional[dict]:
+        """Parse the JSON request body; returns None on invalid JSON."""
         try:
             length = int(self.headers.get("Content-Length", 0))
             return json.loads(self.rfile.read(length)) if length else {}
@@ -193,6 +209,38 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             limit = int(qs.get("limit", ["100"])[0])
             events = self._read_event_log(limit)
             self._send_json({"events": events, "count": len(events)})
+            return
+
+        # /api/latest_alarm — last alarm event (score, threshold, frame filename)
+        if path == "/api/latest_alarm":
+            self._send_json(_ProjectHandler.latest_alarm or {})
+            return
+
+        # /api/frame/<filename> — serve a saved alarm frame JPEG
+        if path.startswith("/api/frame/"):
+            fname = path[len("/api/frame/"):]
+            if not fname or "/" in fname or ".." in fname:
+                self._err("Invalid filename", 400)
+                return
+            frame_dir = _ProjectHandler.alarm_frame_dir
+            if not frame_dir:
+                self._err("No alarm frame directory configured", 503)
+                return
+            fpath = os.path.join(frame_dir, fname)
+            if not os.path.isfile(fpath):
+                self._err(f"Frame '{fname}' not found", 404)
+                return
+            try:
+                with open(fpath, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as exc:
+                self._err(str(exc), 500)
             return
 
         # /dashboard — HTML monitoring dashboard
@@ -370,6 +418,11 @@ def _build_dashboard_html() -> str:
   .section { background: #2D333B; border-radius: 8px; padding: 16px;
              border: 1px solid #373E47; }
   .footer { font-size: 10px; color: #545D68; margin-top: 14px; text-align: center; }
+  #alarm-frame-wrap { background: #2D333B; border-radius: 8px; padding: 16px;
+                      border: 2px solid #E74C3C; margin-bottom: 20px; display:none; }
+  #alarm-frame-wrap h2 { color: #E74C3C; }
+  #alarm-img { max-width: 100%; border-radius: 6px; margin-top: 8px; display: block; }
+  #alarm-meta { font-size: 11px; color: #768390; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -398,6 +451,12 @@ def _build_dashboard_html() -> str:
 <div id="chart-wrap">
   <h2>Score-Verlauf (letzte 120 Frames)</h2>
   <canvas id="chart"></canvas>
+</div>
+
+<div id="alarm-frame-wrap">
+  <h2>⚠  Letzter Alarm-Frame</h2>
+  <img id="alarm-img" src="" alt="Alarm-Frame">
+  <div id="alarm-meta"></div>
 </div>
 
 <div class="section">
@@ -446,14 +505,18 @@ function draw(canvas, scores, thr) {
   });
 }
 
+let lastAlarmFilename = '';
+
 async function fetchData() {
   try {
-    const [sRes, eRes] = await Promise.all([
+    const [sRes, eRes, aRes] = await Promise.all([
       fetch(BASE + '/api/scores?limit=120'),
       fetch(BASE + '/api/events?limit=20'),
+      fetch(BASE + '/api/latest_alarm'),
     ]);
     const sData = await sRes.json();
     const eData = await eRes.json();
+    const aData = await aRes.json();
 
     scores = sData.scores || [];
     alarmCount = scores.filter(s => s.alarm).length;
@@ -474,6 +537,22 @@ async function fetchData() {
     const canvas = document.getElementById('chart');
     draw(canvas, scores, threshold);
 
+    // Latest alarm frame
+    const frameWrap = document.getElementById('alarm-frame-wrap');
+    if (aData.frame_filename) {
+      frameWrap.style.display = 'block';
+      if (aData.frame_filename !== lastAlarmFilename) {
+        lastAlarmFilename = aData.frame_filename;
+        document.getElementById('alarm-img').src =
+          BASE + '/api/frame/' + aData.frame_filename + '?t=' + Date.now();
+      }
+      document.getElementById('alarm-meta').textContent =
+        aData.ts + '  |  Score: ' + (aData.score||0).toFixed(5) +
+        '  |  Schwellwert: ' + (aData.threshold||0).toFixed(5);
+    } else {
+      frameWrap.style.display = 'none';
+    }
+
     const tbody = document.getElementById('events-body');
     tbody.innerHTML = '';
     const events = (eData.events || []).slice().reverse();
@@ -483,10 +562,13 @@ async function fetchData() {
       events.forEach(ev => {
         const tr = document.createElement('tr');
         if (parseFloat(ev.score) > parseFloat(ev.threshold)) tr.className = 'alarm';
-        tr.innerHTML = '<td>' + (ev.timestamp||'–') + '</td>'
+        const frameLink = ev.frame_path
+          ? '<a href="' + BASE + '/api/frame/' + ev.frame_path + '" target="_blank" style="color:#5DADE2">' + ev.frame_path + '</a>'
+          : '–';
+        tr.innerHTML = '<td>' + (ev.timestamp_utc||ev.timestamp||'–') + '</td>'
           + '<td>' + parseFloat(ev.score||0).toFixed(5) + '</td>'
           + '<td>' + (ev.score_pct||'–') + '%</td>'
-          + '<td style="font-size:10px;color:#768390">' + (ev.frame_path ? ev.frame_path.split('/').pop() : '–') + '</td>';
+          + '<td style="font-size:10px">' + frameLink + '</td>';
         tbody.appendChild(tr);
       });
     }
@@ -542,6 +624,21 @@ class RestApiServer:
 
     def set_event_log_path(self, path: str) -> None:
         _ProjectHandler.event_log_path = path
+
+    def set_alarm_frame_dir(self, path: str) -> None:
+        """Set the directory from which alarm frame JPEGs are served."""
+        _ProjectHandler.alarm_frame_dir = path
+
+    def push_latest_alarm(self, frame_path: str, score: float, threshold: float) -> None:
+        """Record the most recent alarm event for the dashboard."""
+        from datetime import datetime
+        _ProjectHandler.latest_alarm = {
+            "ts": datetime.now().isoformat(timespec="seconds"),
+            "score": round(score, 6),
+            "threshold": round(threshold, 6),
+            "frame_path": frame_path,
+            "frame_filename": os.path.basename(frame_path),
+        }
 
     # ------------------------------------------------------------------ state
 

@@ -5,7 +5,13 @@ from PySide6.QtCore import QSettings
 
 
 class AppSettings:
-    """Wrapper around QSettings providing typed accessors."""
+    """
+    Wrapper around QSettings providing typed getter/setter pairs.
+
+    Settings are stored in the OS-specific INI / registry location under
+    organisation "ImageLabelingStudio" / application "ILS".
+    Used by MainWindow, TrainingPage, and SettingsPage.
+    """
 
     _ORG = "ImageLabelingStudio"
     _APP = "ILS"
@@ -49,6 +55,7 @@ class AppSettings:
         return self._s.value("project/recent", []) or []
 
     def add_recent_project(self, path: str) -> None:
+        """Prepend *path* to the MRU list, keeping at most 10 entries."""
         recents = self.get_recent_projects()
         if path in recents:
             recents.remove(path)
@@ -110,4 +117,5 @@ class AppSettings:
         self._s.setValue("window/geometry", geometry)
 
     def sync(self) -> None:
+        """Flush pending changes to disk immediately."""
         self._s.sync()

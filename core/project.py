@@ -19,6 +19,12 @@ PROJECT_FORMAT_VERSION = "2.0"
 
 @dataclass
 class ProjectConfig:
+    """
+    Lightweight metadata block stored in the project JSON under the "config" key.
+
+    Serialised via dataclasses.asdict() on save and reconstructed field-by-field
+    on load for backward compatibility with older project files.
+    """
     name: str = ""
     description: str = ""
     created_at: str = ""
@@ -69,11 +75,18 @@ class Project:
 
     @property
     def is_multi_label(self) -> bool:
+        """True when the project is in multi-label classification mode."""
         return self.config.multi_label
 
     # ------------------------------------------------------------------ save / load
 
     def save(self, path: str = None) -> None:
+        """
+        Serialise the project to JSON at *path* (or the existing project_path).
+
+        Uses an atomic write (temp file → os.replace) to avoid corrupting an
+        existing file on crash or power loss.
+        """
         if path:
             self.project_path = path
         if not self.project_path:
@@ -111,6 +124,13 @@ class Project:
 
     @classmethod
     def load(cls, path: str) -> "Project":
+        """
+        Load a project from the JSON file at *path*.
+
+        Missing keys (from older format versions) are silently ignored;
+        new fields are initialised to their defaults. Merges training_config
+        and ssh_config with current defaults so new keys are always present.
+        """
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
 
@@ -197,12 +217,14 @@ class Project:
 
     # Images
     def add_image(self, image_path: str) -> bool:
+        """Add *image_path* to the project. Returns False if already present."""
         if image_path not in self.images:
             self.images.append(image_path)
             return True
         return False
 
     def remove_image(self, image_path: str) -> None:
+        """Remove an image and all associated labels, ROIs, and flags."""
         self.images = [p for p in self.images if p != image_path]
         self.image_labels.pop(image_path, None)
         self.image_multi_labels.pop(image_path, None)
@@ -212,9 +234,15 @@ class Project:
     # Labels
     def add_label(self, name: str, color: str = "#E74C3C", description: str = "",
                   parent: str = "") -> None:
+        """Add or overwrite a label definition in the project."""
         self.labels[name] = {"color": color, "description": description, "parent": parent}
 
     def remove_label(self, name: str) -> None:
+        """
+        Delete a label and clean up all references.
+
+        Removes the label from image_labels, image_multi_labels, and ROI label fields.
+        """
         self.labels.pop(name, None)
         for img in list(self.image_labels):
             if self.image_labels[img] == name:
@@ -227,6 +255,12 @@ class Project:
                     roi["label"] = ""
 
     def rename_label(self, old: str, new: str) -> None:
+        """
+        Rename a label in place, updating all references.
+
+        Updates labels dict, image_labels, image_multi_labels, and ROI label fields.
+        No-op if *old* does not exist or *old == new*.
+        """
         if old not in self.labels or old == new:
             return
         self.labels[new] = self.labels.pop(old)
@@ -241,28 +275,40 @@ class Project:
                     roi["label"] = new
 
     def get_label_color(self, name: str) -> str:
+        """Return the hex colour for *name*, or '#888888' if the label does not exist."""
         return self.labels.get(name, {}).get("color", "#888888")
 
     def get_root_labels(self) -> List[str]:
+        """Return labels that have no parent (top-level nodes in a label hierarchy)."""
         return [n for n, d in self.labels.items() if not d.get("parent")]
 
     def get_child_labels(self, parent: str) -> List[str]:
+        """Return all labels whose parent field equals *parent*."""
         return [n for n, d in self.labels.items() if d.get("parent") == parent]
 
     # Image labels
     def set_image_label(self, image_path: str, label: str) -> None:
+        """Assign the primary label for *image_path*. Passing an empty string removes it."""
         if label:
             self.image_labels[image_path] = label
         else:
             self.image_labels.pop(image_path, None)
 
     def get_image_label(self, image_path: str) -> str:
+        """Return the primary label for *image_path*, or an empty string."""
         return self.image_labels.get(image_path, "")
 
     def set_image_multi_labels(self, image_path: str, labels: List[str]) -> None:
+        """Store the full multi-label list for *image_path*, filtering out empty strings."""
         self.image_multi_labels[image_path] = [l for l in labels if l]
 
     def get_image_multi_labels(self, image_path: str) -> List[str]:
+        """
+        Return the effective multi-label list for *image_path*.
+
+        Merges the primary label (from image_labels) into the multi-label list
+        so that images labelled in single-label mode are included transparently.
+        """
         primary = self.get_image_label(image_path)
         multi = self.image_multi_labels.get(image_path, [])
         # Merge primary into multi if not present
@@ -272,19 +318,23 @@ class Project:
 
     # ROIs
     def add_roi(self, image_path: str, roi_data: Dict) -> None:
+        """Append a ROI dict to the list for *image_path*, creating the list if needed."""
         self.rois.setdefault(image_path, []).append(roi_data)
 
     def remove_roi(self, image_path: str, roi_id: str) -> None:
+        """Remove the ROI with the given *roi_id* from *image_path*'s list."""
         if image_path in self.rois:
             self.rois[image_path] = [r for r in self.rois[image_path] if r.get("id") != roi_id]
 
     def update_roi(self, image_path: str, roi_id: str, roi_data: Dict) -> None:
+        """Replace the ROI dict matching *roi_id* with *roi_data* in-place."""
         for i, roi in enumerate(self.rois.get(image_path, [])):
             if roi.get("id") == roi_id:
                 self.rois[image_path][i] = roi_data
                 return
 
     def get_rois(self, image_path: str) -> List[Dict]:
+        """Return the list of ROI dicts for *image_path* (empty list if none)."""
         return self.rois.get(image_path, [])
 
     # ROI templates
@@ -321,6 +371,12 @@ class Project:
 
     # Statistics
     def get_label_counts(self, use_rois: bool = False) -> Dict[str, int]:
+        """
+        Return a dict mapping each label name to the number of images (or ROIs) assigned.
+
+        When *use_rois* is True, counts ROI-level labels instead of image-level labels.
+        In multi-label mode, an image contributes one count per active label.
+        """
         counts: Dict[str, int] = {lbl: 0 for lbl in self.labels}
         if use_rois:
             for roi_list in self.rois.values():
@@ -339,14 +395,17 @@ class Project:
         return counts
 
     def get_labeled_image_count(self) -> int:
+        """Return the count of images that have at least one label assigned."""
         if self.config.multi_label:
             return sum(1 for p in self.images if self.image_multi_labels.get(p))
         return len(self.image_labels)
 
     def get_roi_count(self) -> int:
+        """Return the total number of ROIs across all images in the project."""
         return sum(len(v) for v in self.rois.values())
 
     def get_unlabeled_images(self) -> List[str]:
+        """Return a list of image paths that have no label assigned."""
         if self.config.multi_label:
             return [p for p in self.images if not self.image_multi_labels.get(p)]
         return [p for p in self.images if not self.get_image_label(p)]
@@ -375,25 +434,36 @@ class Project:
         return count
 
     def get_images_by_label(self, label: str) -> List[str]:
+        """Return all image paths whose primary label equals *label*."""
         return [p for p, l in self.image_labels.items() if l == label]
 
     # Label Quality Flags
     def set_label_flag(self, image_path: str, uncertain: bool, comment: str = "") -> None:
+        """
+        Set or clear the QA uncertain flag for *image_path*.
+
+        When both *uncertain* is False and *comment* is empty, the entry is
+        removed from image_label_flags to keep the dict compact.
+        """
         if uncertain or comment:
             self.image_label_flags[image_path] = {"uncertain": uncertain, "comment": comment}
         else:
             self.image_label_flags.pop(image_path, None)
 
     def get_label_flag(self, image_path: str) -> Dict:
+        """Return the QA flag dict {uncertain, comment} for *image_path*, or {}."""
         return self.image_label_flags.get(image_path, {})
 
     def is_label_uncertain(self, image_path: str) -> bool:
+        """Return True when *image_path* is flagged as uncertain."""
         return bool(self.image_label_flags.get(image_path, {}).get("uncertain"))
 
     def get_uncertain_images(self) -> List[str]:
+        """Return all image paths currently flagged as uncertain."""
         return [p for p in self.images if self.is_label_uncertain(p)]
 
     def clear_label_flag(self, image_path: str) -> None:
+        """Remove the QA flag for *image_path* if present."""
         self.image_label_flags.pop(image_path, None)
 
     # Active Learning Queue
@@ -424,6 +494,7 @@ class Project:
                 if not self.get_image_label(e["path"])]
 
     def get_dashboard_data(self) -> Dict:
+        """Compile a summary dict used by DashboardPage to populate its statistics widgets."""
         last_run = self.get_last_training_run()
         metrics = last_run.get("metrics", {}) if last_run else {}
         return {

@@ -15,9 +15,15 @@ MODEL_REGISTRY_FILE = "model_registry.json"
 
 
 class ModelRecord:
-    """Metadata for a single trained model."""
+    """
+    Metadata for a single trained model as stored in the model registry.
+
+    All fields are plain Python types so they can be round-tripped through
+    JSON via to_dict() / ModelRecord(data).
+    """
 
     def __init__(self, data: Dict):
+        """Populate all fields from the *data* dict; missing keys use safe defaults."""
         self.model_id: str = data.get("model_id", "")
         self.name: str = data.get("name", "")
         self.description: str = data.get("description", "")
@@ -39,6 +45,7 @@ class ModelRecord:
         self.software_versions: Dict = data.get("software_versions", {})
 
     def to_dict(self) -> Dict:
+        """Serialise all fields to a JSON-compatible dict."""
         return {
             "model_id": self.model_id,
             "name": self.name,
@@ -62,16 +69,24 @@ class ModelRecord:
         }
 
     def accuracy_str(self) -> str:
+        """Return accuracy as a human-readable percentage string."""
         acc = self.metrics.get("accuracy", 0)
         return f"{acc*100:.2f}%"
 
     def f1_str(self) -> str:
+        """Return macro F1 as a human-readable percentage string."""
         f1 = self.metrics.get("macro_f1", 0)
         return f"{f1*100:.2f}%"
 
 
 class ModelManager:
-    """Manages the model library for a project directory."""
+    """
+    Manages the trained-model library for a project directory.
+
+    Persists all records in *models_dir*/model_registry.json.
+    Supports CRUD operations, ONNX/TorchScript export, and metric comparison.
+    Used by ModelsPage (GUI) and _on_training_finished (MainWindow).
+    """
 
     def __init__(self, models_dir: str):
         self.models_dir = models_dir
@@ -83,6 +98,7 @@ class ModelManager:
     # ------------------------------------------------------------------ registry
 
     def _load(self) -> None:
+        """Read the JSON registry from disk; silently resets on parse error."""
         if not os.path.exists(self._registry_path):
             return
         try:
@@ -94,6 +110,7 @@ class ModelManager:
             self._models = []
 
     def _save(self) -> None:
+        """Persist the current in-memory registry to the JSON file."""
         data = {"models": [m.to_dict() for m in self._models]}
         with open(self._registry_path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2, ensure_ascii=False)
@@ -132,28 +149,38 @@ class ModelManager:
         return record
 
     def get_all(self, include_archived: bool = False) -> List[ModelRecord]:
+        """Return all (non-archived by default) model records."""
         if include_archived:
             return list(self._models)
         return [m for m in self._models if not m.archived]
 
     def get_by_id(self, model_id: str) -> Optional[ModelRecord]:
+        """Look up a record by its unique 8-character ID; returns None if not found."""
         return next((m for m in self._models if m.model_id == model_id), None)
 
     def get_best(self) -> Optional[ModelRecord]:
+        """Return the record flagged is_best, or None if none is flagged."""
         return next((m for m in self._models if m.is_best), None)
 
     def mark_as_best(self, model_id: str) -> None:
+        """Set is_best=True on *model_id* and clear the flag on all others."""
         for m in self._models:
             m.is_best = m.model_id == model_id
         self._save()
 
     def archive(self, model_id: str) -> None:
+        """Mark a model as archived so it is hidden from normal listings."""
         m = self.get_by_id(model_id)
         if m:
             m.archived = True
             self._save()
 
     def delete(self, model_id: str, delete_file: bool = False) -> None:
+        """
+        Remove a model record from the registry.
+
+        When *delete_file* is True, also deletes the .pth checkpoint from disk.
+        """
         m = self.get_by_id(model_id)
         if not m:
             return
@@ -166,6 +193,7 @@ class ModelManager:
         self._save()
 
     def update_metadata(self, model_id: str, name: str = None, description: str = None) -> None:
+        """Update the human-readable name and/or description of a stored model."""
         m = self.get_by_id(model_id)
         if m:
             if name is not None:

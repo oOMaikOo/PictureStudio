@@ -35,9 +35,12 @@ _DEDUP_DEFAULT  = 30   # seconds
 # ── background camera scanner ─────────────────────────────────────────────────
 
 class _ScanThread(QThread):
+    """Background thread that enumerates connected USB cameras without blocking the UI."""
+
     done = Signal(list)   # list of (index, name)
 
     def run(self) -> None:
+        """Call ``list_usb_cameras()`` and emit the result."""
         self.done.emit(list_usb_cameras())
 
 
@@ -60,12 +63,16 @@ class CameraPage(QWidget):
         self._camera_thread: Optional[CameraFrameThread] = None
         self._model_path: Optional[str] = None
         self._scan_thread: Optional[_ScanThread] = None
+        self._rest_server = None
+        self._last_frame: Optional[np.ndarray] = None
 
         # Scoring state
         self._smooth_buf: list[float] = []
+        self._score_history: list[float] = []
         self._last_alarm_t: float = 0.0
         self._event_count: int = 0
         self._log_path: Optional[str] = None
+        self._roi: Optional[list] = None  # [x1,y1,x2,y2] normalized, from model metadata
 
         self._build_ui()
         self._scan_cameras()
@@ -73,6 +80,7 @@ class CameraPage(QWidget):
     # ── project ───────────────────────────────────────────────────────────────
 
     def set_project(self, project, audit=None) -> None:
+        """Accept the active project and set up the anomaly-event CSV log path."""
         self._project = project
         if project and getattr(project, "project_path", None):
             log_dir = os.path.join(
@@ -80,6 +88,16 @@ class CameraPage(QWidget):
             )
             os.makedirs(log_dir, exist_ok=True)
             self._log_path = os.path.join(log_dir, "monitoring_events.csv")
+            if self._rest_server:
+                self._rest_server.set_event_log_path(self._log_path)
+                self._rest_server.set_alarm_frame_dir(log_dir)
+
+    def set_rest_server(self, server) -> None:
+        """Wire in the REST API server so live scores and alarm frames are pushed."""
+        self._rest_server = server
+        if self._log_path:
+            server.set_event_log_path(self._log_path)
+            server.set_alarm_frame_dir(os.path.dirname(self._log_path))
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
@@ -346,6 +364,8 @@ class CameraPage(QWidget):
     # ── Camera scan ───────────────────────────────────────────────────────────
 
     def _scan_cameras(self) -> None:
+        """Start a background ``_ScanThread`` to enumerate available cameras."""
+        self._prev_cam = self._cam_combo.currentData()  # save BEFORE clearing
         self._cam_combo.clear()
         self._cam_combo.addItem("Suche läuft…")
         self._refresh_btn.setEnabled(False)
@@ -355,6 +375,8 @@ class CameraPage(QWidget):
 
     @Slot(list)
     def _on_scan_done(self, cams: list) -> None:
+        """Populate the camera combo box with the discovered camera list."""
+        prev = self._prev_cam
         self._cam_combo.clear()
         if cams:
             for idx, name in cams:
@@ -363,16 +385,24 @@ class CameraPage(QWidget):
             self._cam_combo.addItem("Keine USB-Kamera gefunden")
         self._cam_combo.addItem("IP-Kamera (URL eingeben…)", userData="ip")
         self._refresh_btn.setEnabled(True)
+        # Restore previous selection so a refresh doesn't silently reset the user's choice
+        if prev is not None:
+            for i in range(self._cam_combo.count()):
+                if self._cam_combo.itemData(i) == prev:
+                    self._cam_combo.setCurrentIndex(i)
+                    break
 
     # ── Connect / Disconnect ──────────────────────────────────────────────────
 
     def _on_connect_toggled(self, checked: bool) -> None:
+        """Start or stop the camera stream when the connect button is toggled."""
         if checked:
             self._start_stream()
         else:
             self._stop_stream()
 
     def _start_stream(self) -> None:
+        """Open the selected camera source and start the ``CameraFrameThread``."""
         source = self._cam_combo.currentData()
 
         if source == "ip":
@@ -405,6 +435,7 @@ class CameraPage(QWidget):
             self._scoring_btn.setEnabled(True)
 
     def _stop_stream(self) -> None:
+        """Stop the camera thread and reset all live-monitoring UI elements."""
         self._scoring_btn.setChecked(False)
         self._scoring_btn.setEnabled(False)
         if self._camera_thread:
@@ -429,10 +460,12 @@ class CameraPage(QWidget):
         self._score_bar.setValue(0)
         self._alarm_banner.setVisible(False)
         self._smooth_buf.clear()
+        self._score_history.clear()
         self._status_bar.setText("Bereit")
 
     @Slot(str)
     def _on_camera_error(self, msg: str) -> None:
+        """Handle camera errors by disabling scoring and updating the status label."""
         self._scoring_btn.setEnabled(False)
         self._connect_btn.setChecked(False)
         self._conn_status_lbl.setText("Fehler")
@@ -442,8 +475,10 @@ class CameraPage(QWidget):
     # ── Scoring toggle ────────────────────────────────────────────────────────
 
     def _on_scoring_toggled(self, active: bool) -> None:
+        """Reset score history and update button text when scoring is toggled."""
         self._scoring_btn.setText("Scoring aktiv  ●" if active else "Scoring aktivieren")
         self._smooth_buf.clear()
+        self._score_history.clear()
         if not active:
             self._alarm_banner.setVisible(False)
             self._score_lbl.setText("Score: –")
@@ -457,20 +492,73 @@ class CameraPage(QWidget):
 
     @Slot(object)
     def _on_frame(self, frame: np.ndarray) -> None:
+        """
+        Process each incoming camera frame.
+
+        When scoring is active: compute the anomaly score, optionally render the
+        heatmap overlay, draw the ROI rectangle, and call ``_update_score``.
+        Always displays the (possibly annotated) frame in the preview label.
+        """
+        self._last_frame = frame
         display = frame
 
         if self._scoring_btn.isChecked() and self._detector and self._detector.trained:
-            score, _rec, overlay, _bbox = self._detector.score_detailed(frame)
+            analysis = self._apply_roi_crop(frame)
+            score, _rec, overlay, _bbox = self._detector.score_detailed(analysis)
             if self._heatmap_cb.isChecked():
-                display = overlay
+                if self._roi:
+                    display = frame.copy()
+                    h, w = display.shape[:2]
+                    x1 = int(self._roi[0] * w); y1 = int(self._roi[1] * h)
+                    x2 = int(self._roi[2] * w); y2 = int(self._roi[3] * h)
+                    rw, rh = max(1, x2 - x1), max(1, y2 - y1)
+                    display[y1:y2, x1:x2] = cv2.resize(
+                        overlay, (rw, rh), interpolation=cv2.INTER_LINEAR
+                    )
+                else:
+                    display = overlay
             self._update_score(score)
+
+        # Draw cyan ROI rectangle so the monitored region is always visible
+        if self._roi is not None:
+            if display is frame:
+                display = frame.copy()
+            h, w = display.shape[:2]
+            x1 = int(self._roi[0] * w); y1 = int(self._roi[1] * h)
+            x2 = int(self._roi[2] * w); y2 = int(self._roi[3] * h)
+            cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
         if self._ts_cb.isChecked():
             display = apply_timestamp(display)
 
         self._show_frame(display)
 
+    def _apply_roi_crop(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Crop *frame* to the ROI region stored in ``self._roi`` (normalised coords).
+
+        Returns the full frame unchanged when no ROI is configured or the
+        computed pixel dimensions are too small.
+        """
+        if self._roi is None:
+            return frame
+        h, w = frame.shape[:2]
+        x1 = int(self._roi[0] * w); y1 = int(self._roi[1] * h)
+        x2 = int(self._roi[2] * w); y2 = int(self._roi[3] * h)
+        x1, x2 = max(0, min(x1, x2)), min(w, max(x1, x2))
+        y1, y2 = max(0, min(y1, y2)), min(h, max(y1, y2))
+        if x2 - x1 < 4 or y2 - y1 < 4:
+            return frame
+        return frame[y1:y2, x1:x2]
+
     def _update_score(self, score: float) -> None:
+        """
+        Update the score bar, score label, chart, and alarm banner for *score*.
+
+        Applies a rolling-average smoothing buffer. When the smoothed score
+        exceeds the threshold for N consecutive frames (configured by the
+        smoothing spin) an alarm event is logged (with deduplication).
+        """
         thr = self._thr_spin.value()
 
         self._smooth_buf.append(score)
@@ -498,7 +586,11 @@ class CameraPage(QWidget):
         )
 
         if self._score_chart:
-            self._score_chart.add_point(score, thr)
+            self._score_history.append(score)
+            self._score_chart.update_data(self._score_history, thr)
+
+        if self._rest_server:
+            self._rest_server.push_score(score, thr)
 
         self._alarm_banner.setVisible(is_anomaly)
 
@@ -514,19 +606,44 @@ class CameraPage(QWidget):
                 self._write_event(score, thr)
 
     def _write_event(self, score: float, threshold: float) -> None:
+        """
+        Append one alarm event to the CSV log and save a JPEG snapshot.
+
+        The CSV header is written automatically on the first call. A JPEG
+        snapshot of the current frame is saved to the same directory and its
+        filename is pushed to the REST API server.
+        """
         if not self._log_path:
             return
+        ts = datetime.now(timezone.utc)
+        log_dir = os.path.dirname(self._log_path)
+
+        # Save the current frame as a JPEG alarm snapshot
+        frame_filename = ""
+        if self._last_frame is not None:
+            frame_filename = f"alarm_{ts.strftime('%Y%m%dT%H%M%SZ')}.jpg"
+            frame_path = os.path.join(log_dir, frame_filename)
+            try:
+                cv2.imwrite(frame_path, self._last_frame)
+                if self._rest_server:
+                    self._rest_server.push_latest_alarm(frame_path, score, threshold)
+            except Exception:
+                frame_filename = ""
+
+        score_pct = int(score / threshold * 100) if threshold > 0 else 0
         write_header = not os.path.exists(self._log_path)
         try:
             with open(self._log_path, "a", newline="", encoding="utf-8") as f:
                 w = csv.writer(f)
                 if write_header:
-                    w.writerow(["timestamp_utc", "score", "threshold", "model"])
+                    w.writerow(["timestamp_utc", "score", "threshold", "score_pct", "model", "frame_path"])
                 w.writerow([
-                    datetime.now(timezone.utc).isoformat(),
+                    ts.isoformat(),
                     f"{score:.6f}",
                     f"{threshold:.6f}",
+                    str(score_pct),
                     os.path.basename(self._model_path) if self._model_path else "",
+                    frame_filename,
                 ])
             self._log_btn.setEnabled(True)
         except Exception:
@@ -535,6 +652,7 @@ class CameraPage(QWidget):
     # ── Frame display ─────────────────────────────────────────────────────────
 
     def _show_frame(self, frame: np.ndarray) -> None:
+        """Convert a BGR numpy frame to a QPixmap and display it in the preview label."""
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888)
@@ -547,6 +665,7 @@ class CameraPage(QWidget):
     # ── Model ─────────────────────────────────────────────────────────────────
 
     def _load_model(self) -> None:
+        """Open a file chooser to select and load an autoencoder .pth checkpoint."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Autoencoder-Modell laden", "", "PyTorch-Modell (*.pth)"
         )
@@ -561,8 +680,10 @@ class CameraPage(QWidget):
 
         self._detector = det
         self._model_path = path
+        self._roi = det.metadata.get("roi")  # [x1,y1,x2,y2] normalized, or None
         name = os.path.basename(path)
-        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f})")
+        roi_tag = "  ·  ROI aktiv" if self._roi else ""
+        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f}{roi_tag})")
         self._model_lbl.setStyleSheet("color:#2ECC71;")
         self._thr_spin.blockSignals(True)
         self._thr_spin.setValue(det.threshold)
@@ -575,10 +696,11 @@ class CameraPage(QWidget):
             self._scoring_btn.setEnabled(True)
 
         self._status_bar.setText(
-            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}"
+            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}{roi_tag}"
         )
 
     def _show_model_info(self) -> None:
+        """Display an HTML dialog with the loaded model's metadata dictionary."""
         if not self._detector:
             return
         meta = self._detector.metadata
@@ -607,6 +729,7 @@ class CameraPage(QWidget):
         dlg.exec()
 
     def _on_threshold_changed(self, val: float) -> None:
+        """Propagate a spin-box threshold change to the loaded ``AnomalyDetector``."""
         if self._detector:
             self._detector.threshold = val
 
@@ -668,8 +791,10 @@ class CameraPage(QWidget):
             return
         self._detector = det
         self._model_path = path
+        self._roi = det.metadata.get("roi")  # [x1,y1,x2,y2] normalized, or None
         name = os.path.basename(path)
-        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f})")
+        roi_tag = "  ·  ROI aktiv" if self._roi else ""
+        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f}{roi_tag})")
         self._model_lbl.setStyleSheet("color:#2ECC71;")
         self._thr_spin.blockSignals(True)
         self._thr_spin.setValue(det.threshold)
@@ -679,7 +804,7 @@ class CameraPage(QWidget):
         if self._camera_thread:
             self._scoring_btn.setEnabled(True)
         self._status_bar.setText(
-            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}"
+            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}{roi_tag}"
         )
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────

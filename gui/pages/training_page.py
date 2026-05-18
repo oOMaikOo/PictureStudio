@@ -19,12 +19,33 @@ from core.metrics import format_metrics_text
 
 
 class TrainingThread(QThread):
+    """
+    QThread wrapper around ``core.training.TrainingWorker``.
+
+    Bridges the worker's callback-based interface to Qt signals so that
+    ``TrainingPage`` can update the UI from the main thread.
+
+    Signals
+    -------
+    progress : (epoch, total, train_loss, val_loss, train_acc, val_acc)
+    log_msg  : Informational log line from the worker.
+    finished : Full result dict returned by ``TrainingWorker.run()``.
+    error    : Exception message when the worker raises.
+    """
+
     progress = Signal(int, int, float, float, float, float)
     log_msg  = Signal(str)
     finished = Signal(dict)
     error    = Signal(str)
 
     def __init__(self, project, cfg: Dict, save_dir: str):
+        """
+        Parameters
+        ----------
+        project  : Loaded ``Project`` instance.
+        cfg      : Training configuration dict (see ``TrainingPage._get_config()``).
+        save_dir : Directory where model checkpoints will be written.
+        """
         super().__init__()
         self.project = project
         self.cfg = cfg
@@ -32,9 +53,11 @@ class TrainingThread(QThread):
         self._stop = False
 
     def request_stop(self) -> None:
+        """Signal the underlying worker to stop after the current epoch."""
         self._stop = True
 
     def run(self) -> None:
+        """Instantiate ``TrainingWorker`` and run it; emit ``finished`` or ``error``."""
         try:
             from core.training import TrainingWorker
             worker = TrainingWorker(
@@ -51,6 +74,18 @@ class TrainingThread(QThread):
 
 
 class TrainingPage(QWidget):
+    """
+    Training configuration and live-monitoring page (stack index 3).
+
+    Left panel: all hyperparameters (architecture, image size, batch size, epochs,
+    learning rate, optimizer, scheduler, augmentation, SSH remote training).
+    Right panel: live progress bar, loss/accuracy badges, training-curves chart,
+    validation metrics and confusion matrix, and a dedicated test-results tab.
+
+    Emits ``training_finished(dict)`` when the worker completes; ``MainWindow``
+    persists the result and refreshes the Models and Dashboard pages.
+    """
+
     training_finished = Signal(dict)
 
     def __init__(self, parent=None):
@@ -66,6 +101,7 @@ class TrainingPage(QWidget):
         self._build_ui()
 
     def set_project(self, project, audit=None) -> None:
+        """Accept a new project, update the model save directory, and reload saved config."""
         self.project = project
         self._audit = audit
         save_dir = os.path.join(project.get_project_dir(), "models") if project.get_project_dir() else "models"
@@ -73,6 +109,7 @@ class TrainingPage(QWidget):
         self._load_config()
 
     def set_settings(self, settings) -> None:
+        """Inject the application settings and populate the SSH profile combo."""
         self._settings = settings
         self._refresh_ssh_profiles()
 
@@ -495,7 +532,7 @@ class TrainingPage(QWidget):
         dlg.exec()
 
     def _apply_aug_cfg(self, cfg: dict) -> None:
-        """Apply augmentation settings returned from the editor dialog."""
+        """Apply augmentation settings returned from the editor dialog and store extra params."""
         self.aug_flip.setChecked(cfg.get("flip", True))
         self.aug_rotation.setChecked(cfg.get("rotation", True))
         self.aug_brightness.setChecked(cfg.get("brightness", True))
@@ -512,6 +549,7 @@ class TrainingPage(QWidget):
     # ------------------------------------------------------------------ config
 
     def _get_config(self) -> Dict:
+        """Collect all form values into a training configuration dict."""
         return {
             "model_type": self.model_combo.currentText(),
             "use_pretrained": self.pretrained_cb.isChecked(),
@@ -544,6 +582,7 @@ class TrainingPage(QWidget):
         }
 
     def _load_config(self) -> None:
+        """Restore form values from the project's previously saved training config."""
         if not self.project:
             return
         cfg = self.project.training_config
@@ -558,6 +597,7 @@ class TrainingPage(QWidget):
         self.seed_spin.setValue(cfg.get("seed", 42))
 
     def _pick_checkpoint(self) -> None:
+        """Open a file chooser to select a .pth checkpoint for resume training."""
         path, _ = QFileDialog.getOpenFileName(self, "Checkpoint wählen", "", "PyTorch (*.pth)")
         if path:
             self.resume_path_label.setText(path)
@@ -566,6 +606,7 @@ class TrainingPage(QWidget):
     # ------------------------------------------------------------------ training
 
     def _start(self) -> None:
+        """Validate prerequisites, build the config, and start the training thread."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -601,12 +642,14 @@ class TrainingPage(QWidget):
         self.stop_btn.setEnabled(True)
 
     def _stop_training(self) -> None:
+        """Request a graceful stop of the running training thread."""
         if self._thread:
             self._thread.request_stop()
         self.stop_btn.setEnabled(False)
 
     @Slot(int, int, float, float, float, float)
     def _on_progress(self, epoch, total, tl, vl, ta, va) -> None:
+        """Update progress bar, metric badges, and live training curves each epoch."""
         self.progress_bar.setValue(int(epoch / total * 100))
         self.epoch_label.setText(f"Epoche: {epoch} / {total}")
         self.train_loss_lbl.setText(f"Train-Loss: {tl:.4f}")
@@ -619,10 +662,12 @@ class TrainingPage(QWidget):
 
     @Slot(str)
     def _on_log(self, msg: str) -> None:
+        """Append a log message to the training log text area."""
         self.log_text.append(msg)
 
     @Slot(dict)
     def _on_finished(self, result: Dict) -> None:
+        """Populate all result tabs and emit ``training_finished`` when training is done."""
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.progress_bar.setValue(100)
@@ -723,6 +768,7 @@ class TrainingPage(QWidget):
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
+        """Re-enable the start button and show a critical dialog on training error."""
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.log_text.append(f"FEHLER: {msg}")
@@ -731,6 +777,7 @@ class TrainingPage(QWidget):
     # ------------------------------------------------------------------ SSH helpers
 
     def _refresh_ssh_profiles(self) -> None:
+        """Reload SSH profile list from settings and repopulate the combo box."""
         if not self._settings:
             return
         self._ssh_profiles = self._settings.get_ssh_profiles()
@@ -741,6 +788,7 @@ class TrainingPage(QWidget):
             self.ssh_profile_combo.addItem(f"{name}  —  {host}")
 
     def _on_ssh_toggled(self, state: int) -> None:
+        """Enable or disable SSH-related controls when the checkbox is toggled."""
         enabled = bool(state)
         self.ssh_profile_combo.setEnabled(enabled)
         self.ssh_python_edit.setEnabled(enabled)
@@ -750,6 +798,7 @@ class TrainingPage(QWidget):
             self._refresh_ssh_profiles()
 
     def _current_ssh_cfg(self) -> Optional[Dict]:
+        """Build an SSH config dict from the currently selected profile and form fields."""
         idx = self.ssh_profile_combo.currentIndex()
         if idx < 0 or idx >= len(self._ssh_profiles):
             return None
@@ -759,6 +808,7 @@ class TrainingPage(QWidget):
         return profile
 
     def _test_ssh(self) -> None:
+        """Test the selected SSH connection in a background thread and update the status label."""
         cfg = self._current_ssh_cfg()
         if cfg is None:
             QMessageBox.warning(self, "SSH", "Kein Profil ausgewählt.")
@@ -783,6 +833,7 @@ class TrainingPage(QWidget):
 
     @Slot(bool, str)
     def _on_ssh_test_done(self, ok: bool, msg: str) -> None:
+        """Display the SSH connection test result with green (success) or red (failure)."""
         self.ssh_test_btn.setEnabled(True)
         if ok:
             self.ssh_status_lbl.setStyleSheet("color: #2ECC71;")
@@ -820,6 +871,7 @@ class TrainingPage(QWidget):
         dlg.exec()
 
     def _export_report(self) -> None:
+        """Save the last training result as a self-contained HTML report file."""
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Kein Ergebnis", "Erst Training durchführen.")
             return
@@ -839,6 +891,7 @@ class TrainingPage(QWidget):
             QMessageBox.critical(self, "Fehler", str(exc))
 
     def _export_excel(self) -> None:
+        """Save the last training result as an Excel (.xlsx) workbook."""
         if not hasattr(self, "_last_result"):
             QMessageBox.information(self, "Kein Ergebnis", "Erst Training durchführen.")
             return

@@ -15,7 +15,13 @@ except ImportError:
 
 
 class BatchInferenceWorker:
-    """Runs classification on a list of image paths. Thread-safe, cancellable."""
+    """
+    Classifies a list of image paths through a pre-loaded PyTorch model.
+
+    Designed to run inside a QThread (see BatchInferencePage). Cancellable
+    mid-run via cancel(). Each result dict contains:
+      path, filename, predicted, confidence, probabilities, error.
+    """
 
     def __init__(
         self,
@@ -24,6 +30,14 @@ class BatchInferenceWorker:
         image_size: int = 224,
         progress_cb: Optional[Callable[[int, int], None]] = None,
     ):
+        """
+        Parameters
+        ----------
+        model       : Loaded PyTorch model (already on the target device).
+        class_names : Ordered list of class label strings.
+        image_size  : Side length for the square resize applied to each image.
+        progress_cb : Optional callback(current_index, total) called after each image.
+        """
         self.model = model
         self.class_names = class_names
         self.image_size = image_size
@@ -31,9 +45,16 @@ class BatchInferenceWorker:
         self._cancelled = False
 
     def cancel(self) -> None:
+        """Signal the worker to stop after the current image."""
         self._cancelled = True
 
     def run(self, image_paths: List[str]) -> List[Dict]:
+        """
+        Classify all images in *image_paths* and return a list of result dicts.
+
+        Processing stops early when cancel() has been called. Failed images are
+        included in the results with error set to the exception message.
+        """
         if not HAS_TORCH:
             raise RuntimeError("PyTorch nicht verfügbar.")
 

@@ -25,7 +25,13 @@ log = get_logger()
 
 
 class Inferencer:
-    """Load a model checkpoint and classify images or ROI crops."""
+    """
+    Loads a trained .pth checkpoint and exposes prediction methods.
+
+    Used by InferencePage, BatchInferencePage, and the REST API server.
+    Supports single-image prediction, ROI-cropped prediction, folder batch
+    classification, and optional Test-Time Augmentation (TTA).
+    """
 
     def __init__(self):
         self.model = None
@@ -40,6 +46,14 @@ class Inferencer:
     # ------------------------------------------------------------------ setup
 
     def load_model(self, model_path: str) -> Dict:
+        """
+        Load a checkpoint from *model_path*.
+
+        Reads class_names, model_type, and image_size from the checkpoint
+        metadata, creates the matching architecture, and moves it to the
+        best available device. Returns the metadata dict.
+        Raises ValueError if the checkpoint has no class information.
+        """
         if not HAS_TORCH:
             raise RuntimeError("PyTorch ist nicht installiert.")
         from models.classifier import create_model, load_checkpoint
@@ -207,6 +221,16 @@ class Inferencer:
         label_filter: str = "",
         only_low_confidence: bool = False,
     ) -> List[Dict]:
+        """
+        Filter a list of result dicts by label and/or confidence.
+
+        Parameters
+        ----------
+        results            : As returned by predict_folder().
+        min_confidence     : Exclude results with confidence below this value.
+        label_filter       : When non-empty, keep only results with this predicted label.
+        only_low_confidence: When True, keep only results marked as low_confidence.
+        """
         out = results
         if label_filter:
             out = [r for r in out if r.get("predicted_label") == label_filter]
@@ -217,4 +241,5 @@ class Inferencer:
         return out
 
     def is_ready(self) -> bool:
+        """Return True when a model has been successfully loaded."""
         return self.model is not None

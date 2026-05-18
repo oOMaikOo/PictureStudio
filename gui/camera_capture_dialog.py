@@ -156,10 +156,11 @@ class _BatchAnalysisThread(QThread):
 
 class _UsbScanThread(QThread):
     """Enumerates USB cameras in background (may take a second)."""
-    finished = Signal(list)
+    # Named 'cameras_found' (not 'finished') to avoid conflict with QThread.finished
+    cameras_found = Signal(list)
 
     def run(self):
-        self.finished.emit(list_usb_cameras())
+        self.cameras_found.emit(list_usb_cameras())
 
 
 class _AETrainThread(QThread):
@@ -188,11 +189,28 @@ class _AETrainThread(QThread):
 
 
 class CameraCaptureDialog(QDialog):
-    """
-    Full-featured camera capture dialog.
+    """Full-featured camera capture and anomaly detection dialog.
 
-    After exec(), check `.captured_paths` for the list of saved PNG files.
-    The caller is responsible for adding them to the project.
+    Launched from ``MainWindow._open_camera_dialog()``.  After ``exec()``,
+    check ``.captured_paths`` for the list of saved PNG files; the caller is
+    responsible for adding them to the project.
+
+    Features:
+    - USB and IP-camera live preview via ``CameraFrameThread``.
+    - Video-file playback at configurable speed.
+    - Single-shot and burst capture with optional timestamp overlay.
+    - MP4 video recording of the live stream.
+    - Unsupervised anomaly detection using a convolutional autoencoder:
+        1. Collect normal frames while connected.
+        2. Train the autoencoder in a background thread.
+        3. Run live scoring with heatmap overlay, alarm banner and MQTT
+           alarm publication.
+    - Configurable ROI (drawn on the preview): only the ROI region is fed
+      to the autoencoder.
+    - Batch analysis of image files/folders.
+    - Model save/load (.pth), ONNX and TorchScript export.
+    - Monitoring-profile export for headless ``monitor_daemon.py``.
+    - Append-only JSONL audit log for model lifecycle events.
     """
 
     def __init__(self, save_dir: Optional[str] = None, parent=None):
@@ -254,6 +272,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== UI BUILD
 
     def _build_ui(self) -> None:
+        """Build the dialog layout: scrollable left control panel + right preview area."""
         root = QVBoxLayout(self)
 
         splitter = QSplitter(Qt.Horizontal)
@@ -555,7 +574,7 @@ class CameraCaptureDialog(QDialog):
         self._accept_btn = QPushButton("In Projekt übernehmen (0)")
         self._accept_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
         self._accept_btn.setEnabled(False)
-        self._accept_btn.clicked.connect(self.accept)
+        self._accept_btn.clicked.connect(self._on_accept_clicked)
         btn_row.addWidget(self._accept_btn)
         root.addLayout(btn_row)
 
@@ -836,15 +855,19 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== CAMERA SCAN
 
     def _scan_usb_cameras(self) -> None:
+        """Start an async USB camera scan and update the combo when finished."""
+        self._prev_usb_cam = self._usb_combo.currentData()  # save BEFORE clearing
         self._usb_combo.clear()
         self._usb_combo.addItem("Suche läuft…")
         self._usb_combo.setEnabled(False)
         self._scan_thread = _UsbScanThread(self)
-        self._scan_thread.finished.connect(self._on_usb_scan_done)
+        self._scan_thread.cameras_found.connect(self._on_usb_scan_done)
         self._scan_thread.start()
 
     @Slot(list)
     def _on_usb_scan_done(self, cameras: list) -> None:
+        """Populate the USB camera combo with the scan results."""
+        prev = self._prev_usb_cam
         self._usb_combo.clear()
         self._usb_combo.setEnabled(True)
         if cameras:
@@ -852,10 +875,17 @@ class CameraCaptureDialog(QDialog):
                 self._usb_combo.addItem(label, userData=idx)
         else:
             self._usb_combo.addItem("Keine USB-Kamera gefunden")
+        # Restore previous selection so a refresh doesn't silently reset the user's choice
+        if prev is not None:
+            for i in range(self._usb_combo.count()):
+                if self._usb_combo.itemData(i) == prev:
+                    self._usb_combo.setCurrentIndex(i)
+                    break
 
     # ================================================================== CONNECTION
 
     def _pick_video_file(self) -> None:
+        """Open a file chooser and store the chosen video path for later playback."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Video-Datei wählen", "",
             "Videos (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;Alle Dateien (*)"
@@ -866,6 +896,7 @@ class CameraCaptureDialog(QDialog):
             self._vid_path_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
 
     def _toggle_connection(self) -> None:
+        """Connect if disconnected, or stop the active camera/video thread."""
         is_running = (
             (self._frame_thread and self._frame_thread.isRunning()) or
             (self._video_thread and self._video_thread.isRunning())
@@ -876,6 +907,7 @@ class CameraCaptureDialog(QDialog):
             self._connect()
 
     def _connect(self) -> None:
+        """Start the appropriate frame thread for the selected source tab (USB/IP/video file)."""
         tab = self._src_tabs.currentIndex()
         if tab == 2:  # Video-Datei
             if not self._video_file_path or not os.path.isfile(self._video_file_path):
@@ -904,6 +936,7 @@ class CameraCaptureDialog(QDialog):
         self._status_lbl.setStyleSheet("color:#F39C12;")
 
     def _disconnect(self) -> None:
+        """Stop all running frame/video threads and reset the UI to disconnected state."""
         if self._frame_thread:
             self._frame_thread.stop()
             self._frame_thread = None
@@ -924,11 +957,13 @@ class CameraCaptureDialog(QDialog):
 
     @Slot(int, int)
     def _on_video_progress(self, current: int, total: int) -> None:
+        """Update the video-file progress bar as frames are decoded."""
         self._vid_progress.setRange(0, total)
         self._vid_progress.setValue(current)
 
     @Slot()
     def _on_video_finished(self) -> None:
+        """Clean up after the video-file thread signals completion."""
         self._video_thread = None
         self._vid_progress.setVisible(False)
         self._connect_btn.setText("Verbinden")
@@ -937,6 +972,10 @@ class CameraCaptureDialog(QDialog):
         self._status_lbl.setStyleSheet("color:#3FB950;")
 
     def _resolve_source(self):
+        """Return an integer device index (USB) or URL string (IP) for the selected source tab.
+
+        Returns None and shows a warning dialog if the selection is invalid.
+        """
         if self._src_tabs.currentIndex() == 0:
             data = self._usb_combo.currentData()
             if data is None:
@@ -953,6 +992,18 @@ class CameraCaptureDialog(QDialog):
 
     @Slot(object)
     def _on_frame(self, frame: np.ndarray) -> None:
+        """Process each incoming BGR frame: record, collect, score and display.
+
+        Pipeline per frame:
+        1. Feed to the live video writer if recording.
+        2. Crop to ROI (or keep full frame) for anomaly analysis.
+        3. Collect into the autoencoder training buffer if collecting.
+        4. Apply the optional motion filter (skip scoring when scene is static).
+        5. Score every 3rd frame; accumulate score history; trigger alarms with
+           smoothing (N consecutive frames) and deduplication (cooldown window).
+        6. Composite the heatmap overlay (ROI-aware) and draw the ROI rectangle.
+        7. Display the final frame and update status labels.
+        """
         self._current_frame = frame
         h, w = frame.shape[:2]
         self._frame_shape = (h, w)
@@ -1085,12 +1136,14 @@ class CameraCaptureDialog(QDialog):
 
     @Slot(str)
     def _on_camera_error(self, msg: str) -> None:
+        """Disconnect and show an error dialog when the camera thread reports a problem."""
         self._disconnect()
         QMessageBox.warning(self, "Kamerafehler", msg)
 
     # ================================================================== SCORE DISPLAY
 
     def _update_score_display(self, score: float, is_anomaly: bool) -> None:
+        """Colour the score label and toggle the alarm banner based on the smoothed alarm state."""
         thr = self._detector.threshold
         pct = int(score / thr * 100) if thr > 0 else 0
         label_text = f"Score: {score:.5f}  ({pct}% des Schwellwerts)"
@@ -1115,6 +1168,7 @@ class CameraCaptureDialog(QDialog):
             self._alarm_banner.setVisible(False)
 
     def _set_preview_border_normal(self) -> None:
+        """Reset the preview label border to the default dark style (no alarm highlight)."""
         self._preview_lbl.setStyleSheet(
             "background:#111;color:#555;font-size:18px;border:3px solid #333;"
         )
@@ -1122,11 +1176,13 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== TIMESTAMP
 
     def _apply_timestamp(self, frame: np.ndarray) -> np.ndarray:
+        """Delegate to ``core.camera.apply_timestamp``; separated to allow easy mocking in tests."""
         return apply_timestamp(frame)
 
     # ================================================================== CAPTURE
 
     def _capture_single(self) -> None:
+        """Save the current frame to disk and add it to the captured list."""
         if self._current_frame is None:
             return
         path = self._save_frame(self._current_frame)
@@ -1134,6 +1190,7 @@ class CameraCaptureDialog(QDialog):
             self._add_to_list(path)
 
     def _save_frame(self, frame: np.ndarray) -> Optional[str]:
+        """Write *frame* to a PNG file in ``_save_dir`` and return the path, or None on error."""
         os.makedirs(self._save_dir, exist_ok=True)
         self._capture_index += 1
         filename = f"capture_{int(time.time())}_{self._capture_index:04d}.png"
@@ -1210,6 +1267,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== BATCH ANALYSIS
 
     def _batch_pick_folder(self) -> None:
+        """Choose a folder; populate ``_batch_paths`` with all supported image files inside."""
         folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
         if not folder:
             return
@@ -1224,6 +1282,7 @@ class CameraCaptureDialog(QDialog):
         self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
 
     def _batch_pick_files(self) -> None:
+        """Choose individual image files via a multi-select dialog and store them in ``_batch_paths``."""
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Bilder wählen", "",
             "Bilder (*.jpg *.jpeg *.png *.bmp *.tiff *.tif *.webp);;Alle (*)"
@@ -1234,6 +1293,7 @@ class CameraCaptureDialog(QDialog):
             self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
 
     def _batch_start(self) -> None:
+        """Start the batch-analysis thread and switch the preview to the Batch tab."""
         self._ensure_detector()
         if not self._detector.trained:
             QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren oder laden.")
@@ -1257,6 +1317,7 @@ class CameraCaptureDialog(QDialog):
         self._preview_tabs.setCurrentIndex(2)  # switch to Batch tab
 
     def _batch_stop(self) -> None:
+        """Stop the batch-analysis thread and update button states."""
         if self._batch_thread:
             self._batch_thread.stop()
             self._batch_thread = None
@@ -1267,6 +1328,7 @@ class CameraCaptureDialog(QDialog):
 
     @Slot(str, float, bool)
     def _on_batch_result(self, path: str, score: float, is_anomaly: bool) -> None:
+        """Append a single batch-analysis result to the table (anomalies highlighted in dark red)."""
         from PySide6.QtWidgets import QTableWidgetItem
         self._batch_results.append((path, score, is_anomaly))
         thr = self._detector.threshold
@@ -1284,6 +1346,7 @@ class CameraCaptureDialog(QDialog):
 
     @Slot()
     def _on_batch_finished(self) -> None:
+        """Clean up after the batch thread completes and show a summary count."""
         self._batch_thread = None
         self._batch_progress.setVisible(False)
         self._batch_start_btn.setEnabled(True)
@@ -1295,6 +1358,7 @@ class CameraCaptureDialog(QDialog):
         )
 
     def _batch_export_csv(self) -> None:
+        """Export the batch-analysis results table to a CSV file chosen by the user."""
         if not self._batch_results:
             return
         import csv
@@ -1315,12 +1379,14 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== RECORDING
 
     def _toggle_recording(self) -> None:
+        """Start recording if not already recording, or stop and flush the current video file."""
         if self._video_writer is not None:
             self._stop_recording()
         else:
             self._start_recording()
 
     def _start_recording(self) -> None:
+        """Open a save dialog, initialise the ``cv2.VideoWriter`` and start recording frames."""
         if self._current_frame is None:
             QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
             return
@@ -1344,6 +1410,7 @@ class CameraCaptureDialog(QDialog):
         self._rec_lbl.setText(f"REC  {os.path.basename(path)}")
 
     def _stop_recording(self) -> None:
+        """Release the VideoWriter and reset the recording UI elements."""
         if self._video_writer:
             self._video_writer.release()
             self._video_writer = None
@@ -1354,6 +1421,7 @@ class CameraCaptureDialog(QDialog):
         self._recording_path = None
 
     def _add_to_list(self, path: str) -> None:
+        """Add a captured file to ``captured_paths`` and the UI list widget."""
         self.captured_paths.append(path)
         item = QListWidgetItem(os.path.basename(path))
         item.setData(Qt.UserRole, path)
@@ -1363,6 +1431,7 @@ class CameraCaptureDialog(QDialog):
         self._accept_btn.setEnabled(True)
 
     def _on_captured_list_menu(self, pos) -> None:
+        """Show a context menu for a captured-image list entry (false-positive marking or removal)."""
         item = self._captured_list.itemAt(pos)
         if not item:
             return
@@ -1408,6 +1477,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== BURST
 
     def _start_burst(self) -> None:
+        """Initiate a burst capture: set up a repeating QTimer that calls ``_burst_tick``."""
         if self._current_frame is None:
             QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
             return
@@ -1425,6 +1495,7 @@ class CameraCaptureDialog(QDialog):
         self._burst_tick()
 
     def _burst_tick(self) -> None:
+        """Capture one frame per timer tick and stop when the burst count is reached."""
         if self._burst_remaining <= 0 or self._current_frame is None:
             self._burst_timer.stop()
             self._burst_btn.setEnabled(True)
@@ -1443,6 +1514,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== LIST
 
     def _delete_selected(self) -> None:
+        """Remove selected entries from the captured-images list (file is kept on disk)."""
         for item in self._captured_list.selectedItems():
             path = item.data(Qt.UserRole)
             if path in self.captured_paths:
@@ -1452,6 +1524,7 @@ class CameraCaptureDialog(QDialog):
         self._accept_btn.setEnabled(len(self.captured_paths) > 0)
 
     def _clear_all(self) -> None:
+        """Clear the entire captured-images list and disable the accept button."""
         self.captured_paths.clear()
         self._captured_list.clear()
         self._accept_btn.setText("In Projekt übernehmen (0)")
@@ -1460,6 +1533,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== SAVE DIR
 
     def _choose_save_dir(self) -> None:
+        """Open a directory chooser and update ``_save_dir`` and the displayed path."""
         folder = QFileDialog.getExistingDirectory(self, "Speicherordner wählen", self._save_dir)
         if folder:
             self._save_dir = folder
@@ -1468,11 +1542,13 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== ANOMALY DETECTION
 
     def _ensure_detector(self) -> None:
+        """Lazily initialise the ``AnomalyDetector`` on first use."""
         if self._detector is None:
             from core.anomaly_detector import AnomalyDetector
             self._detector = AnomalyDetector()
 
     def _start_collecting(self) -> None:
+        """Begin collecting normal frames from the live stream into the autoencoder buffer."""
         if self._current_frame is None:
             QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
             return
@@ -1486,6 +1562,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_collect_btn.setEnabled(False)
 
     def _clear_ae_frames(self) -> None:
+        """Discard all collected training frames and reset the collection UI."""
         if self._detector:
             self._detector.clear_frames()
         self._ae_collecting = False
@@ -1496,6 +1573,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_btn.setEnabled(False)
 
     def _train_autoencoder(self) -> None:
+        """Inject camera metadata and start the autoencoder training thread."""
         self._ensure_detector()
         if self._detector.n_collected() < 10:
             QMessageBox.warning(self, "Zu wenig Frames",
@@ -1524,11 +1602,13 @@ class CameraCaptureDialog(QDialog):
 
     @Slot(int, int, float)
     def _on_ae_epoch(self, epoch: int, total: int, loss: float) -> None:
+        """Update the training progress bar and loss label at the end of each epoch."""
         self._ae_train_bar.setValue(epoch)
         self._ae_train_lbl.setText(f"Epoche {epoch}/{total}  |  Loss: {loss:.5f}")
 
     @Slot(float)
     def _on_ae_trained(self, threshold: float) -> None:
+        """Receive the computed threshold after training, auto-save the model and enable scoring."""
         self._ae_train_bar.setVisible(False)
         self._ae_train_btn.setEnabled(True)
         self._ae_collect_btn.setEnabled(True)
@@ -1565,8 +1645,34 @@ class CameraCaptureDialog(QDialog):
         """Path to the auto-saved model after training, or None if not trained/saved."""
         return self._auto_saved_model_path
 
+    def _on_accept_clicked(self) -> None:
+        """If a model was trained, prompt where to save it before closing."""
+        # accept() only hides the dialog — it does NOT call closeEvent, so the
+        # camera thread would keep running and crash when dlg is garbage-collected.
+        self._ae_collecting = False
+        self._ae_scoring_btn.setChecked(False)
+        self._disconnect()
+
+        if self._detector and self._detector.trained:
+            default = os.path.join(self._save_dir, "autoencoder.pth")
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Modell speichern", default, "PyTorch-Modell (*.pth)"
+            )
+            if path:
+                try:
+                    self._detector.save(path)
+                    self._auto_saved_model_path = path
+                    self._ae_model_path = path
+                    log.info(f"Model saved to {path}")
+                except Exception as exc:
+                    QMessageBox.critical(self, "Fehler beim Speichern", str(exc))
+                    return
+            # Cancelled file dialog → accept without re-saving (auto-save still available)
+        self.accept()
+
     @Slot(str)
     def _on_ae_error(self, msg: str) -> None:
+        """Show a training error and re-enable the training buttons."""
         self._ae_train_bar.setVisible(False)
         self._ae_train_btn.setEnabled(True)
         self._ae_collect_btn.setEnabled(True)
@@ -1574,16 +1680,19 @@ class CameraCaptureDialog(QDialog):
         QMessageBox.critical(self, "Trainingsfehler", msg)
 
     def _on_threshold_changed(self, value: float) -> None:
+        """Push the spin-box value directly onto the detector's ``threshold`` attribute."""
         if self._detector:
             self._detector.threshold = value
 
     def _on_motion_filter_toggled(self, checked: bool) -> None:
+        """Enable/disable the sensitivity spinner and reset the previous frame reference on toggle."""
         self._motion_sens_spin.setEnabled(checked)
         self._motion_sens_lbl.setEnabled(checked)
         self._motion_status_lbl.setVisible(checked)
         self._motion_prev_frame = None  # reset prev frame on toggle
 
     def _open_event_log(self) -> None:
+        """Open the anomaly event log file with the OS default application."""
         if self._event_logger is None:
             return
         import subprocess, sys
@@ -1596,6 +1705,7 @@ class CameraCaptureDialog(QDialog):
             subprocess.Popen(["xdg-open", path])
 
     def _open_calibration(self) -> None:
+        """Open the threshold calibration dialog with the collected score history."""
         if not self._score_history:
             QMessageBox.information(
                 self, "Keine Daten",
@@ -1613,6 +1723,7 @@ class CameraCaptureDialog(QDialog):
             self._ae_threshold_spin.setValue(dlg.selected_threshold)
 
     def _save_ae_model(self) -> None:
+        """Prompt for a path, save the detector to disk and write a JSON sidecar with ROI info."""
         self._ensure_detector()
         if not self._detector.trained:
             QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
@@ -1637,6 +1748,7 @@ class CameraCaptureDialog(QDialog):
         QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
 
     def _load_ae_model(self) -> None:
+        """Load a saved detector checkpoint and restore any persisted ROI metadata sidecar."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Autoencoder-Modell laden", self._save_dir, "PyTorch (*.pth)"
         )
@@ -1695,6 +1807,7 @@ class CameraCaptureDialog(QDialog):
         dlg.exec()
 
     def _export_ae_onnx(self) -> None:
+        """Export the trained autoencoder as an ONNX model for deployment."""
         self._ensure_detector()
         if not self._detector.trained:
             QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
@@ -1711,6 +1824,7 @@ class CameraCaptureDialog(QDialog):
             QMessageBox.critical(self, "ONNX-Fehler", str(exc))
 
     def _export_ae_torchscript(self) -> None:
+        """Export the trained autoencoder as a TorchScript ``.pt`` module."""
         self._ensure_detector()
         if not self._detector.trained:
             QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
@@ -1729,10 +1843,12 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== MODEL META (ROI sidecar)
 
     def _meta_path(self, model_path: str) -> str:
+        """Return the path of the JSON sidecar file that stores ROI and other metadata for a model."""
         base, _ = os.path.splitext(model_path)
         return base + "_meta.json"
 
     def _save_model_meta(self, model_path: str) -> None:
+        """Persist the current ROI as a JSON sidecar next to the model file."""
         import json
         meta = {"roi": list(self._roi) if self._roi else None}
         try:
@@ -1742,6 +1858,7 @@ class CameraCaptureDialog(QDialog):
             pass  # meta is optional; don't block the save
 
     def _load_model_meta(self, model_path: str) -> None:
+        """Load the ROI sidecar for a model file and restore the ROI state in the dialog."""
         import json
         mp = self._meta_path(model_path)
         if not os.path.isfile(mp):
@@ -1769,6 +1886,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== MONITORING PROFILE
 
     def _export_monitoring_profile(self) -> None:
+        """Collect all current settings into a monitoring profile JSON and save it to disk."""
         from core.monitoring_profile import default_profile, save_profile
         if not (self._detector and self._detector.trained):
             QMessageBox.warning(
@@ -1811,6 +1929,7 @@ class CameraCaptureDialog(QDialog):
             QMessageBox.critical(self, "Fehler", str(exc))
 
     def _load_monitoring_profile(self) -> None:
+        """Load a monitoring profile JSON and apply its settings (threshold, ROI, model path, etc.)."""
         from core.monitoring_profile import load_profile
         path, _ = QFileDialog.getOpenFileName(
             self, "Monitoring-Profil laden", self._save_dir, "JSON (*.json)"
@@ -1864,6 +1983,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== SCORING TOGGLE
 
     def _on_scoring_toggled(self, checked: bool) -> None:
+        """Start or stop live scoring; create an event logger on start and clear the heatmap on stop."""
         if checked:
             self._ae_scoring_btn.setText("⏹  Live-Scoring stoppen")
             self._ae_score_streak = 0
@@ -1906,6 +2026,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== ROI
 
     def _on_roi_draw_toggled(self, checked: bool) -> None:
+        """Enter or exit ROI draw mode (cross cursor + event filter captures mouse drag)."""
         if checked:
             self._roi_drawing = True
             self._preview_lbl.setCursor(Qt.CrossCursor)
@@ -1918,6 +2039,7 @@ class CameraCaptureDialog(QDialog):
             self._roi_draw_btn.setText("ROI aufziehen")
 
     def _clear_roi(self) -> None:
+        """Reset the ROI to None (full-frame analysis) and update the label."""
         self._roi = None
         self._roi_start = None
         self._roi_end = None
@@ -1980,6 +2102,7 @@ class CameraCaptureDialog(QDialog):
         return (int(max(0, min(fw - 1, fx))), int(max(0, min(fh - 1, fy))))
 
     def eventFilter(self, obj, event) -> bool:
+        """Intercept mouse events on the preview label to support interactive ROI drawing."""
         if obj is self._preview_lbl and self._roi_drawing:
             t = event.type()
             if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
@@ -1996,6 +2119,10 @@ class CameraCaptureDialog(QDialog):
         return super().eventFilter(obj, event)
 
     def _finalise_roi(self) -> None:
+        """Convert the drag start/end label coords to normalised ROI and commit it.
+
+        Ignores drags smaller than 2% of the frame in either dimension.
+        """
         if not (self._roi_start and self._roi_end):
             return
         h, w = self._frame_shape
@@ -2020,6 +2147,7 @@ class CameraCaptureDialog(QDialog):
     # ================================================================== CLEANUP
 
     def closeEvent(self, event) -> None:
+        """Stop all background activity before the dialog is destroyed."""
         self._ae_collecting = False
         self._ae_scoring_btn.setChecked(False)
         if self._ae_train_thread and self._ae_train_thread.isRunning():

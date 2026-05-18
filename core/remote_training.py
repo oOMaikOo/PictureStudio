@@ -22,7 +22,20 @@ _SCRIPT_PATH = os.path.join(
 
 
 class RemoteTrainingThread(QThread):
-    """Mirrors the TrainingThread signal interface for drop-in use."""
+    """
+    QThread that runs the full SSH remote training pipeline.
+
+    Mirrors the TrainingThread signal interface so TrainingPage can use either
+    thread without changing its signal connections.
+
+    Pipeline steps:
+      1. Connect to SSH host.
+      2. Build and upload the training bundle (images.zip + config.json).
+      3. Upload remote_train.py script.
+      4. Execute the script; stream and parse structured log lines.
+      5. Download the best checkpoint.
+      6. Emit finished(result_dict).
+    """
 
     progress = Signal(int, int, float, float, float, float)   # epoch, total, tl, vl, ta, va
     log_msg  = Signal(str)
@@ -38,11 +51,13 @@ class RemoteTrainingThread(QThread):
         self._stop    = False
 
     def request_stop(self) -> None:
+        """Signal the thread to abort after the current remote operation."""
         self._stop = True
 
     # ------------------------------------------------------------------ run
 
     def run(self) -> None:
+        """Thread entry point; delegates to _pipeline() and emits error on exception."""
         from core.remote_ssh import SSHManager
         ssh = SSHManager()
         try:
@@ -54,6 +69,7 @@ class RemoteTrainingThread(QThread):
             ssh.disconnect()
 
     def _pipeline(self, ssh) -> None:
+        """Execute the nine-step remote training pipeline with *ssh* already injected."""
         from core.remote_ssh import SSHManager, build_training_bundle
 
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -199,6 +215,7 @@ class RemoteTrainingThread(QThread):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def _log(self, msg: str) -> None:
+        """Emit a log message both to the GUI (via signal) and the Python logger."""
         self.log_msg.emit(msg)
         log.info("[remote] %s", msg)
 

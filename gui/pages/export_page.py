@@ -15,6 +15,17 @@ from core.export import DEFAULT_COLUMNS
 
 
 class ExportPage(QWidget):
+    """
+    Excel export page (stack index 6).
+
+    Lets the user:
+    - Pull inference results from the project's last classification run.
+    - Choose a target Excel file (new or existing).
+    - Configure sheet name and append vs. overwrite mode.
+    - Toggle and rename individual result columns via a mapping table.
+    - Trigger ``core.export.export_results_to_excel`` and view a log.
+    """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.project = None
@@ -23,6 +34,7 @@ class ExportPage(QWidget):
         self._build_ui()
 
     def set_project(self, project) -> None:
+        """Accept the active project and pre-fill the result count if results exist."""
         self.project = project
         if project and project.inference_results:
             self._results = project.inference_results
@@ -107,6 +119,7 @@ class ExportPage(QWidget):
         layout.addWidget(proto_group)
 
     def _populate_col_table(self) -> None:
+        """Fill the column-mapping table with the default column definitions."""
         for row, col in enumerate(self._col_defs):
             # Active checkbox
             cb = QCheckBox()
@@ -129,6 +142,7 @@ class ExportPage(QWidget):
             self.col_table.setItem(row, 2, header_item)
 
     def _get_col_defs(self) -> List[Dict]:
+        """Read the current column-mapping table and return a list of column definition dicts."""
         defs = []
         for row in range(self.col_table.rowCount()):
             cb_widget = self.col_table.cellWidget(row, 0)
@@ -146,6 +160,7 @@ class ExportPage(QWidget):
     # ------------------------------------------------------------------ actions
 
     def _load_from_project(self) -> None:
+        """Copy the project's stored inference results into the page for export."""
         if not self.project or not self.project.inference_results:
             QMessageBox.information(self, "Keine Daten",
                                     "Zuerst im Inferenz-Panel Bilder klassifizieren.")
@@ -154,6 +169,7 @@ class ExportPage(QWidget):
         self.count_label.setText(f"{len(self._results)} Ergebnisse geladen")
 
     def _choose_file(self) -> None:
+        """Select an existing Excel file to append data to."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Excel-Datei wählen", "", "Excel (*.xlsx *.xls)"
         )
@@ -162,6 +178,7 @@ class ExportPage(QWidget):
             self.append_cb.setChecked(True)
 
     def _new_file(self) -> None:
+        """Prompt for a new Excel file path and switch to overwrite mode."""
         path, _ = QFileDialog.getSaveFileName(
             self, "Neue Excel-Datei", "ergebnisse.xlsx", "Excel (*.xlsx)"
         )
@@ -170,6 +187,7 @@ class ExportPage(QWidget):
             self.append_cb.setChecked(False)
 
     def _export(self) -> None:
+        """Validate inputs, call ``export_results_to_excel``, and log the outcome."""
         path = self.file_label.text()
         if not path or path == "Keine Datei gewählt":
             QMessageBox.warning(self, "Keine Datei", "Bitte zuerst eine Zieldatei wählen.")

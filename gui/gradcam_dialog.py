@@ -30,20 +30,22 @@ class GradCAMWorker(QThread):
     error    = Signal(str)
 
     def __init__(self, model, model_type: str, image_path: str,
-                 class_idx: Optional[int], image_size: int = 224):
+                 class_idx: Optional[int], image_size: int = 224,
+                 roi: Optional[dict] = None):
         super().__init__()
         self.model      = model
         self.model_type = model_type
         self.image_path = image_path
         self.class_idx  = class_idx
         self.image_size = image_size
+        self.roi        = roi
 
     def run(self) -> None:
         try:
             from core.gradcam import compute_gradcam_overlay
             orig, overlay = compute_gradcam_overlay(
                 self.model, self.model_type, self.image_path,
-                self.class_idx, self.image_size,
+                self.class_idx, self.image_size, roi=self.roi,
             )
             self.finished.emit(orig, overlay)
         except Exception as exc:
@@ -83,7 +85,7 @@ class GradCAMDialog(QDialog):
 
     def __init__(self, model, model_type: str, image_path: str,
                  class_names: List[str], class_idx: Optional[int] = None,
-                 image_size: int = 224, parent=None):
+                 image_size: int = 224, roi: Optional[dict] = None, parent=None):
         super().__init__(parent)
         self.model      = model
         self.model_type = model_type
@@ -91,10 +93,14 @@ class GradCAMDialog(QDialog):
         self.class_names = class_names
         self._class_idx  = class_idx
         self.image_size  = image_size
+        self._roi        = roi
         self._overlay_pil = None
         self._worker: Optional[GradCAMWorker] = None
 
-        self.setWindowTitle("Grad-CAM – Aktivierungskarte")
+        title = "Grad-CAM – Aktivierungskarte"
+        if roi is not None:
+            title += f"  [ROI {int(roi.get('x',0))},{int(roi.get('y',0))}  {int(roi.get('w',0))}×{int(roi.get('h',0))} px]"
+        self.setWindowTitle(title)
         self.resize(900, 520)
         self._build_ui()
         self._run()
@@ -174,7 +180,8 @@ class GradCAMDialog(QDialog):
         self._class_combo.setEnabled(False)
 
         self._worker = GradCAMWorker(
-            self.model, self.model_type, self.image_path, idx, self.image_size
+            self.model, self.model_type, self.image_path, idx, self.image_size,
+            roi=self._roi,
         )
         self._worker.finished.connect(self._on_done)
         self._worker.error.connect(self._on_error)

@@ -16,11 +16,22 @@ from PySide6.QtGui import QColor, QFont, QPixmap
 
 
 class InferenceThread(QThread):
+    """Background thread that calls ``Inferencer.predict_folder`` without blocking the UI."""
+
     progress = Signal(int, int)
     finished = Signal(list)
     error    = Signal(str)
 
     def __init__(self, inferencer, folder: str, top_k: int, roi_templates: list, tta_passes: int = 1):
+        """
+        Parameters
+        ----------
+        inferencer    : Ready ``Inferencer`` instance with a model already loaded.
+        folder        : Directory of images to classify.
+        top_k         : Number of top predictions to include per image.
+        roi_templates : Optional ROI crop templates applied to every image.
+        tta_passes    : Test-time augmentation passes (1 = disabled).
+        """
         super().__init__()
         self.inferencer = inferencer
         self.folder = folder
@@ -29,6 +40,7 @@ class InferenceThread(QThread):
         self.tta_passes = tta_passes
 
     def run(self) -> None:
+        """Run folder inference and emit ``finished`` with the result list, or ``error``."""
         try:
             results = self.inferencer.predict_folder(
                 self.folder,
@@ -43,6 +55,25 @@ class InferenceThread(QThread):
 
 
 class InferencePage(QWidget):
+    """
+    Single-image and batch classification page (stack index 5).
+
+    Features:
+    - Load a primary model (``Inferencer``) and optional ensemble models.
+    - Classify a single image or an entire folder via ``InferenceThread``.
+    - Top-K predictions, confidence colour coding, and a low-confidence tab.
+    - Filter results by label and minimum confidence threshold.
+    - Active-Learning integration: push low-confidence images to the labeling queue.
+    - Semi-automatic labeling: apply high-confidence predictions as project labels.
+    - Grad-CAM visualisation for any selected result row.
+    - Export results to Excel or rename images with their predicted label appended.
+
+    Signals
+    -------
+    al_queue_updated : Emitted after adding images to the AL queue.
+    labels_applied   : Emitted with the count of labels written to the project.
+    """
+
     al_queue_updated = Signal()      # emitted when images are added to AL queue
     labels_applied   = Signal(int)   # emitted after semi-auto labeling; carries count
 
@@ -60,11 +91,12 @@ class InferencePage(QWidget):
         self._build_ui()
 
     def set_project(self, project, audit=None) -> None:
+        """Accept the active project and optional audit trail."""
         self.project = project
         self._audit = audit
 
     def load_model_path(self, path: str) -> None:
-        """Called from model library page."""
+        """Load a model checkpoint from *path* and update the model-info label."""
         try:
             meta = self.inferencer.load_model(path)
             self.model_path_label.setText(os.path.basename(path))
@@ -341,6 +373,7 @@ class InferencePage(QWidget):
             self.load_model_path(path)
 
     def _add_ensemble_model(self) -> None:
+        """Load an additional model and append it to the ensemble list."""
         path, _ = QFileDialog.getOpenFileName(
             self, "Ensemble-Modell hinzufügen", "", "PyTorch (*.pth)"
         )
@@ -357,6 +390,7 @@ class InferencePage(QWidget):
             QMessageBox.critical(self, "Ensemble-Fehler", str(exc))
 
     def _clear_ensemble(self) -> None:
+        """Remove all ensemble models, reverting to single-model inference."""
         self._ensemble_inferencers.clear()
         self._ens_list.setText("(kein Ensemble)")
 
@@ -389,6 +423,7 @@ class InferencePage(QWidget):
         }
 
     def _classify_single(self) -> None:
+        """Open a file chooser, classify the selected image, and display the result."""
         if not self.inferencer.is_ready():
             QMessageBox.warning(self, "Kein Modell", "Bitte erst ein Modell laden.")
             return
@@ -402,10 +437,17 @@ class InferencePage(QWidget):
         try:
             top_k = self.topk_spin.value()
             tta = self.tta_spin.value()
+            # If the image is a project image with labeled ROIs, classify the ROI crop
+            # (the model was trained on crops, not full frames)
+            roi = None
+            if self.project and path in self.project.images:
+                rois = self.project.get_rois(path)
+                if rois:
+                    roi = next((r for r in rois if r.get("label")), rois[0])
             if self._ensemble_inferencers:
                 pred = self._ensemble_predict(path, top_k, tta)
             else:
-                pred = self.inferencer.predict_image(path, top_k=top_k, tta_passes=tta)
+                pred = self.inferencer.predict_image(path, top_k=top_k, tta_passes=tta, roi=roi)
             result = {
                 "filename": os.path.basename(path), "path": path,
                 "predicted_label": pred["predicted_label"],
@@ -422,11 +464,13 @@ class InferencePage(QWidget):
             QMessageBox.critical(self, "Fehler", str(exc))
 
     def _select_folder(self) -> None:
+        """Open a folder chooser and update the folder label."""
         folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
         if folder:
             self.folder_label.setText(folder)
 
     def _classify_folder(self) -> None:
+        """Start ``InferenceThread`` to classify all images in the selected folder."""
         if not self.inferencer.is_ready():
             QMessageBox.warning(self, "Kein Modell", "Bitte erst ein Modell laden.")
             return
@@ -453,6 +497,7 @@ class InferencePage(QWidget):
 
     @Slot(list)
     def _on_finished(self, results: List[Dict]) -> None:
+        """Store results, update label-filter combo, and apply the current filter."""
         self.classify_btn.setEnabled(True)
         self.progress_bar.setValue(100)
         self._all_results = results
@@ -475,10 +520,12 @@ class InferencePage(QWidget):
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
+        """Re-enable the classify button and show the error in a critical dialog."""
         self.classify_btn.setEnabled(True)
         QMessageBox.critical(self, "Fehler", msg)
 
     def _apply_filter(self) -> None:
+        """Filter ``_all_results`` with the current UI filter settings and refresh the table."""
         lbl = self.label_filter_combo.currentText()
         lbl = "" if lbl == "Alle" else lbl
         self._filtered = self.inferencer.filter_results(
@@ -490,6 +537,7 @@ class InferencePage(QWidget):
         self._populate_table(self._filtered)
 
     def _populate_table(self, results: List[Dict]) -> None:
+        """Fill the results table from *results* and update the low-confidence tab."""
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(results))
         low_conf_lines = []
@@ -540,6 +588,7 @@ class InferencePage(QWidget):
         )
 
     def _on_table_select(self, row: int) -> None:
+        """Update the image preview and Grad-CAM button when the selected row changes."""
         if row < 0 or row >= len(self._filtered):
             self._gradcam_btn.setEnabled(False)
             return
@@ -555,6 +604,7 @@ class InferencePage(QWidget):
                 )
 
     def _add_to_al_queue(self) -> None:
+        """Add all low-confidence results to the project's Active Learning queue."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -583,6 +633,7 @@ class InferencePage(QWidget):
             self.al_queue_updated.emit()
 
     def _apply_label_suggestions(self) -> None:
+        """Write high-confidence predictions as project labels for unlabeled images."""
         if not self.project:
             QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
             return
@@ -631,6 +682,7 @@ class InferencePage(QWidget):
             self.labels_applied.emit(applied)
 
     def _show_gradcam(self) -> None:
+        """Open the Grad-CAM dialog for the currently selected result row."""
         row = self.table.currentRow()
         if row < 0 or row >= len(self._filtered):
             return
@@ -658,6 +710,18 @@ class InferencePage(QWidget):
             except ValueError:
                 class_idx = None
 
+        # Look up the project ROI for this image — the model was trained on crops,
+        # so Grad-CAM must see the same crop to produce meaningful activations.
+        roi = None
+        if self.project:
+            rois = self.project.get_rois(path)
+            if rois:
+                # Prefer the ROI whose label matches the predicted class
+                roi = next(
+                    (r for r in rois if r.get("label") == pred_label),
+                    rois[0],
+                )
+
         from gui.gradcam_dialog import GradCAMDialog
         dlg = GradCAMDialog(
             model=model,
@@ -666,11 +730,13 @@ class InferencePage(QWidget):
             class_names=class_names,
             class_idx=class_idx,
             image_size=image_size,
+            roi=roi,
             parent=self,
         )
         dlg.exec()
 
     def _export_excel(self) -> None:
+        """Save all inference results to an Excel workbook."""
         if not self._all_results:
             QMessageBox.information(self, "Keine Daten", "Erst Bilder klassifizieren.")
             return
