@@ -30,6 +30,7 @@ _IMAGE_PAGES: List[Tuple[str, str, int]] = [
     ("Batch",          "📦", 9),
     ("Export",         "📤", 6),
     ("Einstellungen",  "⚙",  7),
+    ("Clustering",     "🔬", 11),
 ]
 
 _VIDEO_PAGES: List[Tuple[str, str, int]] = [
@@ -40,6 +41,7 @@ _VIDEO_PAGES: List[Tuple[str, str, int]] = [
     ("Modelle",         "📊", 4),
     ("Export",          "📤", 6),
     ("Einstellungen",   "⚙",  7),
+    ("Clustering",      "🔬", 11),
 ]
 
 _BTN_STYLE = """

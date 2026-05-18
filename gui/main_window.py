@@ -94,36 +94,39 @@ class MainWindow(QMainWindow):
         self._tour = GuideTour(self)
 
         # Instantiate all pages
-        from gui.pages.dashboard_page       import DashboardPage
-        from gui.pages.data_page            import DataPage
-        from gui.pages.camera_page          import CameraPage
-        from gui.pages.labeling_page        import LabelingPage
-        from gui.pages.training_page        import TrainingPage
-        from gui.pages.models_page          import ModelsPage
-        from gui.pages.inference_page       import InferencePage
-        from gui.pages.export_page          import ExportPage
-        from gui.pages.settings_page        import SettingsPage
-        from gui.pages.batch_inference_page import BatchInferencePage
-        from gui.pages.multi_camera_page    import MultiCameraPage
+        from gui.pages.dashboard_page          import DashboardPage
+        from gui.pages.data_page               import DataPage
+        from gui.pages.camera_page             import CameraPage
+        from gui.pages.labeling_page           import LabelingPage
+        from gui.pages.training_page           import TrainingPage
+        from gui.pages.models_page             import ModelsPage
+        from gui.pages.inference_page          import InferencePage
+        from gui.pages.export_page             import ExportPage
+        from gui.pages.settings_page           import SettingsPage
+        from gui.pages.batch_inference_page    import BatchInferencePage
+        from gui.pages.multi_camera_page       import MultiCameraPage
+        from gui.pages.anomaly_clustering_page import AnomalyClusteringPage
 
-        self.dashboard_page    = DashboardPage()
-        self.data_page         = DataPage()
-        self.camera_page       = CameraPage()
-        self.labeling_page     = LabelingPage()
-        self.training_page     = TrainingPage()
-        self.models_page       = ModelsPage()
-        self.inference_page    = InferencePage()
-        self.export_page       = ExportPage()
-        self.settings_page     = SettingsPage()
-        self.batch_page        = BatchInferencePage()
-        self.multi_camera_page = MultiCameraPage()
+        self.dashboard_page          = DashboardPage()
+        self.data_page               = DataPage()
+        self.camera_page             = CameraPage()
+        self.labeling_page           = LabelingPage()
+        self.training_page           = TrainingPage()
+        self.models_page             = ModelsPage()
+        self.inference_page          = InferencePage()
+        self.export_page             = ExportPage()
+        self.settings_page           = SettingsPage()
+        self.batch_page              = BatchInferencePage()
+        self.multi_camera_page       = MultiCameraPage()
+        self.anomaly_clustering_page = AnomalyClusteringPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
             self.training_page, self.models_page, self.inference_page,
             self.export_page, self.settings_page, self.camera_page,
-            self.batch_page,         # index 9
-            self.multi_camera_page,  # index 10
+            self.batch_page,                # index 9
+            self.multi_camera_page,         # index 10
+            self.anomaly_clustering_page,   # index 11
         ]:
             self.stack.addWidget(page)
 
@@ -433,6 +436,7 @@ class MainWindow(QMainWindow):
         self.inference_page.set_project(project, self.audit)
         self.export_page.set_project(project)
         self.batch_page.set_project(project)
+        self.anomaly_clustering_page.set_project(project)
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)

@@ -553,6 +553,46 @@ TOUR_STEPS = {
          "Im unteren Bereich erscheinen alle Alarm-Ereignisse aller Kanäle mit Zeitstempel und Score.",
          None),
     ],
+    11: [  # Anomalie-Clustering
+        ("Anomalie-Clustering – Überblick",
+         "Diese Seite gruppiert deine Alarm-Bilder automatisch\n"
+         "nach visueller Ähnlichkeit – ohne manuelle Annotation.\n\n"
+         "Der k-Means-Algorithmus erkennt, welche Fehlertypen\n"
+         "im Datensatz vorkommen und wie häufig sie sind.\n\n"
+         "Voraussetzung: Projekt mit Bildern, die als\n"
+         "Anomalie (oder Fehler) gelabelt sind.",
+         None),
+        ("Cluster-Anzahl einstellen & starten",
+         "Anzahl Cluster einstellen (2–20).\n\n"
+         "Empfehlung: mit 5 Clustern starten.\n"
+         "Sind Bilder innerhalb eines Clusters\n"
+         "optisch zu verschieden → Anzahl erhöhen.\n\n"
+         "Dann 'Clustering starten' klicken.\n"
+         "Das Modell extrahiert Merkmale und\n"
+         "berechnet die Cluster (wenige Sekunden).",
+         "Clustering starten"),
+        ("Ergebnisse im Cluster-Browser lesen",
+         "Nach der Berechnung erscheinen Cluster-Karten:\n\n"
+         "• Jede Karte zeigt das repräsentative Bild\n"
+         "  (den Cluster-Mittelpunkt) als Thumbnail\n"
+         "• Darunter steht die Bildanzahl des Clusters\n"
+         "• Karte anklicken → alle Bilder des Clusters\n"
+         "  werden in der Thumbnail-Liste angezeigt\n\n"
+         "Cluster mit wenigen Bildern = seltene Anomalie.\n"
+         "Cluster mit vielen Bildern = häufige Fehlerart.",
+         None),
+        ("CSV exportieren",
+         "Klicke 'CSV exportieren' um die Ergebnisse\n"
+         "als Tabelle zu speichern.\n\n"
+         "Die CSV enthält drei Spalten:\n"
+         "• path — absoluter Dateipfad des Bildes\n"
+         "• cluster_id — Cluster-Nummer (0-basiert)\n"
+         "• is_representative — True für das Bild\n"
+         "  das dem Cluster-Mittelpunkt am nächsten liegt\n\n"
+         "Die CSV kann direkt in Excel oder Python\n"
+         "für weitere Analysen genutzt werden.",
+         "CSV exportieren"),
+    ],
     9: [  # Batch-Inferenz
         ("Batch-Inferenz",
          "Klassifiziere einen ganzen Ordner\n"

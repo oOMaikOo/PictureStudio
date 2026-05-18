@@ -28,10 +28,11 @@ SECTIONS = [
     ("🔧", "Fehlerbehebung"),
     ("💻", "Monitor-Client"),   # 13
     ("📹", "Multi-Kamera"),    # 14
+    ("🔬", "Anomalie-Clustering"),  # 15
 ]
 
 # Map sidebar page index → section index
-PAGE_TO_SECTION = {0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 10: 14}
+PAGE_TO_SECTION = {0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 10: 14, 11: 15}
 
 # ---------------------------------------------------------------------------
 # Shared CSS
@@ -968,6 +969,72 @@ aus den Einstellungen gelten für alle Kanäle.
 <div class="tip">
 <b>ONNX-Modelle:</b> Für geringere Latenz können .onnx-Modelle geladen werden (kein PyTorch nötig).
 </div>
+"""),
+
+
+# ── 15  Anomalie-Clustering ───────────────────────────────────────────────────
+15: page("""
+<h1>🔬 Anomalie-Clustering</h1>
+<p>Alarm-Bilder automatisch nach visueller Ähnlichkeit gruppieren – ohne manuelle Annotation.</p>
+
+<hr>
+<h2>Was macht Anomalie-Clustering?</h2>
+<p>Der k-Means-Algorithmus analysiert die visuellen Merkmale aller Bilder, die als Anomalie gelabelt
+wurden, und teilt sie in Gruppen (<b>Cluster</b>) auf. Bilder in einem Cluster sehen sich ähnlich –
+z. B. alle Kratzer an einer bestimmten Stelle, alle Farbausreißer oder alle Positionsfehler.</p>
+<div class="tip"><b>Wozu ist das nützlich?</b><br>
+Statt hunderte Alarm-Bilder manuell durchzusehen bekommst du auf einen Blick, welche
+<b>Fehlerarten</b> im Datensatz vorkommen und wie häufig sie sind. Ideal als erster Schritt
+zur Fehlerklassifikation.</div>
+
+<hr>
+<h2>Schritt-für-Schritt</h2>
+
+<div class="step"><b><span class="num">1</span>Projekt mit Anomalie-Bildern laden</b><br>
+Öffne ein Projekt, in dem Bilder mit dem Anomalie-Label (oder einem anderen Fehler-Label)
+annotiert sind. Die Seite zeigt automatisch wie viele Bilder für das Clustering zur Verfügung stehen.</div>
+
+<div class="step"><b><span class="num">2</span>Cluster-Anzahl wählen</b><br>
+Stelle den Schieberegler oder das Eingabefeld auf die gewünschte Anzahl Cluster ein (2–20).<br>
+<b>Empfehlung:</b> Mit <b>5 Clustern</b> starten. Erhöhe die Anzahl, wenn die Ergebnisse noch zu
+gemischt wirken – d. h. ein Cluster enthält optisch sehr verschiedene Bilder.</div>
+
+<div class="step"><b><span class="num">3</span>Clustering starten</b><br>
+Klicke <i>Clustering starten</i>. Das Modell extrahiert Bildmerkmale und berechnet die Cluster.
+Der Vorgang dauert je nach Bildanzahl wenige Sekunden bis ca. eine Minute.</div>
+
+<div class="step"><b><span class="num">4</span>Ergebnisse im Cluster-Browser ansehen</b><br>
+Nach der Berechnung erscheinen die Cluster als Karten:<br>
+<ul>
+  <li>Jede Karte zeigt das <b>repräsentative Bild</b> (den Cluster-Mittelpunkt) als Thumbnail</li>
+  <li>Darunter steht die Anzahl der Bilder in diesem Cluster</li>
+  <li>Klicke eine Karte an um alle Bilder des Clusters in der Thumbnail-Liste zu sehen</li>
+</ul></div>
+
+<div class="step"><b><span class="num">5</span>CSV exportieren</b><br>
+Klicke <i>CSV exportieren</i> um die Clustering-Ergebnisse als Tabelle zu speichern.</div>
+
+<hr>
+<h2>CSV-Export – Spalten</h2>
+<table>
+  <tr><th>Spalte</th><th>Inhalt</th></tr>
+  <tr><td><code>path</code></td><td>Absoluter Dateipfad des Bildes</td></tr>
+  <tr><td><code>cluster_id</code></td><td>Cluster-Nummer (0-basiert) dem das Bild zugeordnet wurde</td></tr>
+  <tr><td><code>is_representative</code></td><td><code>True</code> für das Bild das dem Cluster-Mittelpunkt am nächsten liegt, sonst <code>False</code></td></tr>
+</table>
+
+<hr>
+<h2>Tipps &amp; Empfehlungen</h2>
+<div class="tip"><b>Startpunkt: 5 Cluster</b><br>
+Beginne mit 5 Clustern und erhöhe schrittweise. Sind Bilder eines Clusters optisch zu
+verschieden, teile diesen Cluster durch Erhöhung der Gesamtanzahl weiter auf.</div>
+<div class="tip"><b>Zu wenige Bilder?</b><br>
+k-Means benötigt mindestens so viele Bilder wie Cluster. Bei weniger als 10 Anomalie-Bildern
+2–3 Cluster verwenden.</div>
+<div class="warn"><b>Cluster ≠ Fehlerklassen</b><br>
+Clustering gruppiert nach visueller Ähnlichkeit, nicht nach technischer Fehlerursache.
+Die inhaltliche Interpretation der Cluster (z. B. „Cluster 0 = Risse, Cluster 1 = Flecken")
+muss manuell erfolgen.</div>
 """),
 
 }
