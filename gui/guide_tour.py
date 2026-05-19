@@ -547,20 +547,91 @@ TOUR_STEPS = {
          None),
     ],
     10: [  # Multi-Kamera-Monitoring
-        ("Multi-Kamera-Monitoring",
-         "Diese Seite ermöglicht die gleichzeitige Überwachung von bis zu <b>4 Kamera-Quellen</b>. "
-         "Jeder Kanal hat eine eigene Kamera und ein eigenes Anomalie-Modell.",
+        ("Multi-Kamera-Monitoring – Überblick",
+         "Überwache 1–9 Kameras gleichzeitig,\n"
+         "jede mit eigenem Modell und eigenem ROI.\n\n"
+         "Grid: bis zu 4 Kanäle pro Seite (2×2).\n"
+         "Bei mehr als 4 Kanälen: blättere mit\n"
+         "◀ Vorherige / Nächste ▶ zwischen Seiten.\n\n"
+         "REST-API: per-Kanal-Endpunkte unter\n"
+         "/api/mc/channels, /api/mc/scores?channel=N\n"
+         "und /api/mc/latest_alarm?channel=N.",
          None),
+        ("Kanalzahl festlegen",
+         "Das Drehfeld 'Kanäle: [2]' oben links\n"
+         "legt die Anzahl der Kanäle fest (1–9).\n\n"
+         "Standard: 2 Kanäle.\n\n"
+         "Beim Erhöhen werden neue leere Kanäle\n"
+         "hinzugefügt. Beim Verringern werden\n"
+         "die letzten Kanäle gestoppt und entfernt.\n\n"
+         "Bereits konfigurierte Kanäle\n"
+         "(Modell + Kamera) behalten ihre\n"
+         "Einstellungen.",
+         "Kanäle"),
         ("Kanal konfigurieren",
-         "Klicke <b>⚙ Konfigurieren</b> um Kamera und Modell für diesen Kanal auszuwählen. "
-         "Es werden .pt- und .onnx-Modelle unterstützt.",
-         "⚙ Konfigurieren"),
-        ("Alle starten",
-         "Mit <b>Alle starten</b> werden alle konfigurierten Kanäle gleichzeitig aktiviert. "
-         "Jeder Kanal analysiert das Kamerabild und zeigt Score und Status an.",
+         "Klicke ⚙ Konfigurieren im jeweiligen\n"
+         "Kanal-Widget.\n\n"
+         "Wähle:\n"
+         "• Kamera – USB-Index aus der Liste\n"
+         "• Modell – .pth (PyTorch) oder\n"
+         "  .onnx (onnxruntime, kein PyTorch)\n\n"
+         "Nach OK:\n"
+         "• Kanalanzeige zeigt Kamera und Modell\n"
+         "• Starten-Button wird freigeschaltet\n"
+         "• ROI und Schwellwert werden automatisch\n"
+         "  aus den Modell-Metadaten geladen.",
+         "Konfigurieren"),
+        ("Kanäle starten und stoppen",
+         "Einzelner Kanal:\n"
+         "▶ Starten / ■ Stoppen im Kanal-Widget.\n\n"
+         "Alle auf einmal:\n"
+         "Alle starten → startet alle\n"
+         "konfigurierten (aber noch nicht\n"
+         "laufenden) Kanäle.\n\n"
+         "Alle stoppen → stoppt alle\n"
+         "aktiven Kanäle sofort.\n\n"
+         "Status-Farben:\n"
+         "Grün = Normal | Rot = ANOMALIE",
          "Alle starten"),
-        ("Alarm-Protokoll",
-         "Im unteren Bereich erscheinen alle Alarm-Ereignisse aller Kanäle mit Zeitstempel und Score.",
+        ("Seitennavigation (> 4 Kanäle)",
+         "Bei mehr als 4 Kanälen erscheint\n"
+         "automatisch die Navigationszeile:\n\n"
+         "◀ Vorherige  Seite N / Gesamt  Nächste ▶\n\n"
+         "Jede Seite zeigt 4 Kanäle im 2×2-Raster.\n"
+         "Beispiel bei 9 Kanälen:\n"
+         "• Seite 1: Kanäle 1–4\n"
+         "• Seite 2: Kanäle 5–8\n"
+         "• Seite 3: Kanal 9\n\n"
+         "Kanäle auf anderen Seiten laufen\n"
+         "weiter — auch wenn sie nicht sichtbar sind.",
+         "Nächste"),
+        ("Alarm-Protokoll & JPEG-Speicherung",
+         "Alarm-Protokoll (unten):\n"
+         "Jede Anomalie erscheint mit:\n"
+         "• Uhrzeit und Kanal-Nummer\n"
+         "• Score und Schwellwert\n"
+         "• Dateiname des gespeicherten Frames\n\n"
+         "Alarm-JPEG:\n"
+         "Bei jedem Alarm wird automatisch\n"
+         "ein Schnappschuss gespeichert unter:\n"
+         "monitor_logs/multi_cam/\n"
+         "mc_chN_YYYYMMDDTHHMMSSZ.jpg\n\n"
+         "E-Mail/Webhook aus den Einstellungen\n"
+         "gelten für alle Kanäle.",
+         None),
+        ("REST-API – Per-Kanal-Endpunkte",
+         "Wenn der REST-Server läuft\n"
+         "(Einstellungen → REST-API → Starten),\n"
+         "sind diese Endpunkte verfügbar:\n\n"
+         "GET /api/mc/channels\n"
+         "→ alle Kanäle: Score, is_alarm,\n"
+         "  event_count, cam_status\n\n"
+         "GET /api/mc/scores?channel=N\n"
+         "→ Score-Verlauf für Kanal N\n\n"
+         "GET /api/mc/latest_alarm?channel=N\n"
+         "→ letzter Alarm für Kanal N\n\n"
+         "Das /dashboard zeigt automatisch\n"
+         "eine Multi-Kamera-Sektion.",
          None),
     ],
     11: [  # Anomalie-Clustering

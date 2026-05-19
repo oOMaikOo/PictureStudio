@@ -178,9 +178,10 @@ Gehe zur <b>Export-Seite</b>:<br>
   <tr><td><b>Modellbibliothek</b></td><td>Versioniertes Registry, ONNX/TorchScript-Export, Accuracy/F1-Vergleich, Run-History</td></tr>
   <tr><td><b>Inferenz</b></td><td>Batch-Inferenz, Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling</td></tr>
   <tr><td><b>Excel-Export</b></td><td>Konfigurierbare Spalten, Anhängen/Überschreiben, rote Markierung unter Schwellwert</td></tr>
-  <tr><td><b>REST-API</b></td><td>HTTP-Server (Port konfigurierbar), optionaler API-Key-Schutz, Label zuweisen per POST, Live-Dashboard im Browser</td></tr>
+  <tr><td><b>REST-API</b></td><td>HTTP-Server (Port konfigurierbar), optionaler API-Key-Schutz, Label zuweisen per POST, Live-Dashboard im Browser, Per-Kanal-Endpunkte für Multi-Kamera</td></tr>
   <tr><td><b>MQTT-Alarm</b></td><td>JSON-Events bei Anomalie-Alarm an beliebigen Broker (paho-mqtt), auth-fähig</td></tr>
   <tr><td><b>Kamera / Video</b></td><td>USB-Kamera, IP-Kamera (RTSP/HTTP), Video-Datei direkt im Live-Monitor, Auto-Reconnect, Live-Aufzeichnung (MP4), Burst-Modus</td></tr>
+  <tr><td><b>Multi-Kamera</b></td><td>1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG-Saving pro Kanal, per-Kanal REST-API</td></tr>
   <tr><td><b>Anomalie-Erkennung</b></td><td>Conv-Autoencoder, ROI-Bereich, Bewegungsfilter, Schwellwert-Kalibrierung, Heatmap, Bounding-Box, Alarm-Pause, Audit-Log, False-Positive-Markierung</td></tr>
   <tr><td><b>Batch-Analyse</b></td><td>Ordner oder Dateien auf Anomalien prüfen, CSV-Export der Ergebnisse</td></tr>
 </table>
@@ -975,30 +976,71 @@ Im Ausgabeverzeichnis (Standard: <code>monitor_logs/</code>) werden gespeichert:
 
 # ── 14  Multi-Kamera-Monitoring ───────────────────────────────────────────────
 14: page("""
-<h2>📹 Multi-Kamera-Monitoring</h2>
-<p>Überwache bis zu <b>4 Kamera-Quellen gleichzeitig</b>, jede mit eigenem Modell und ROI.
+<h1>📹 Multi-Kamera-Monitoring</h1>
+<p>Überwache <b>1–9 Kamera-Quellen gleichzeitig</b>, jede mit eigenem Modell und ROI.
 Ideal für Produktionslinien mit mehreren Prüfstationen.</p>
 
-<div class="step">
-<b>Kanal konfigurieren</b><br>
-"⚙ Konfigurieren" klicken → Kamera und Modell (.pt oder .onnx) auswählen → OK.
-Der Kanal zeigt dann Kameraname und Modell an.
-</div>
-<div class="step">
-<b>Starten</b><br>
-"▶ Starten" für einzelne Kanäle oder "Alle starten" für alle konfigurierten Kanäle gleichzeitig.
-</div>
-<div class="step">
-<b>Alarm-Ereignisse</b><br>
-Anomalien jedes Kanals erscheinen im Alarm-Protokoll unten. E-Mail/Webhook-Benachrichtigungen
-aus den Einstellungen gelten für alle Kanäle.
-</div>
-<div class="tip">
-<b>Performance:</b> Jeder Kanal analysiert jeden 3. Frame — bei 4 aktiven Kanälen bleibt die CPU-Last moderat.
-</div>
-<div class="tip">
-<b>ONNX-Modelle:</b> Für geringere Latenz können .onnx-Modelle geladen werden (kein PyTorch nötig).
-</div>
+<hr>
+<h2>Anzahl Kanäle festlegen</h2>
+<div class="step"><b>Kanäle-Selector (Toolbar oben)</b><br>
+Das Drehfeld <i>Kanäle: [2]</i> legt fest, wie viele Kamera-Kanäle gleichzeitig aktiv sind.<br>
+Bereich: <b>1–9</b>, Standard: <b>2</b>.<br>
+Bei Änderung werden alle laufenden Kanäle gestoppt; bereits konfigurierte Kanäle behalten ihre Einstellungen.</div>
+
+<h2>Grid und Paginierung</h2>
+<div class="step"><b>2×2-Grid je Seite</b><br>
+Bis zu <b>4 Kanäle</b> werden auf einer Seite im 2×2-Raster angezeigt.<br>
+Bei mehr als 4 Kanälen erscheinen automatisch die Schaltflächen <b>◀ Vorherige</b> und <b>Nächste ▶</b>.<br>
+Jede Seite zeigt den Ausschnitt z. B. Kanäle 1–4, 5–8, 9 — je nach gewählter Kanalzahl.<br>
+Die aktuelle Seite und Gesamtzahl stehen zwischen den Buttons: <i>Seite 1 / 3</i>.</div>
+
+<hr>
+<h2>Kanal einrichten und starten</h2>
+<div class="step"><b>1 – Kanal konfigurieren</b><br>
+<i>⚙ Konfigurieren</i> im jeweiligen Kanal klicken.<br>
+Kamera (USB-Index) und Modell (<code>.pth</code> oder <code>.onnx</code>) auswählen → OK.<br>
+Der Kanal zeigt danach Kameraname und Modellname an; die Start-Schaltfläche wird freigeschaltet.</div>
+
+<div class="step"><b>2 – Kanal starten</b><br>
+<i>▶ Starten</i> für einzelne Kanäle oder <i>Alle starten</i> für alle konfigurierten Kanäle.<br>
+Die Score-Leiste und der Status (<span style="color:#2ECC71">Normal</span> / <span style="color:#E74C3C">ANOMALIE</span>) aktualisieren sich live.</div>
+
+<div class="step"><b>3 – Kanal stoppen</b><br>
+<i>Stoppen</i> für einzelne Kanäle oder <i>Alle stoppen</i> für alle.</div>
+
+<hr>
+<h2>Alarm-Ereignisse und JPEG-Speicherung</h2>
+<div class="step"><b>Alarm-Protokoll</b><br>
+Jede erkannte Anomalie erscheint im Protokoll unten mit Zeitstempel, Kanal-Nummer und Score.<br>
+E-Mail/Webhook-Benachrichtigungen aus den Einstellungen gelten automatisch für alle Kanäle.</div>
+
+<div class="step"><b>Alarm-JPEG-Speicherung</b><br>
+Bei jedem Alarm wird der aktuelle Frame automatisch als JPEG gespeichert:<br>
+Pfad: <code>monitor_logs/multi_cam/mc_ch<i>N</i>_<i>YYYYMMDDTHHMMSSZ</i>.jpg</code><br>
+Der Dateiname enthält Kanalnummer und UTC-Zeitstempel.</div>
+
+<hr>
+<h2>REST-API – Per-Kanal-Endpunkte</h2>
+<p>Wenn der REST-Server läuft, stehen neben den Standard-Endpunkten auch drei Multi-Kamera-Endpunkte bereit:</p>
+
+<table>
+  <tr><th>Methode</th><th>Endpunkt</th><th>Beschreibung</th></tr>
+  <tr><td><code>GET</code></td><td><code>/api/mc/channels</code></td><td>Zusammenfassung aller Kanäle (Score, Schwellwert, Alarm-Zähler, Kamerastatus)</td></tr>
+  <tr><td><code>GET</code></td><td><code>/api/mc/scores?channel=N</code></td><td>Rollender Score-Puffer (bis 500 Einträge) für Kanal N</td></tr>
+  <tr><td><code>GET</code></td><td><code>/api/mc/latest_alarm?channel=N</code></td><td>Letztes Alarm-Event für Kanal N (Zeitstempel, Score, Dateiname)</td></tr>
+</table>
+
+<div class="tip"><b>Beispiel:</b><br>
+<code>curl http://localhost:8765/api/mc/channels</code><br>
+<code>curl http://localhost:8765/api/mc/latest_alarm?channel=0 -H "X-Api-Key: dein-key"</code></div>
+
+<p>Das Web-Dashboard (<code>/dashboard</code>) zeigt automatisch eine Multi-Kamera-Sektion, sobald Kanäle registriert sind.</p>
+
+<hr>
+<h2>Tipps</h2>
+<div class="tip"><b>Performance:</b> Jeder Kanal bewertet jeden 3. Frame — bei 4 aktiven Kanälen bleibt die CPU-Last moderat.</div>
+<div class="tip"><b>ONNX-Modelle:</b> <code>.onnx</code>-Modelle werden unterstützt und laufen ohne PyTorch (nur onnxruntime nötig).</div>
+<div class="warn"><b>Kanalzahl ändern stoppt alle Kanäle</b> — laufende Streams werden beendet. Konfigurierte Kanäle (Modell, Kamera-Index) bleiben erhalten.</div>
 """),
 
 
