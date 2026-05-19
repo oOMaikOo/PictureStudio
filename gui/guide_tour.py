@@ -322,15 +322,19 @@ TOUR_STEPS = {
          "REST-Server starten:\n"
          "Port einstellen (Standard: 8765)\n"
          "→ 'API starten' klicken\n\n"
-         "Verfügbare Endpunkte:\n"
+         "Öffentliche Endpunkte (kein Key nötig):\n"
          "GET  /api/status    → Projektstatus\n"
+         "GET  /dashboard     → Browser-Dashboard\n\n"
+         "Geschützte Endpunkte:\n"
          "GET  /api/labels    → Klassenliste\n"
          "GET  /api/images    → Bilder + Labels\n"
          "POST /api/images/label → Label setzen\n"
          "GET  /api/scores    → Score-Puffer\n"
          "GET  /api/events    → Alarm-Events\n\n"
-         "'📊 Dashboard' → öffnet Browser-\n"
-         "Dashboard (aktualisiert alle 3 s).",
+         "API-Key (empfohlen):\n"
+         "'Generieren' → Schlüssel erstellen.\n"
+         "Anfragen brauchen dann den Header:\n"
+         "X-Api-Key: <schlüssel>",
          "API starten"),
         ("MQTT-Alarm konfigurieren",
          "MQTT sendet bei jedem Anomalie-Alarm\n"
@@ -398,7 +402,13 @@ TOUR_STEPS = {
          "→ 'Verbinden' klicken.\n\n"
          "Video-Datei-Tab:\n"
          "'Datei wählen…' → Video öffnen.\n"
-         "FPS = 0 → originale Geschwindigkeit.",
+         "FPS = 0 → originale Geschwindigkeit.\n\n"
+         "Live-Monitor (Seite 'Live-Monitoring'):\n"
+         "Dropdown enthält USB- und IP-Kameras\n"
+         "sowie 'Videodatei (MP4, AVI, …)' direkt.\n"
+         "FPS wird automatisch aus der Datei gelesen.\n"
+         "Bricht eine Live-Verbindung ab → Auto-\n"
+         "Reconnect alle 5 s (gelber Status).",
          "Verbinden"),
         ("ROI – Analysebereich setzen",
          "'ROI aufziehen' klicken, dann im\n"

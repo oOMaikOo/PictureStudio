@@ -434,6 +434,7 @@ class SettingsPage(QWidget):
         self.autosave_spin.setValue(self._settings.get_autosave_interval())
         self.backup_cb.setChecked(self._settings.get_backup_enabled())
         self.thumb_size_spin.setValue(self._settings.get_thumbnail_size())
+        self.show_roi_labels_cb.setChecked(self._settings.get_show_roi_labels())
         self.low_conf_spin.setValue(self._settings.get_low_confidence_threshold())
         self.top_k_spin.setValue(self._settings.get_show_top_k())
         mqtt = self._settings.get_mqtt_config()
@@ -756,6 +757,7 @@ class SettingsPage(QWidget):
         self._settings.set_autosave_interval(self.autosave_spin.value())
         self._settings.set_backup_enabled(self.backup_cb.isChecked())
         self._settings.set_thumbnail_size(self.thumb_size_spin.value())
+        self._settings.set_show_roi_labels(self.show_roi_labels_cb.isChecked())
         self._settings.set_low_confidence_threshold(self.low_conf_spin.value())
         self._settings.set_show_top_k(self.top_k_spin.value())
         self._settings.save_mqtt_config({

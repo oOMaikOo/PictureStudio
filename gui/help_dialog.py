@@ -178,9 +178,9 @@ Gehe zur <b>Export-Seite</b>:<br>
   <tr><td><b>Modellbibliothek</b></td><td>Versioniertes Registry, ONNX/TorchScript-Export, Accuracy/F1-Vergleich, Run-History</td></tr>
   <tr><td><b>Inferenz</b></td><td>Batch-Inferenz, Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling</td></tr>
   <tr><td><b>Excel-Export</b></td><td>Konfigurierbare Spalten, Anhängen/Überschreiben, rote Markierung unter Schwellwert</td></tr>
-  <tr><td><b>REST-API</b></td><td>HTTP-Server (Port konfigurierbar), Label zuweisen per POST, Live-Dashboard im Browser</td></tr>
+  <tr><td><b>REST-API</b></td><td>HTTP-Server (Port konfigurierbar), optionaler API-Key-Schutz, Label zuweisen per POST, Live-Dashboard im Browser</td></tr>
   <tr><td><b>MQTT-Alarm</b></td><td>JSON-Events bei Anomalie-Alarm an beliebigen Broker (paho-mqtt), auth-fähig</td></tr>
-  <tr><td><b>Kamera / Video</b></td><td>USB-Kamera, IP-Kamera (RTSP/HTTP), Video-Datei, Live-Aufzeichnung (MP4), Burst-Modus</td></tr>
+  <tr><td><b>Kamera / Video</b></td><td>USB-Kamera, IP-Kamera (RTSP/HTTP), Video-Datei direkt im Live-Monitor, Auto-Reconnect, Live-Aufzeichnung (MP4), Burst-Modus</td></tr>
   <tr><td><b>Anomalie-Erkennung</b></td><td>Conv-Autoencoder, ROI-Bereich, Bewegungsfilter, Schwellwert-Kalibrierung, Heatmap, Bounding-Box, Alarm-Pause, Audit-Log, False-Positive-Markierung</td></tr>
   <tr><td><b>Batch-Analyse</b></td><td>Ordner oder Dateien auf Anomalien prüfen, CSV-Export der Ergebnisse</td></tr>
 </table>
@@ -498,10 +498,23 @@ Status wechselt auf grün. Mit <i>URL kopieren</i> die Basis-URL in die Zwischen
 Öffnet ein Live-Monitoring-Dashboard im Browser (aktualisiert alle 3 Sekunden).<br>
 Zeigt Projektstatus, Labels, aktuelle Scores und Anomalie-Events.</div>
 
+<h3>API-Key Authentifizierung</h3>
+<div class="step"><b>Warum?</b> Ohne Key ist die API für jeden im Netzwerk erreichbar.<br>
+<b>Generieren:</b> <i>Generieren</i>-Button → 64-stelliger Zufallsschlüssel wird erstellt und sofort aktiv.<br>
+<b>Löschen:</b> <i>Löschen</i>-Button → Authentifizierung deaktiviert (alle Anfragen erlaubt).<br>
+<b>Anzeigen:</b> <i>Anzeigen</i>-Toggle → zeigt den Key im Klartext (standardmäßig verborgen).</div>
+
+<div class="tip"><b>Öffentliche Endpunkte</b> (brauchen keinen Key, auch im Browser erreichbar):<br>
+<code>/api/status</code> und <code>/dashboard</code><br>
+<b>Alle anderen</b> Endpunkte erfordern den Header:<br>
+<code>X-Api-Key: &lt;dein-schlüssel&gt;</code><br>
+Alternativ: <code>Authorization: Bearer &lt;dein-schlüssel&gt;</code></div>
+
 <h3>API-Endpunkte (alle GET außer label/multilabel)</h3>
 <table>
   <tr><th>Methode</th><th>Endpunkt</th><th>Beschreibung</th></tr>
-  <tr><td><code>GET</code></td><td><code>/api/status</code></td><td>Server-Status und Versionsinformation</td></tr>
+  <tr><td><code>GET</code></td><td><code>/api/status</code></td><td>Server-Status und Versionsinformation <i>(öffentlich)</i></td></tr>
+  <tr><td><code>GET</code></td><td><code>/dashboard</code></td><td>HTML Live-Dashboard <i>(öffentlich)</i></td></tr>
   <tr><td><code>GET</code></td><td><code>/api/project</code></td><td>Projektübersicht (Name, Bilder, Labels)</td></tr>
   <tr><td><code>GET</code></td><td><code>/api/labels</code></td><td>Alle Label-Definitionen (Name, Farbe)</td></tr>
   <tr><td><code>GET</code></td><td><code>/api/images</code></td><td>Alle Bilder mit zugewiesenen Labels</td></tr>
@@ -510,12 +523,13 @@ Zeigt Projektstatus, Labels, aktuelle Scores und Anomalie-Events.</div>
   <tr><td><code>POST</code></td><td><code>/api/images/multilabel</code></td><td>Multi-Label: <code>{"path":"...","labels":[...]}</code></td></tr>
   <tr><td><code>GET</code></td><td><code>/api/scores</code></td><td>Live-Score-Puffer (Anomalie-Erkennung)</td></tr>
   <tr><td><code>GET</code></td><td><code>/api/events</code></td><td>Anomalie-Event-Liste</td></tr>
-  <tr><td><code>GET</code></td><td><code>/dashboard</code></td><td>HTML Live-Dashboard</td></tr>
 </table>
 
-<div class="tip"><b>Beispiel-Aufruf:</b><br>
+<div class="tip"><b>Beispiel-Aufruf ohne Key:</b><br>
 <code>curl http://localhost:8765/api/status</code><br>
-<code>curl -X POST http://localhost:8765/api/images/label -H "Content-Type: application/json" -d '{"path":"/pfad/bild.jpg","label":"gut"}'</code></div>
+<b>Mit Key:</b><br>
+<code>curl http://localhost:8765/api/labels -H "X-Api-Key: dein-schlüssel"</code><br>
+<code>curl -X POST http://localhost:8765/api/images/label -H "Content-Type: application/json" -H "X-Api-Key: dein-schlüssel" -d '{"path":"/pfad/bild.jpg","label":"gut"}'</code></div>
 
 <hr>
 
@@ -644,6 +658,22 @@ Unterstützte Protokolle:
 <i>Datei wählen…</i> → MP4, AVI, MOV, MKV, WebM wählen.<br>
 <b>Wiedergabe fps:</b> Auf 0 lassen = originale Videogeschwindigkeit.<br>
 Der Fortschrittsbalken zeigt Frame-Nummer / Gesamt während der Wiedergabe.</div>
+
+<hr>
+<h2>Live-Monitoring (Produktivbetrieb)</h2>
+<p>Die <b>Live-Monitoring-Seite</b> ist für den Dauerbetrieb ausgelegt — Modell laden, Kamera verbinden, Scoring aktivieren.</p>
+
+<h3>Kameraquellen im Live-Monitor</h3>
+<div class="step">Dropdown enthält alle erkannten USB-Kameras sowie zwei Sondereinträge:<br>
+• <b>IP-Kamera (URL eingeben…)</b> – RTSP/HTTP-URL eingeben (Format wird vorab geprüft)<br>
+• <b>Videodatei (MP4, AVI, …)</b> – Dateidialog öffnet sich; FPS wird automatisch aus der Datei gelesen</div>
+
+<h3>Auto-Reconnect</h3>
+<div class="step">Bricht die Verbindung zu einer <b>Live-Kamera</b> ab, versucht der Monitor automatisch alle <b>5 Sekunden</b> eine Wiederverbindung.<br>
+Die Statusanzeige wechselt auf gelb „Reconnect in 5 s…" und zählt die Versuche mit.<br>
+Beim ersten erfolgreichen Frame wechselt der Status wieder auf grün „Verbunden".<br>
+<b>Manuell stoppen:</b> <i>Trennen</i> klicken – bricht den Reconnect-Zyklus dauerhaft ab.<br>
+<b>Hinweis:</b> Bei Video-Dateien gibt es kein Auto-Reconnect (Ende = „Video beendet").</div>
 
 <hr>
 <h2>Aufnahme-Funktionen</h2>
