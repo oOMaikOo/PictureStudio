@@ -26,10 +26,12 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QProgressBar,
     QDialog, QComboBox, QLineEdit, QFileDialog,
-    QDialogButtonBox, QPlainTextEdit, QSizePolicy,
+    QDialogButtonBox, QPlainTextEdit, QSizePolicy, QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal, QMetaObject, Q_ARG, Slot
 from PySide6.QtGui import QImage, QPixmap, QFont
+
+_MAX_PER_PAGE = 4   # channels visible at once (2 × 2 grid)
 
 # ---------------------------------------------------------------------------
 # Channel state (plain Python object, no Qt)
@@ -358,15 +360,18 @@ class MultiCameraPage(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._channels: list[_ChannelState] = [_ChannelState() for _ in range(4)]
+        self._channels: list[_ChannelState] = []
         self._widgets: list[_ChannelWidget] = []
         self._notifier: Optional[AlarmNotifier] = None
         self._rest_server = None
         self._alarm_cooldown: float = 30.0
         self._cached_cameras: list = []   # [(idx, name), ...]
+        self._num_channels: int = 2
+        self._current_page: int = 0
 
         self._frame_signal.connect(self._on_frame_ui)
         self._build_ui()
+        self._apply_channel_count(2)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -377,6 +382,76 @@ class MultiCameraPage(QWidget):
     def set_rest_server(self, server) -> None:
         """Wire in the REST API server."""
         self._rest_server = server
+
+    # ── Camera count + pagination ─────────────────────────────────────────────
+
+    @Slot(int)
+    def _on_count_changed(self, count: int) -> None:
+        self._apply_channel_count(count)
+
+    def _apply_channel_count(self, count: int) -> None:
+        """Resize channel and widget lists, then rebuild the page view."""
+        self._on_stop_all()
+        self._num_channels = count
+
+        # Grow or shrink _channels (preserve existing configs)
+        while len(self._channels) < count:
+            self._channels.append(_ChannelState())
+        while len(self._channels) > count:
+            self._channels.pop()
+
+        # Rebuild widget list
+        for w in self._widgets:
+            w.setParent(None)
+        self._widgets.clear()
+
+        for i in range(count):
+            w = _ChannelWidget(i, self)
+            w.configure_requested.connect(self._on_configure)
+            w.start_requested.connect(self._on_start)
+            w.stop_requested.connect(self._on_stop)
+            self._widgets.append(w)
+
+        # Clamp page index
+        total_pages = max(1, (count + _MAX_PER_PAGE - 1) // _MAX_PER_PAGE)
+        if self._current_page >= total_pages:
+            self._current_page = total_pages - 1
+
+        self._refresh_page_view()
+
+    def _refresh_page_view(self) -> None:
+        """Repopulate the grid with the widgets for the current page."""
+        layout = self._grid_layout
+        # Detach existing widgets without destroying them
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+
+        start = self._current_page * _MAX_PER_PAGE
+        end = min(start + _MAX_PER_PAGE, len(self._widgets))
+        for slot, idx in enumerate(range(start, end)):
+            self._grid_layout.addWidget(self._widgets[idx], slot // 2, slot % 2)
+            self._widgets[idx].setParent(self._grid_widget)
+
+        # Update page nav
+        count = self._num_channels
+        total_pages = max(1, (count + _MAX_PER_PAGE - 1) // _MAX_PER_PAGE)
+        self._page_nav.setVisible(count > _MAX_PER_PAGE)
+        self._page_label.setText(f"Seite {self._current_page + 1} / {total_pages}")
+        self._prev_btn.setEnabled(self._current_page > 0)
+        self._next_btn.setEnabled(self._current_page < total_pages - 1)
+
+    def _on_page_prev(self) -> None:
+        if self._current_page > 0:
+            self._current_page -= 1
+            self._refresh_page_view()
+
+    def _on_page_next(self) -> None:
+        total_pages = max(1, (self._num_channels + _MAX_PER_PAGE - 1) // _MAX_PER_PAGE)
+        if self._current_page < total_pages - 1:
+            self._current_page += 1
+            self._refresh_page_view()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -400,6 +475,27 @@ class MultiCameraPage(QWidget):
         title_lbl.setFont(title_font)
         title_lbl.setStyleSheet("color: #5DADE2;")
         top_bar.addWidget(title_lbl)
+
+        top_bar.addSpacing(20)
+        count_lbl = QLabel("Kanäle:")
+        count_lbl.setStyleSheet("color: #BDC3C7; font-size: 13px;")
+        top_bar.addWidget(count_lbl)
+
+        self._count_spin = QSpinBox()
+        self._count_spin.setRange(1, 9)
+        self._count_spin.setValue(2)
+        self._count_spin.setFixedWidth(60)
+        self._count_spin.setToolTip(
+            "Anzahl der Kamera-Kanäle (1–9). "
+            "Bei mehr als 4 Kanälen wird in Seiten à 4 geblättert."
+        )
+        self._count_spin.setStyleSheet(
+            "QSpinBox { background: #0D1117; color: #E0E0E0;"
+            "  border: 1px solid #2C3E50; border-radius: 4px; padding: 3px; }"
+        )
+        self._count_spin.valueChanged.connect(self._on_count_changed)
+        top_bar.addWidget(self._count_spin)
+
         top_bar.addStretch()
 
         self._start_all_btn = QPushButton("Alle starten")
@@ -422,19 +518,47 @@ class MultiCameraPage(QWidget):
 
         root.addLayout(top_bar)
 
-        # ── 2×2 channel grid ──────────────────────────────────────────────────
-        grid = QGridLayout()
-        grid.setSpacing(8)
+        # ── Channel grid container ─────────────────────────────────────────────
+        self._grid_widget = QWidget()
+        self._grid_layout = QGridLayout(self._grid_widget)
+        self._grid_layout.setSpacing(8)
+        root.addWidget(self._grid_widget, stretch=1)
 
-        for i in range(4):
-            w = _ChannelWidget(i, self)
-            w.configure_requested.connect(self._on_configure)
-            w.start_requested.connect(self._on_start)
-            w.stop_requested.connect(self._on_stop)
-            self._widgets.append(w)
-            grid.addWidget(w, i // 2, i % 2)
+        # ── Page navigation (visible only when count > _MAX_PER_PAGE) ─────────
+        self._page_nav = QWidget()
+        nav_row = QHBoxLayout(self._page_nav)
+        nav_row.setContentsMargins(0, 0, 0, 0)
+        nav_row.setSpacing(8)
 
-        root.addLayout(grid, stretch=1)
+        self._prev_btn = QPushButton("◀ Vorherige")
+        self._prev_btn.setFixedWidth(120)
+        self._prev_btn.setStyleSheet(
+            "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
+            "  padding: 4px 12px; }"
+            "QPushButton:hover:enabled { background: #34495E; }"
+            "QPushButton:disabled { background: #1A252F; color: #4A5568; }"
+        )
+        self._prev_btn.clicked.connect(self._on_page_prev)
+        nav_row.addWidget(self._prev_btn)
+
+        self._page_label = QLabel("Seite 1 / 1")
+        self._page_label.setAlignment(Qt.AlignCenter)
+        self._page_label.setStyleSheet("color: #BDC3C7; font-size: 12px;")
+        nav_row.addWidget(self._page_label, stretch=1)
+
+        self._next_btn = QPushButton("Nächste ▶")
+        self._next_btn.setFixedWidth(120)
+        self._next_btn.setStyleSheet(
+            "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
+            "  padding: 4px 12px; }"
+            "QPushButton:hover:enabled { background: #34495E; }"
+            "QPushButton:disabled { background: #1A252F; color: #4A5568; }"
+        )
+        self._next_btn.clicked.connect(self._on_page_next)
+        nav_row.addWidget(self._next_btn)
+
+        self._page_nav.setVisible(False)
+        root.addWidget(self._page_nav)
 
         # ── Alarm log ─────────────────────────────────────────────────────────
         alarm_grp = QGroupBox("Alarm-Ereignisse")
@@ -564,14 +688,14 @@ class MultiCameraPage(QWidget):
 
     def _on_start_all(self) -> None:
         """Start all configured (but not yet running) channels."""
-        for i in range(4):
+        for i in range(self._num_channels):
             if not self._channels[i].running and self._channels[i].detector is not None:
                 self._on_start(i)
 
     def _on_stop_all(self) -> None:
         """Stop all running channels."""
-        for i in range(4):
-            if self._channels[i].running:
+        for i in range(self._num_channels):
+            if i < len(self._channels) and self._channels[i].running:
                 self._on_stop(i)
 
     # ── Frame processing (camera thread) ─────────────────────────────────────
