@@ -468,3 +468,113 @@ class TestApiKeyAuth:
         assert status == 401
         data = json.loads(body)
         assert "error" in data
+
+
+# ---------------------------------------------------------------------------
+# GET /api/mc/* — multi-camera per-channel endpoints
+# ---------------------------------------------------------------------------
+
+class TestMultiCameraEndpoints:
+    """Tests for /api/mc/channels, /api/mc/scores, /api/mc/latest_alarm."""
+
+    @pytest.fixture(autouse=True)
+    def mc_server(self, tmp_path):
+        """Bare server with 3 channels initialized."""
+        _reset_handler_state()
+        from api.rest_server import RestApiServer
+        port = _free_port()
+        srv = RestApiServer()
+        srv.start(port=port)
+        srv.set_project(_make_project(tmp_path))
+        srv.set_mc_channel_count(3)
+        time.sleep(0.15)
+        self._srv = srv
+        self._port = port
+        yield
+        srv.stop()
+
+    def _url(self, path):
+        return f"http://localhost:{self._port}{path}"
+
+    def test_channels_returns_200(self):
+        status, _, _ = _get(self._url("/api/mc/channels"))
+        assert status == 200
+
+    def test_channels_has_correct_count(self):
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        assert data["count"] == 3
+
+    def test_channels_each_has_required_keys(self):
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        for ch in data["channels"]:
+            for key in ("channel", "score", "threshold", "is_alarm",
+                        "event_count", "cam_status"):
+                assert key in ch, f"Missing key '{key}' in channel {ch}"
+
+    def test_scores_returns_200_for_valid_channel(self):
+        status, _, _ = _get(self._url("/api/mc/scores?channel=0"))
+        assert status == 200
+
+    def test_scores_returns_404_for_invalid_channel(self):
+        status, _, _ = _get(self._url("/api/mc/scores?channel=99"))
+        assert status == 404
+
+    def test_scores_has_scores_key(self):
+        _, _, body = _get(self._url("/api/mc/scores?channel=1"))
+        data = json.loads(body)
+        assert "scores" in data
+
+    def test_latest_alarm_returns_200_for_valid_channel(self):
+        status, _, _ = _get(self._url("/api/mc/latest_alarm?channel=0"))
+        assert status == 200
+
+    def test_latest_alarm_returns_404_for_invalid_channel(self):
+        status, _, _ = _get(self._url("/api/mc/latest_alarm?channel=99"))
+        assert status == 404
+
+    def test_push_mc_score_appears_in_scores_endpoint(self):
+        self._srv.push_mc_score(0, 0.123, 0.05)
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/scores?channel=0"))
+        data = json.loads(body)
+        assert data["count"] >= 1
+        assert abs(data["scores"][-1]["score"] - 0.123) < 1e-4
+
+    def test_push_mc_alarm_appears_in_latest_alarm(self):
+        self._srv.push_mc_alarm(1, 0.9, 0.05, "mc_ch2_alarm.jpg")
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/latest_alarm?channel=1"))
+        data = json.loads(body)
+        assert data.get("frame_filename") == "mc_ch2_alarm.jpg"
+
+    def test_push_mc_alarm_increments_event_count(self):
+        self._srv.push_mc_alarm(2, 0.8, 0.05, "frame.jpg")
+        self._srv.push_mc_alarm(2, 0.9, 0.05, "frame2.jpg")
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        ch = data["channels"][2]
+        assert ch["event_count"] == 2
+
+    def test_set_mc_channel_count_grows_list(self):
+        self._srv.set_mc_channel_count(6)
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        assert data["count"] == 6
+
+    def test_set_mc_channel_count_shrinks_list(self):
+        self._srv.set_mc_channel_count(1)
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        assert data["count"] == 1
+
+    def test_set_mc_cam_status_updates_channel(self):
+        self._srv.set_mc_cam_status(0, "Verbunden")
+        time.sleep(0.05)
+        _, _, body = _get(self._url("/api/mc/channels"))
+        data = json.loads(body)
+        assert data["channels"][0]["cam_status"] == "Verbunden"

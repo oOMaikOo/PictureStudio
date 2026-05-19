@@ -48,6 +48,9 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     alarm_frame_dir: str = ""        # directory where alarm JPEG snapshots are saved
     latest_alarm: dict = {}          # most recent alarm: {ts, score, threshold, frame_path}
     _api_key: str = ""               # shared secret; empty = no auth required
+    # Multi-camera per-channel state: list of dicts, one per channel
+    mc_channels: list = []           # [{channel, score, threshold, is_alarm, event_count,
+                                     #   cam_status, score_buffer, latest_alarm}, ...]
 
     # ------------------------------------------------------------------ util
 
@@ -278,6 +281,53 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        # /api/mc/channels — multi-camera channel summary
+        if path == "/api/mc/channels":
+            channels = _ProjectHandler.mc_channels
+            summary = [
+                {
+                    "channel":     ch.get("channel", i),
+                    "score":       ch.get("score", 0.0),
+                    "threshold":   ch.get("threshold", 0.0),
+                    "is_alarm":    ch.get("is_alarm", False),
+                    "event_count": ch.get("event_count", 0),
+                    "cam_status":  ch.get("cam_status", "Gestoppt"),
+                }
+                for i, ch in enumerate(channels)
+            ]
+            self._send_json({"channels": summary, "count": len(summary)})
+            return
+
+        # /api/mc/scores?channel=N — per-channel score buffer
+        if path == "/api/mc/scores":
+            try:
+                channel = int(qs.get("channel", ["0"])[0])
+            except ValueError:
+                self._err("'channel' must be an integer", 400)
+                return
+            limit = int(qs.get("limit", ["120"])[0])
+            channels = _ProjectHandler.mc_channels
+            if channel < 0 or channel >= len(channels):
+                self._err(f"Channel {channel} not found", 404)
+                return
+            buf = channels[channel].get("score_buffer", [])[-limit:]
+            self._send_json({"channel": channel, "scores": buf, "count": len(buf)})
+            return
+
+        # /api/mc/latest_alarm?channel=N — per-channel latest alarm
+        if path == "/api/mc/latest_alarm":
+            try:
+                channel = int(qs.get("channel", ["0"])[0])
+            except ValueError:
+                self._err("'channel' must be an integer", 400)
+                return
+            channels = _ProjectHandler.mc_channels
+            if channel < 0 or channel >= len(channels):
+                self._err(f"Channel {channel} not found", 404)
+                return
+            self._send_json(channels[channel].get("latest_alarm", {}))
+            return
+
         self._err("Endpoint not found", 404)
 
     def _read_event_log(self, limit: int) -> list:
@@ -495,6 +545,11 @@ def _build_dashboard_html(api_key: str = "") -> str:
   </table>
 </div>
 
+<div class="section" id="mc-section" style="margin-top:16px;display:none">
+  <h2>Multi-Kamera-Kanäle</h2>
+  <div id="mc-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px"></div>
+</div>
+
 <div class="footer">Aktualisiert alle 3 Sekunden &middot; Picture Studio</div>
 
 <script>
@@ -607,6 +662,34 @@ async function fetchData() {
     document.getElementById('status-dot').className = 'err';
     console.warn('fetch error', e);
   }
+
+  // Multi-camera section
+  try {
+    const mcRes = await apiFetch(BASE + '/api/mc/channels');
+    if (mcRes.ok) {
+      const mcData = await mcRes.json();
+      const channels = mcData.channels || [];
+      const mcSection = document.getElementById('mc-section');
+      const mcGrid = document.getElementById('mc-grid');
+      if (channels.length > 0) {
+        mcSection.style.display = 'block';
+        mcGrid.innerHTML = channels.map((ch, i) => {
+          const pct = ch.threshold > 0 ? Math.round(ch.score / ch.threshold * 100) : 0;
+          const alarmStyle = ch.is_alarm ? 'color:#E74C3C' : 'color:#58D68D';
+          return `<div style="background:#1C2A3A;border-radius:6px;padding:10px;border:1px solid #2C3E50">
+            <div style="font-size:11px;color:#5DADE2;font-weight:bold;margin-bottom:6px">Kanal ${i+1}</div>
+            <div style="font-size:13px;${alarmStyle}">${ch.is_alarm?'ANOMALIE':'Normal'}</div>
+            <div style="font-size:11px;color:#768390">Score: ${ch.score.toFixed(5)}</div>
+            <div style="font-size:11px;color:#768390">Thr: ${ch.threshold.toFixed(5)}</div>
+            <div style="font-size:11px;color:#E67E22">Alarme: ${ch.event_count}</div>
+            <div style="font-size:10px;color:#545D68;margin-top:3px">${ch.cam_status}</div>
+          </div>`;
+        }).join('');
+      } else {
+        mcSection.style.display = 'none';
+      }
+    }
+  } catch(e) { /* multi-camera section not available — hide silently */ }
 }
 
 fetchData();
@@ -675,6 +758,66 @@ class RestApiServer:
             "frame_path": frame_path,
             "frame_filename": os.path.basename(frame_path),
         }
+
+    # ---- Multi-camera per-channel state ----
+
+    def set_mc_channel_count(self, count: int) -> None:
+        """(Re-)initialize the per-channel state list to *count* entries."""
+        channels = _ProjectHandler.mc_channels
+        while len(channels) < count:
+            idx = len(channels)
+            channels.append({
+                "channel": idx, "score": 0.0, "threshold": 0.0,
+                "is_alarm": False, "event_count": 0,
+                "cam_status": "Gestoppt",
+                "score_buffer": [], "latest_alarm": {},
+            })
+        while len(channels) > count:
+            channels.pop()
+
+    def push_mc_score(self, channel: int, score: float, threshold: float) -> None:
+        """Push a live score for one multi-camera channel (thread-safe by GIL)."""
+        from datetime import datetime, timezone
+        channels = _ProjectHandler.mc_channels
+        if channel < 0 or channel >= len(channels):
+            return
+        ch = channels[channel]
+        ch["score"] = round(score, 6)
+        ch["threshold"] = round(threshold, 6)
+        ch["is_alarm"] = score > threshold
+        entry = {
+            "ts":        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "score":     round(score, 6),
+            "threshold": round(threshold, 6),
+            "alarm":     score > threshold,
+        }
+        buf = ch.setdefault("score_buffer", [])
+        buf.append(entry)
+        if len(buf) > 500:
+            ch["score_buffer"] = buf[-500:]
+
+    def push_mc_alarm(
+        self, channel: int, score: float, threshold: float, frame_filename: str
+    ) -> None:
+        """Record a per-channel alarm event (thread-safe by GIL)."""
+        from datetime import datetime, timezone
+        channels = _ProjectHandler.mc_channels
+        if channel < 0 or channel >= len(channels):
+            return
+        ch = channels[channel]
+        ch["event_count"] = ch.get("event_count", 0) + 1
+        ch["latest_alarm"] = {
+            "ts":             datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "score":          round(score, 6),
+            "threshold":      round(threshold, 6),
+            "frame_filename": frame_filename,
+        }
+
+    def set_mc_cam_status(self, channel: int, status: str) -> None:
+        """Update the camera status label for one channel."""
+        channels = _ProjectHandler.mc_channels
+        if 0 <= channel < len(channels):
+            channels[channel]["cam_status"] = status
 
     # ------------------------------------------------------------------ state
 

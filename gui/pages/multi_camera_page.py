@@ -368,6 +368,7 @@ class MultiCameraPage(QWidget):
         self._cached_cameras: list = []   # [(idx, name), ...]
         self._num_channels: int = 2
         self._current_page: int = 0
+        self._alarm_output_dir: str = "monitor_logs/multi_cam"
 
         self._frame_signal.connect(self._on_frame_ui)
         self._build_ui()
@@ -382,6 +383,11 @@ class MultiCameraPage(QWidget):
     def set_rest_server(self, server) -> None:
         """Wire in the REST API server."""
         self._rest_server = server
+        if server is not None:
+            try:
+                server.set_mc_channel_count(self._num_channels)
+            except Exception:
+                pass
 
     # ── Camera count + pagination ─────────────────────────────────────────────
 
@@ -416,6 +422,13 @@ class MultiCameraPage(QWidget):
         total_pages = max(1, (count + _MAX_PER_PAGE - 1) // _MAX_PER_PAGE)
         if self._current_page >= total_pages:
             self._current_page = total_pages - 1
+
+        # Sync channel count to REST API
+        if self._rest_server is not None:
+            try:
+                self._rest_server.set_mc_channel_count(count)
+            except Exception:
+                pass
 
         self._refresh_page_view()
 
@@ -728,19 +741,40 @@ class MultiCameraPage(QWidget):
             except Exception:
                 pass
 
+        # Push score to REST API (every scored frame)
+        if self._rest_server is not None and state.frame_counter % 3 == 0:
+            try:
+                self._rest_server.push_mc_score(channel_idx, score, state.threshold)
+            except Exception:
+                pass
+
         # Fire alarm if anomaly and cooldown has expired
         if is_anomaly:
             now = time.perf_counter()
             if (now - state.last_alarm_t) >= self._alarm_cooldown:
                 state.last_alarm_t = now
                 state.event_count += 1
-                # Log to alarm panel (must happen on UI thread — use signal)
                 ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
                 thr = state.threshold
+
+                # Save alarm JPEG
+                fname = self._save_alarm_frame(frame, channel_idx)
+
                 log_msg = (
                     f"[{ts}] Kanal {channel_idx + 1}:"
                     f" Score={score:.5f} > Thr={thr:.5f}"
+                    + (f"  → {fname}" if fname else "")
                 )
+
+                # Push alarm to REST API
+                if self._rest_server is not None:
+                    try:
+                        self._rest_server.push_mc_alarm(
+                            channel_idx, score, thr, fname
+                        )
+                    except Exception:
+                        pass
+
                 # Dispatch log + notifier call via signal (reaches UI thread)
                 self._frame_signal.emit(
                     channel_idx, frame, score, state.threshold, is_anomaly
@@ -748,10 +782,11 @@ class MultiCameraPage(QWidget):
                 # Notifier can be called from any thread
                 if self._notifier is not None:
                     model_name = os.path.basename(state.model_path)
+                    fpath = os.path.join(self._alarm_output_dir, fname) if fname else ""
                     try:
                         self._notifier.notify(
                             score, thr,
-                            frame_path="",
+                            frame_path=fpath,
                             model_name=model_name,
                         )
                     except Exception:
@@ -785,6 +820,24 @@ class MultiCameraPage(QWidget):
         self._widgets[channel_idx].update_frame(frame, score, threshold, is_anomaly)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _save_alarm_frame(self, frame: np.ndarray, channel_idx: int) -> str:
+        """Save *frame* as a JPEG alarm snapshot; return the filename or ''."""
+        try:
+            os.makedirs(self._alarm_output_dir, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            fname = f"mc_ch{channel_idx + 1}_{ts}.jpg"
+            fpath = os.path.join(self._alarm_output_dir, fname)
+            cv2.imwrite(fpath, frame)
+            # Tell REST server where to serve alarm frames from
+            if self._rest_server is not None:
+                try:
+                    self._rest_server.set_alarm_frame_dir(self._alarm_output_dir)
+                except Exception:
+                    pass
+            return fname
+        except Exception:
+            return ""
 
     @staticmethod
     def _apply_roi_crop(frame: np.ndarray, roi: Optional[list]) -> np.ndarray:
