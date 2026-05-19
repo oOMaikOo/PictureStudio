@@ -4,7 +4,7 @@ for training and SSH remote-training. Imported by most modules.
 """
 
 APP_NAME = "Image Labeling Studio"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 DEFAULT_COLORS = [
     "#E74C3C", "#3498DB", "#2ECC71", "#F39C12", "#9B59B6",
