@@ -38,6 +38,7 @@ class SettingsPage(QWidget):
     autosave_changed = Signal(int, bool)
     alarm_notifier_config_changed = Signal(dict)
     industrial_config_changed = Signal(dict)
+    api_key_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -150,6 +151,31 @@ class SettingsPage(QWidget):
         self.api_port_spin.setRange(1024, 65535)
         self.api_port_spin.setValue(8765)
         api_form.addRow("Port:", self.api_port_spin)
+
+        # API Key
+        key_row = QHBoxLayout()
+        self._api_key_edit = QLineEdit()
+        self._api_key_edit.setReadOnly(True)
+        self._api_key_edit.setPlaceholderText("Kein API-Key (Authentifizierung deaktiviert)")
+        self._api_key_edit.setEchoMode(QLineEdit.Password)
+        key_row.addWidget(self._api_key_edit)
+        gen_key_btn = QPushButton("Generieren")
+        gen_key_btn.setToolTip("Neuen zufälligen API-Key erstellen")
+        gen_key_btn.clicked.connect(self._generate_api_key)
+        key_row.addWidget(gen_key_btn)
+        show_key_btn = QPushButton("Anzeigen")
+        show_key_btn.setCheckable(True)
+        show_key_btn.toggled.connect(
+            lambda on: self._api_key_edit.setEchoMode(
+                QLineEdit.Normal if on else QLineEdit.Password
+            )
+        )
+        key_row.addWidget(show_key_btn)
+        clear_key_btn = QPushButton("Löschen")
+        clear_key_btn.setToolTip("API-Key entfernen — Authentifizierung deaktivieren")
+        clear_key_btn.clicked.connect(self._clear_api_key)
+        key_row.addWidget(clear_key_btn)
+        api_form.addRow("API-Key:", key_row)
         ag.addLayout(api_form)
 
         self.api_status_label = QLabel("Gestoppt")
@@ -424,6 +450,9 @@ class SettingsPage(QWidget):
         self._load_alarm_notifier_settings()
         self._load_industrial_settings()
         self._refresh_ssh_list()
+        # API key
+        if hasattr(self, "_api_key_edit"):
+            self._api_key_edit.setText(self._settings.get_api_key())
 
     def _load_alarm_notifier_settings(self) -> None:
         """Populate alarm notifier UI fields from AppSettings."""
@@ -696,6 +725,26 @@ class SettingsPage(QWidget):
             import webbrowser
             port = self._api_server.port
             webbrowser.open(f"http://localhost:{port}/dashboard")
+
+    def _generate_api_key(self) -> None:
+        """Generate a random 32-byte hex API key, save it, and apply it immediately."""
+        import secrets
+        key = secrets.token_hex(32)
+        self._api_key_edit.setText(key)
+        self._apply_api_key(key)
+
+    def _clear_api_key(self) -> None:
+        """Remove the API key, disabling authentication."""
+        self._api_key_edit.clear()
+        self._apply_api_key("")
+
+    def _apply_api_key(self, key: str) -> None:
+        """Persist and broadcast the new API key immediately."""
+        if self._settings:
+            self._settings.save_api_key(key)
+        if self._api_server:
+            self._api_server.set_api_key(key)
+        self.api_key_changed.emit(key)
 
     def _save(self) -> None:
         """Persist all settings, emit ``autosave_changed``, and show a confirmation dialog."""

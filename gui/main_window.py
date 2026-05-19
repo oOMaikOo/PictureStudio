@@ -156,6 +156,8 @@ class MainWindow(QMainWindow):
         self.settings_page.set_api_server(self._rest_server)
         self.settings_page.set_notifier(self._notifier)
         self.settings_page.set_industrial_notifier(self._industrial_notifier)
+        # Apply persisted API key immediately so the server is protected on startup
+        self._rest_server.set_api_key(self._settings.get_api_key())
         self.camera_page.set_rest_server(self._rest_server)
         self.camera_page.set_notifier(self._notifier)
         self.camera_page.set_industrial_notifier(self._industrial_notifier)

@@ -335,3 +335,136 @@ class TestUnknownEndpoints:
     def test_unknown_endpoint_returns_404(self, server):
         status, _, _ = _get(f"http://localhost:{server.port}/api/does_not_exist")
         assert status == 404
+
+
+# ---------------------------------------------------------------------------
+# API Key Authentication (Fix 1)
+# ---------------------------------------------------------------------------
+
+def _get_with_key(url: str, key: str, timeout: float = 5.0):
+    """GET *url* with X-Api-Key header."""
+    req = urllib.request.Request(url, headers={"X-Api-Key": key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, dict(resp.headers), resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+def _post_with_key(url: str, key: str, body: dict, timeout: float = 5.0):
+    """POST *url* with X-Api-Key header and JSON body."""
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(
+        url, data=data,
+        headers={"Content-Type": "application/json", "X-Api-Key": key},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, dict(resp.headers), resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, dict(e.headers), e.read()
+
+
+@pytest.fixture
+def auth_server(tmp_path):
+    """Server with an API key set. Only authorised requests succeed."""
+    _reset_handler_state()
+    port = _free_port()
+    from api.rest_server import RestApiServer
+    srv = RestApiServer()
+    srv.start(port=port)
+    srv.set_project(_make_project(tmp_path))
+    srv.set_api_key("test-secret-key-12345")
+    time.sleep(0.15)
+    yield srv
+    srv.stop()
+    # Clear key so other tests aren't affected
+    from api.rest_server import _ProjectHandler
+    _ProjectHandler._api_key = ""
+
+
+class TestApiKeyAuth:
+    def test_public_status_endpoint_needs_no_key(self, auth_server):
+        """GET /api/status must succeed without a key (public endpoint)."""
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/status")
+        assert status == 200
+
+    def test_public_dashboard_needs_no_key(self, auth_server):
+        """GET /dashboard must succeed without a key (public endpoint)."""
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/dashboard")
+        assert status == 200
+
+    def test_protected_labels_returns_401_without_key(self, auth_server):
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/labels")
+        assert status == 401
+
+    def test_protected_project_returns_401_without_key(self, auth_server):
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/project")
+        assert status == 401
+
+    def test_protected_images_returns_401_without_key(self, auth_server):
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/images")
+        assert status == 401
+
+    def test_protected_scores_returns_401_without_key(self, auth_server):
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/scores")
+        assert status == 401
+
+    def test_labels_succeeds_with_correct_key(self, auth_server):
+        status, _, _ = _get_with_key(
+            f"http://localhost:{auth_server.port}/api/labels",
+            "test-secret-key-12345"
+        )
+        assert status == 200
+
+    def test_wrong_key_returns_401(self, auth_server):
+        status, _, _ = _get_with_key(
+            f"http://localhost:{auth_server.port}/api/labels",
+            "wrong-key"
+        )
+        assert status == 401
+
+    def test_no_key_configured_allows_all_requests(self, server):
+        """When no key is set (default), all protected endpoints are open."""
+        from api.rest_server import _ProjectHandler
+        assert _ProjectHandler._api_key == ""
+        status, _, _ = _get(f"http://localhost:{server.port}/api/labels")
+        assert status == 200
+
+    def test_post_label_returns_401_without_key(self, auth_server):
+        req = urllib.request.Request(
+            f"http://localhost:{auth_server.port}/api/images/label",
+            data=json.dumps({"path": "x", "label": "gut"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            status = 200
+        except urllib.error.HTTPError as e:
+            status = e.code
+        assert status == 401
+
+    def test_post_label_succeeds_with_correct_key(self, auth_server):
+        from api.rest_server import _ProjectHandler
+        proj = _ProjectHandler.project
+        img_path = proj.images[0]
+        status, _, _ = _post_with_key(
+            f"http://localhost:{auth_server.port}/api/images/label",
+            "test-secret-key-12345",
+            {"path": img_path, "label": "gut"},
+        )
+        assert status == 200
+
+    def test_set_api_key_empty_string_disables_auth(self, auth_server):
+        auth_server.set_api_key("")
+        time.sleep(0.05)
+        status, _, _ = _get(f"http://localhost:{auth_server.port}/api/labels")
+        assert status == 200
+
+    def test_401_body_contains_error_message(self, auth_server):
+        status, _, body = _get(f"http://localhost:{auth_server.port}/api/labels")
+        assert status == 401
+        data = json.loads(body)
+        assert "error" in data

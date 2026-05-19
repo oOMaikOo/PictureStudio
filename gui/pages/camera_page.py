@@ -70,6 +70,14 @@ class CameraPage(QWidget):
         self._industrial_notifier: Optional[IndustrialNotifier] = None
         self._last_frame: Optional[np.ndarray] = None
 
+        # Auto-reconnect state
+        self._reconnect_source = None   # source string/int to reconnect to; None = don't reconnect
+        self._reconnect_attempts: int = 0
+        self._is_video_file: bool = False
+        self._reconnect_timer = QTimer(self)
+        self._reconnect_timer.setSingleShot(True)
+        self._reconnect_timer.timeout.connect(self._try_reconnect)
+
         # Scoring state
         self._smooth_buf: list[float] = []
         self._score_history: list[float] = []
@@ -411,6 +419,7 @@ class CameraPage(QWidget):
         else:
             self._cam_combo.addItem("Keine USB-Kamera gefunden")
         self._cam_combo.addItem("IP-Kamera (URL eingeben…)", userData="ip")
+        self._cam_combo.addItem("Videodatei (MP4, AVI, …)", userData="video")
         self._refresh_btn.setEnabled(True)
         # Restore previous selection so a refresh doesn't silently reset the user's choice
         if prev is not None:
@@ -431,6 +440,8 @@ class CameraPage(QWidget):
     def _start_stream(self) -> None:
         """Open the selected camera source and start the ``CameraFrameThread``."""
         source = self._cam_combo.currentData()
+
+        is_video = False
 
         if source == "ip":
             url, ok = QInputDialog.getText(
@@ -455,20 +466,51 @@ class CameraPage(QWidget):
                 )
                 self._connect_btn.setChecked(False)
                 return
+        elif source == "video":
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Videodatei öffnen", "",
+                "Video-Dateien (*.mp4 *.avi *.mov *.mkv *.m4v *.wmv *.flv);;"
+                "Alle Dateien (*)"
+            )
+            if not path:
+                self._connect_btn.setChecked(False)
+                return
+            source = path
+            is_video = True
         elif source is None:
             self._connect_btn.setChecked(False)
             return
 
-        self._camera_thread = CameraFrameThread(source, fps=15.0, parent=self)
+        self._is_video_file = is_video
+        # Only live streams get auto-reconnect
+        self._reconnect_source = None if is_video else source
+        self._reconnect_attempts = 0
+        self._reconnect_timer.stop()
+
+        # Detect native FPS for video files; fall back to 25 fps
+        fps = 15.0
+        if is_video:
+            cap = cv2.VideoCapture(source)
+            native_fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+            fps = native_fps if native_fps and native_fps > 0 else 25.0
+
+        self._camera_thread = CameraFrameThread(source, fps=fps, parent=self)
         self._camera_thread.frame_ready.connect(self._on_frame)
         self._camera_thread.error.connect(self._on_camera_error)
         self._camera_thread.start()
 
         self._connect_btn.setText("Trennen")
-        self._conn_status_lbl.setText("Verbunden")
-        self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
-        cam_name = self._cam_combo.currentText()
-        self._status_bar.setText(f"Verbunden: {cam_name}")
+        if is_video:
+            fname = os.path.basename(source)
+            self._conn_status_lbl.setText(f"Wiedergabe: {fname}")
+            self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
+            self._status_bar.setText(f"Video: {source}  ({fps:.1f} fps)")
+        else:
+            self._conn_status_lbl.setText("Verbunden")
+            self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
+            cam_name = self._cam_combo.currentText()
+            self._status_bar.setText(f"Verbunden: {cam_name}")
 
         # Enable scoring if model already loaded
         if self._detector and self._detector.trained:
@@ -476,6 +518,11 @@ class CameraPage(QWidget):
 
     def _stop_stream(self) -> None:
         """Stop the camera thread and reset all live-monitoring UI elements."""
+        # Disable reconnect so the error handler doesn't restart the stream
+        self._reconnect_source = None
+        self._reconnect_timer.stop()
+        self._is_video_file = False
+
         self._scoring_btn.setChecked(False)
         self._scoring_btn.setEnabled(False)
         if self._camera_thread:
@@ -505,12 +552,48 @@ class CameraPage(QWidget):
 
     @Slot(str)
     def _on_camera_error(self, msg: str) -> None:
-        """Handle camera errors by disabling scoring and updating the status label."""
+        """Handle camera errors; auto-reconnect for live streams (not video files)."""
         self._scoring_btn.setEnabled(False)
+        self._connect_btn.blockSignals(True)
         self._connect_btn.setChecked(False)
-        self._conn_status_lbl.setText("Fehler")
-        self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
-        self._status_bar.setText(f"Kamera-Fehler: {msg}")
+        self._connect_btn.blockSignals(False)
+
+        if self._reconnect_source is not None and not self._is_video_file:
+            self._conn_status_lbl.setText("Verbindung unterbrochen — Reconnect in 5 s…")
+            self._conn_status_lbl.setStyleSheet("color:#D29922;")
+            self._status_bar.setText(f"Kamera-Fehler: {msg} — Reconnect läuft…")
+            self._reconnect_timer.start(5000)
+        else:
+            label = "Video beendet" if self._is_video_file else "Fehler"
+            self._conn_status_lbl.setText(label)
+            self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
+            self._status_bar.setText(
+                "Video abgespielt." if self._is_video_file else f"Kamera-Fehler: {msg}"
+            )
+
+    def _try_reconnect(self) -> None:
+        """Attempt to restart the stream after a connection error."""
+        source = self._reconnect_source
+        if source is None:
+            return
+        self._reconnect_attempts += 1
+        self._conn_status_lbl.setText(f"Reconnect #{self._reconnect_attempts}…")
+        self._conn_status_lbl.setStyleSheet("color:#D29922;")
+        self._status_bar.setText(f"Verbinde erneut… (Versuch {self._reconnect_attempts})")
+
+        if self._camera_thread:
+            self._camera_thread.stop()
+            self._camera_thread = None
+
+        self._camera_thread = CameraFrameThread(source, fps=15.0, parent=self)
+        self._camera_thread.frame_ready.connect(self._on_frame)
+        self._camera_thread.error.connect(self._on_camera_error)
+        self._camera_thread.start()
+
+        self._connect_btn.blockSignals(True)
+        self._connect_btn.setChecked(True)
+        self._connect_btn.setText("Trennen")
+        self._connect_btn.blockSignals(False)
 
     # ── Scoring toggle ────────────────────────────────────────────────────────
 
@@ -541,6 +624,15 @@ class CameraPage(QWidget):
         """
         self._last_frame = frame
         display = frame
+
+        # First frame after reconnect — restore green status
+        if self._reconnect_attempts > 0:
+            self._reconnect_attempts = 0
+            self._conn_status_lbl.setText("Verbunden")
+            self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
+            self._status_bar.setText("Verbindung wiederhergestellt.")
+            if self._detector and self._detector.trained:
+                self._scoring_btn.setEnabled(True)
 
         if self._scoring_btn.isChecked() and self._detector and self._detector.trained:
             analysis = self._apply_roi_crop(frame)

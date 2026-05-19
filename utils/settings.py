@@ -123,6 +123,13 @@ class AppSettings:
     def save_ssh_profiles(self, profiles: list) -> None:
         self._s.setValue("ssh/profiles", profiles)
 
+    # ---- REST API key ----
+    def get_api_key(self) -> str:
+        return self._s.value("api/key", "") or ""
+
+    def save_api_key(self, key: str) -> None:
+        self._s.setValue("api/key", key)
+
     # ---- window state ----
     def get_window_geometry(self):
         return self._s.value("window/geometry")

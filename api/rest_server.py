@@ -47,6 +47,7 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     event_log_path: str = ""         # path to anomaly_events.csv (set externally)
     alarm_frame_dir: str = ""        # directory where alarm JPEG snapshots are saved
     latest_alarm: dict = {}          # most recent alarm: {ts, score, threshold, frame_path}
+    _api_key: str = ""               # shared secret; empty = no auth required
 
     # ------------------------------------------------------------------ util
 
@@ -87,6 +88,22 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         matches = [p for p in proj.images if os.path.basename(p) == raw]
         return matches[0] if matches else None
 
+    # ------------------------------------------------------------------ auth
+
+    # Public endpoints that never require a key (monitoring dashboards need them)
+    _PUBLIC_PATHS = {"/api/status", "/dashboard", "/dashboard/"}
+
+    def _check_auth(self) -> bool:
+        """Return True if the request is authorised (or no key is configured)."""
+        key = _ProjectHandler._api_key
+        if not key:
+            return True
+        provided = (
+            self.headers.get("X-Api-Key", "")
+            or self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        )
+        return provided == key
+
     # ------------------------------------------------------------------ CORS pre-flight
 
     def do_OPTIONS(self) -> None:
@@ -101,9 +118,13 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         _ProjectHandler.request_count += 1
         parsed = urlparse(self.path)
-        path = parsed.path.rstrip("/")
+        path = parsed.path.rstrip("/") or "/"
         qs = parse_qs(parsed.query)
         proj = _ProjectHandler.project
+
+        if path not in self._PUBLIC_PATHS and not self._check_auth():
+            self._err("Unauthorized — provide X-Api-Key header", 401)
+            return
 
         # /api/status
         if path == "/api/status":
@@ -247,7 +268,7 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
         # /dashboard — HTML monitoring dashboard
         if path in ("/dashboard", "/dashboard/"):
-            html = _build_dashboard_html()
+            html = _build_dashboard_html(_ProjectHandler._api_key)
             body = html.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -280,6 +301,10 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         _ProjectHandler.request_count += 1
         path = urlparse(self.path).path.rstrip("/")
         proj = _ProjectHandler.project
+
+        if not self._check_auth():
+            self._err("Unauthorized — provide X-Api-Key header", 401)
+            return
 
         body = self._read_body()
         if body is None:
@@ -388,8 +413,9 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
 # ── Dashboard HTML ─────────────────────────────────────────────────────────
 
-def _build_dashboard_html() -> str:
-    return """<!DOCTYPE html>
+def _build_dashboard_html(api_key: str = "") -> str:
+    _key_js = f"'{api_key}'" if api_key else "''"
+    _html = """<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
@@ -473,6 +499,9 @@ def _build_dashboard_html() -> str:
 
 <script>
 const BASE = window.location.origin;
+const API_KEY = __API_KEY__;
+const _headers = API_KEY ? {'X-Api-Key': API_KEY} : {};
+function apiFetch(url) { return fetch(url, {headers: _headers}); }
 let scores = [];
 let threshold = 0;
 let alarmCount = 0;
@@ -512,9 +541,9 @@ let lastAlarmFilename = '';
 async function fetchData() {
   try {
     const [sRes, eRes, aRes] = await Promise.all([
-      fetch(BASE + '/api/scores?limit=120'),
-      fetch(BASE + '/api/events?limit=20'),
-      fetch(BASE + '/api/latest_alarm'),
+      apiFetch(BASE + '/api/scores?limit=120'),
+      apiFetch(BASE + '/api/events?limit=20'),
+      apiFetch(BASE + '/api/latest_alarm'),
     ]);
     const sData = await sRes.json();
     const eData = await eRes.json();
@@ -585,6 +614,7 @@ setInterval(fetchData, 3000);
 </script>
 </body>
 </html>"""
+    return _html.replace("__API_KEY__", _key_js)
 
 
 class RestApiServer:
@@ -607,6 +637,10 @@ class RestApiServer:
 
     def set_project(self, project) -> None:
         _ProjectHandler.project = project
+
+    def set_api_key(self, key: str) -> None:
+        """Set (or clear) the shared API key. Empty string disables auth."""
+        _ProjectHandler._api_key = key or ""
 
     def set_inferencer(self, inferencer) -> None:
         _ProjectHandler.inferencer = inferencer
