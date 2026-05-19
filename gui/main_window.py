@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
         self.camera_page.set_industrial_notifier(self._industrial_notifier)
         self.multi_camera_page.set_rest_server(self._rest_server)
         self.multi_camera_page.set_notifier(self._notifier)
+        self.multi_camera_page.set_industrial_notifier(self._industrial_notifier)
         self.training_page.set_settings(self._settings)
         self.settings_page.theme_changed.connect(self._apply_theme)
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)

@@ -4,6 +4,25 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [1.3.0] – 2026-05-19
+
+### Added
+- **OPC-UA / Modbus TCP: Multi-Kamera-Integration** — `MultiCameraPage` forwards
+  alarm events to `IndustrialNotifier` (`on_alarm(True, score, threshold)`) for
+  every channel that fires an alarm. Previously only the single-channel
+  `CameraPage` was wired to the industrial notifier; multi-camera was missing.
+  `MainWindow` now calls `multi_camera_page.set_industrial_notifier()` on startup.
+- **Anomalie-Clustering: vollständig** — `AnomalyClusteringPage` (Stack-Index 11),
+  `AnomalyClustering` core, `ClusteringThread` QThread-Wrapper, CSV-Export und
+  Cluster-Browser-UI sind vollständig implementiert und getestet.
+
+### Changed
+- Help (Section 9 – Einstellungen): OPC-UA/Modbus section already covers
+  general alarm forwarding; no content change needed.
+- Tour (Step 7 – Einstellungen): existing OPC-UA step unchanged.
+
+---
+
 ## [1.2.0] – 2026-05-19
 
 ### Added

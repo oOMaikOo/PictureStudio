@@ -15,6 +15,7 @@ import numpy as np
 from core.anomaly_detector import AnomalyDetector
 from core.camera import list_usb_cameras, CameraFrameThread
 from core.alarm_notifier import AlarmNotifier
+from core.industrial_notifier import IndustrialNotifier
 
 try:
     from core.onnx_anomaly_scorer import OnnxAnomalyScorer, HAS_ORT
@@ -363,6 +364,7 @@ class MultiCameraPage(QWidget):
         self._channels: list[_ChannelState] = []
         self._widgets: list[_ChannelWidget] = []
         self._notifier: Optional[AlarmNotifier] = None
+        self._industrial_notifier: Optional[IndustrialNotifier] = None
         self._rest_server = None
         self._alarm_cooldown: float = 30.0
         self._cached_cameras: list = []   # [(idx, name), ...]
@@ -379,6 +381,10 @@ class MultiCameraPage(QWidget):
     def set_notifier(self, n: AlarmNotifier) -> None:
         """Inject the AlarmNotifier used for email/webhook alarm notifications."""
         self._notifier = n
+
+    def set_industrial_notifier(self, n: IndustrialNotifier) -> None:
+        """Inject the IndustrialNotifier for OPC-UA / Modbus TCP alarm forwarding."""
+        self._industrial_notifier = n
 
     def set_rest_server(self, server) -> None:
         """Wire in the REST API server."""
@@ -789,6 +795,12 @@ class MultiCameraPage(QWidget):
                             frame_path=fpath,
                             model_name=model_name,
                         )
+                    except Exception:
+                        pass
+                # Industrial protocol (OPC-UA / Modbus TCP)
+                if self._industrial_notifier is not None:
+                    try:
+                        self._industrial_notifier.on_alarm(True, score, thr)
                     except Exception:
                         pass
                 # We already emitted the signal above; return to avoid double emit

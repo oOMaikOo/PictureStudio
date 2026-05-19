@@ -231,3 +231,73 @@ def test_channel_widget_set_running_false_does_not_crash(qtbot):
     widget = _ChannelWidget(channel_idx=0)
     qtbot.addWidget(widget)
     widget.set_running(False)
+
+
+# ---------------------------------------------------------------------------
+# Industrial Notifier wiring (Feature 5: OPC-UA / Modbus)
+# ---------------------------------------------------------------------------
+
+def test_set_industrial_notifier_method_exists(qtbot):
+    """MultiCameraPage must expose set_industrial_notifier()."""
+    page = MultiCameraPage()
+    qtbot.addWidget(page)
+    assert hasattr(page, "set_industrial_notifier")
+    assert callable(page.set_industrial_notifier)
+
+
+def test_set_industrial_notifier_none_does_not_crash(qtbot):
+    """set_industrial_notifier(None) must not raise."""
+    page = MultiCameraPage()
+    qtbot.addWidget(page)
+    page.set_industrial_notifier(None)
+
+
+def test_set_industrial_notifier_stores_reference(qtbot):
+    """set_industrial_notifier() should store the notifier on _industrial_notifier."""
+    from core.industrial_notifier import IndustrialNotifier
+    page = MultiCameraPage()
+    qtbot.addWidget(page)
+    n = IndustrialNotifier()
+    page.set_industrial_notifier(n)
+    assert page._industrial_notifier is n
+
+
+def test_industrial_notifier_on_alarm_called_on_alarm_event(qtbot):
+    """_on_frame() alarm path must call industrial_notifier.on_alarm()."""
+    import numpy as np
+    from core.industrial_notifier import IndustrialNotifier
+
+    page = MultiCameraPage()
+    qtbot.addWidget(page)
+
+    calls = []
+
+    class _MockIndustrial:
+        def on_alarm(self, is_anomaly, score, threshold):
+            calls.append((is_anomaly, score, threshold))
+
+    page.set_industrial_notifier(_MockIndustrial())
+
+    # Inject a channel state that is running with a very low threshold
+    # so the mock frame triggers an alarm
+    from gui.pages.multi_camera_page import _ChannelState
+    state = _ChannelState()
+    state.running = True
+    state.threshold = 0.0          # any score > 0 is an alarm
+    state.last_alarm_t = 0.0       # cooldown expired
+    page._channels[0] = state
+
+    class _MockDetector:
+        threshold = 0.0
+        metadata = {}
+        def score_detailed(self, frame):
+            return (1.0, None)
+
+    state.detector = _MockDetector()
+    state.frame_counter = 2        # so frame_counter % 3 == 0 after increment
+
+    frame = np.zeros((64, 64, 3), dtype=np.uint8)
+    page._on_frame(0, frame)
+
+    assert len(calls) == 1
+    assert calls[0][0] is True    # is_anomaly=True
