@@ -389,3 +389,451 @@ class TestSaveAlarm:
         fname = save_alarm(frame, 0.95, 0.5, out_dir, log_path, 1)
         rows = _read_csv_rows(log_path)
         assert rows[0]["frame_file"] == fname
+
+
+# ---------------------------------------------------------------------------
+# _CameraThread — video detection and construction (no hardware required)
+# ---------------------------------------------------------------------------
+
+class TestCameraThreadVideoDetection:
+    """Tests for _CameraThread._detect_video() — pure logic, no camera access."""
+
+    def test_integer_source_is_not_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video(0) is False
+        assert _CameraThread._detect_video(2) is False
+
+    def test_mp4_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("/path/to/video.mp4") is True
+
+    def test_avi_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("recording.AVI") is True
+
+    def test_mov_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("clip.mov") is True
+
+    def test_mkv_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("film.mkv") is True
+
+    def test_rtsp_url_is_not_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("rtsp://admin:pass@192.168.1.100/stream") is False
+
+    def test_http_url_is_not_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("http://camera.local/video.cgi") is False
+
+    def test_no_extension_is_not_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("rtsp://cam.local/stream1") is False
+
+    def test_unknown_extension_is_not_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("/path/to/file.xyz") is False
+
+    def test_webm_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("recording.webm") is True
+
+    def test_ts_extension_detected_as_video(self):
+        from monitor import _CameraThread
+        assert _CameraThread._detect_video("/recordings/stream.ts") is True
+
+    def test_thread_is_daemon(self):
+        from monitor import _CameraThread
+        t = _CameraThread(0, 15.0, lambda f: None)
+        assert t.daemon is True
+
+    def test_is_video_flag_set_correctly_for_int(self):
+        from monitor import _CameraThread
+        t = _CameraThread(0, 15.0, lambda f: None)
+        assert t._is_video is False
+
+    def test_is_video_flag_set_correctly_for_mp4(self):
+        from monitor import _CameraThread
+        t = _CameraThread("/path/video.mp4", 15.0, lambda f: None)
+        assert t._is_video is True
+
+    def test_is_video_flag_set_correctly_for_rtsp(self):
+        from monitor import _CameraThread
+        t = _CameraThread("rtsp://cam/stream", 15.0, lambda f: None)
+        assert t._is_video is False
+
+    def test_stop_clears_running_flag(self):
+        from monitor import _CameraThread
+        t = _CameraThread(0, 15.0, lambda f: None)
+        t._running = True
+        t.stop()
+        assert t._running is False
+
+
+# ---------------------------------------------------------------------------
+# _MonitorState — thread-safe shared state
+# ---------------------------------------------------------------------------
+
+class TestMonitorState:
+    def test_initial_score_is_zero(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        assert s.score == 0.0
+
+    def test_initial_event_count_is_zero(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        assert s.event_count == 0
+
+    def test_initial_score_buffer_empty(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        assert s.score_buffer == []
+
+    def test_initial_latest_alarm_empty(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        assert s.latest_alarm == {}
+
+    def test_push_score_updates_score(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_score(0.42, 0.10)
+        assert abs(s.score - 0.42) < 1e-9
+
+    def test_push_score_sets_is_alarm_true_when_above_threshold(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_score(0.50, 0.10)
+        assert s.is_alarm is True
+
+    def test_push_score_sets_is_alarm_false_when_below_threshold(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_score(0.05, 0.10)
+        assert s.is_alarm is False
+
+    def test_push_score_appends_to_buffer(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_score(0.1, 0.5)
+        s.push_score(0.2, 0.5)
+        assert len(s.score_buffer) == 2
+
+    def test_push_score_buffer_capped_at_500(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        for i in range(600):
+            s.push_score(float(i) / 1000.0, 0.5)
+        assert len(s.score_buffer) <= 500
+
+    def test_push_score_entry_has_expected_keys(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_score(0.123, 0.5)
+        entry = s.score_buffer[-1]
+        assert "ts" in entry
+        assert "score" in entry
+        assert "threshold" in entry
+        assert "alarm" in entry
+
+    def test_push_alarm_updates_latest_alarm(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_alarm(0.9, 0.5, "alarm_001.jpg")
+        assert s.latest_alarm["frame_filename"] == "alarm_001.jpg"
+        assert abs(s.latest_alarm["score"] - 0.9) < 1e-6
+
+    def test_push_alarm_increments_event_count(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        s.push_alarm(0.9, 0.5, "f.jpg")
+        s.push_alarm(0.8, 0.5, "g.jpg")
+        assert s.event_count == 2
+
+    def test_snapshot_returns_dict(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        snap = s.snapshot()
+        assert isinstance(snap, dict)
+
+    def test_snapshot_contains_expected_keys(self):
+        from monitor import _MonitorState
+        s = _MonitorState()
+        snap = s.snapshot()
+        for key in ("model_name", "threshold", "score", "is_alarm",
+                    "event_count", "cam_status", "uptime_s", "score_count"):
+            assert key in snap, f"Missing key: {key}"
+
+    def test_snapshot_uptime_is_non_negative(self):
+        from monitor import _MonitorState
+        import time
+        s = _MonitorState()
+        time.sleep(0.01)
+        assert s.snapshot()["uptime_s"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# build_parser — new arguments added in v1.1.0
+# ---------------------------------------------------------------------------
+
+class TestBuildParserNewArgs:
+    def test_url_argument_accepted(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt", "--url", "rtsp://cam/stream"])
+        assert args.url == "rtsp://cam/stream"
+
+    def test_url_and_camera_are_mutually_exclusive(self):
+        from monitor import build_parser
+        p = build_parser()
+        with pytest.raises(SystemExit):
+            p.parse_args(["--model", "m.pt", "--camera", "0", "--url", "rtsp://cam"])
+
+    def test_default_url_is_none(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt"])
+        assert args.url is None
+
+    def test_reconnect_delay_default_is_5(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt"])
+        assert abs(args.reconnect_delay - 5.0) < 1e-9
+
+    def test_reconnect_delay_custom_value(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt", "--reconnect-delay", "10.0"])
+        assert abs(args.reconnect_delay - 10.0) < 1e-9
+
+    def test_mqtt_host_default_is_empty(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).mqtt_host == ""
+
+    def test_mqtt_port_default_is_1883(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).mqtt_port == 1883
+
+    def test_mqtt_topic_default(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).mqtt_topic == "picture_studio/monitor"
+
+    def test_mqtt_user_default_is_empty(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).mqtt_user == ""
+
+    def test_mqtt_pass_default_is_empty(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).mqtt_pass == ""
+
+    def test_api_port_default_is_zero(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).api_port == 0
+
+    def test_api_port_custom_value(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt", "--api-port", "8766"])
+        assert args.api_port == 8766
+
+    def test_api_key_default_is_empty(self):
+        from monitor import build_parser
+        p = build_parser()
+        assert p.parse_args(["--model", "m.pt"]).api_key == ""
+
+    def test_api_key_custom_value(self):
+        from monitor import build_parser
+        p = build_parser()
+        args = p.parse_args(["--model", "m.pt", "--api-key", "secret123"])
+        assert args.api_key == "secret123"
+
+
+# ---------------------------------------------------------------------------
+# _MonitorApiServer + _MonitorHandler — live HTTP tests
+# ---------------------------------------------------------------------------
+
+import json as _json
+import socket as _socket
+import urllib.error as _urlerr
+import urllib.request as _urlreq
+
+
+def _free_port() -> int:
+    with _socket.socket() as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _http_get(url: str, headers: dict | None = None, timeout: float = 5.0):
+    req = _urlreq.Request(url, headers=headers or {})
+    try:
+        with _urlreq.urlopen(req, timeout=timeout) as r:
+            return r.status, _json.loads(r.read())
+    except _urlerr.HTTPError as e:
+        return e.code, _json.loads(e.read())
+
+
+@pytest.fixture(scope="module")
+def monitor_server(tmp_path_factory):
+    """Start a _MonitorApiServer on a free port; tear it down after the module."""
+    from monitor import _MonitorApiServer, _MonitorState
+    state = _MonitorState()
+    state.model_name = "test_model.pth"
+    state.threshold = 0.05
+    state.cam_status = "Verbunden"
+    state.output_dir = str(tmp_path_factory.mktemp("api_frames"))
+
+    port = _free_port()
+    srv = _MonitorApiServer(port, state)
+    srv.start()
+    import time; time.sleep(0.1)
+    yield port, state, srv
+    srv.stop()
+
+
+@pytest.fixture(scope="module")
+def auth_server(tmp_path_factory):
+    """Server with API key set."""
+    from monitor import _MonitorApiServer, _MonitorState, _MonitorHandler
+    state = _MonitorState()
+    state.api_key = "monitor-secret-key"
+    state.output_dir = str(tmp_path_factory.mktemp("auth_frames"))
+
+    port = _free_port()
+    _MonitorHandler.state = state
+    srv = _MonitorApiServer(port, state)
+    srv.start()
+    import time; time.sleep(0.1)
+    yield port, state, srv
+    srv.stop()
+
+
+class TestMonitorApiServer:
+    def test_status_endpoint_returns_200(self, monitor_server):
+        port, state, _ = monitor_server
+        status, body = _http_get(f"http://localhost:{port}/api/status")
+        assert status == 200
+
+    def test_status_has_model_name(self, monitor_server):
+        port, state, _ = monitor_server
+        _, body = _http_get(f"http://localhost:{port}/api/status")
+        assert body["model_name"] == "test_model.pth"
+
+    def test_status_has_threshold(self, monitor_server):
+        port, state, _ = monitor_server
+        _, body = _http_get(f"http://localhost:{port}/api/status")
+        assert abs(body["threshold"] - 0.05) < 1e-9
+
+    def test_scores_endpoint_returns_200(self, monitor_server):
+        port, state, _ = monitor_server
+        status, _ = _http_get(f"http://localhost:{port}/api/scores")
+        assert status == 200
+
+    def test_scores_endpoint_has_scores_key(self, monitor_server):
+        port, state, _ = monitor_server
+        _, body = _http_get(f"http://localhost:{port}/api/scores")
+        assert "scores" in body
+
+    def test_latest_alarm_endpoint_returns_200(self, monitor_server):
+        port, state, _ = monitor_server
+        status, _ = _http_get(f"http://localhost:{port}/api/latest_alarm")
+        assert status == 200
+
+    def test_scores_reflect_pushed_data(self, monitor_server):
+        port, state, _ = monitor_server
+        state.push_score(0.123, 0.05)
+        _, body = _http_get(f"http://localhost:{port}/api/scores")
+        assert body["count"] >= 1
+
+    def test_latest_alarm_reflects_pushed_alarm(self, monitor_server):
+        port, state, _ = monitor_server
+        state.push_alarm(0.9, 0.05, "alarm_test.jpg")
+        _, body = _http_get(f"http://localhost:{port}/api/latest_alarm")
+        assert body["frame_filename"] == "alarm_test.jpg"
+
+    def test_unknown_endpoint_returns_404(self, monitor_server):
+        port, _, _ = monitor_server
+        status, _ = _http_get(f"http://localhost:{port}/api/does_not_exist")
+        assert status == 404
+
+    def test_frame_invalid_path_returns_400(self, monitor_server):
+        port, _, _ = monitor_server
+        status, _ = _http_get(f"http://localhost:{port}/api/frame/../etc/passwd")
+        assert status in (400, 404)
+
+    def test_dashboard_returns_html(self, monitor_server):
+        port, _, _ = monitor_server
+        req = _urlreq.Request(f"http://localhost:{port}/dashboard")
+        with _urlreq.urlopen(req, timeout=5) as r:
+            ct = r.headers.get("Content-Type", "")
+            body = r.read().decode()
+        assert "text/html" in ct
+        assert "PictureStudio Monitor" in body
+
+
+class TestMonitorApiAuth:
+    def test_status_is_public_no_key_needed(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(f"http://localhost:{port}/api/status")
+        assert status == 200
+
+    def test_dashboard_is_public_no_key_needed(self, auth_server):
+        port, _, _ = auth_server
+        req = _urlreq.Request(f"http://localhost:{port}/dashboard")
+        with _urlreq.urlopen(req, timeout=5) as r:
+            assert r.status == 200
+
+    def test_scores_requires_key_returns_401_without_it(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(f"http://localhost:{port}/api/scores")
+        assert status == 401
+
+    def test_latest_alarm_requires_key_returns_401_without_it(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(f"http://localhost:{port}/api/latest_alarm")
+        assert status == 401
+
+    def test_correct_key_grants_access_to_scores(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(
+            f"http://localhost:{port}/api/scores",
+            headers={"X-Api-Key": "monitor-secret-key"},
+        )
+        assert status == 200
+
+    def test_wrong_key_returns_401(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(
+            f"http://localhost:{port}/api/scores",
+            headers={"X-Api-Key": "wrong-key"},
+        )
+        assert status == 401
+
+    def test_bearer_token_auth_works(self, auth_server):
+        port, _, _ = auth_server
+        status, _ = _http_get(
+            f"http://localhost:{port}/api/scores",
+            headers={"Authorization": "Bearer monitor-secret-key"},
+        )
+        assert status == 200
+
+    def test_401_body_has_error_field(self, auth_server):
+        port, _, _ = auth_server
+        _, body = _http_get(f"http://localhost:{port}/api/scores")
+        assert "error" in body
+
+    def test_dashboard_html_embeds_api_key(self, auth_server):
+        port, _, _ = auth_server
+        req = _urlreq.Request(f"http://localhost:{port}/dashboard")
+        with _urlreq.urlopen(req, timeout=5) as r:
+            body = r.read().decode()
+        assert "monitor-secret-key" in body
