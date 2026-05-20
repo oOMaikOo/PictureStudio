@@ -186,6 +186,10 @@ class _CameraThread(threading.Thread):
                 delay = 1.0 / max(self._fps, 1.0)
 
             consec_fail = 0
+            first_frame = True
+            # Live cameras (especially built-in on macOS) need up to 30 read()
+            # calls before delivering the first frame — don't break too early.
+            warmup_limit = 3 if self._is_video else 60
             t_next = time.perf_counter()
 
             while self._running:
@@ -197,6 +201,11 @@ class _CameraThread(threading.Thread):
 
                 ret, frame = cap.read()
                 if ret and frame is not None:
+                    if first_frame:
+                        first_frame = False
+                        src_label = self._source if isinstance(self._source, str) else f"Index {self._source}"
+                        print(f"[Kamera] Erster Frame von {src_label} empfangen "
+                              f"({frame.shape[1]}×{frame.shape[0]})")
                     consec_fail = 0
                     try:
                         self._callback(frame)
@@ -204,7 +213,9 @@ class _CameraThread(threading.Thread):
                         pass
                 else:
                     consec_fail += 1
-                    if self._is_video or consec_fail >= 5:
+                    if consec_fail >= warmup_limit:
+                        print(f"[Kamera] Quelle {self._source}: {consec_fail} "
+                              f"aufeinanderfolgende Fehler — trenne Verbindung.")
                         break
                     time.sleep(0.1)
 
