@@ -1,0 +1,31 @@
+title: PictureStudio
+description: KI-gestützte Bildanalyse & Anomalieerkennung — Open Source, Python + PySide6
+theme: jekyll-theme-slate
+url: "https://oOMaikOo.github.io"
+baseurl: "/PictureStudio"
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+
+# Plugins
+plugins:
+  - jekyll-relative-links
+  - jekyll-sitemap
+
+# Include / Exclude
+include:
+  - guide/
+  - wiki/
+
+exclude:
+  - "*.py"
+  - "*.pyc"
+  - __pycache__/
+  - .venv/
+
+# Site metadata
+author: oOMaikOo
+repository: oOMaikOo/PictureStudio
