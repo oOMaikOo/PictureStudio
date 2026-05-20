@@ -1045,10 +1045,20 @@ function refreshCard(card, ch) {
 
 // ─── Frame polling per channel ────────────────────────────────────────────────
 function startFramePoll(id) {
-  function poll() {
+  let _objUrl = null;
+  async function poll() {
     const img = document.getElementById('img-'+id);
     if (!img) return; // card removed
-    img.src = '/setup/channels/'+id+'/frame.jpg?t='+Date.now();
+    try {
+      const r = await fetch('/setup/channels/'+id+'/frame.jpg?t='+Date.now());
+      if (r.ok && r.status === 200) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        img.src = url;
+        if (_objUrl) URL.revokeObjectURL(_objUrl);
+        _objUrl = url;
+      }
+    } catch(e) {}
     setTimeout(poll, 300);
   }
   poll();
@@ -1395,11 +1405,11 @@ class _SetupHandler(BaseHTTPRequestHandler):
                     return
                 frame = ch.get_frame()
                 if frame is None:
-                    self.send_response(204)
-                    self._cors()
-                    self.end_headers()
-                    return
-                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                    # Return a small black placeholder JPEG so <img> never breaks
+                    placeholder = np.zeros((120, 160, 3), dtype=np.uint8)
+                    ok, buf = cv2.imencode(".jpg", placeholder, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                else:
+                    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
                 if not ok:
                     self.send_response(204)
                     self._cors()
