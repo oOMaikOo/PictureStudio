@@ -45,12 +45,19 @@ def _read_csv_rows(path: str):
 # ---------------------------------------------------------------------------
 
 class TestBuildParser:
-    def test_model_is_required_exits_with_error_if_missing(self):
+    def test_model_is_optional_in_parser(self):
+        # --model is now optional at argparse level; main() enforces it when --setup absent
         from monitor import build_parser
         parser = build_parser()
-        with pytest.raises(SystemExit) as exc_info:
-            parser.parse_args([])
-        assert exc_info.value.code != 0
+        args = parser.parse_args([])
+        assert args.model is None
+
+    def test_setup_flag_makes_model_unnecessary(self):
+        from monitor import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["--setup"])
+        assert args.setup is True
+        assert args.model is None
 
     def test_model_argument_accepted(self):
         from monitor import build_parser
