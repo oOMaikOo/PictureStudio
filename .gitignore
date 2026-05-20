@@ -31,3 +31,9 @@ test_cam.json
 .idea/
 .vscode/
 *.swp
+
+# Claude Code local settings (contain machine-specific absolute paths)
+.claude/
+
+# Monitor runtime logs
+monitor_logs/
