@@ -845,22 +845,22 @@ class GuideTour(QFrame):
                 border-radius: 10px;
             }
         """)
-        self.setFixedWidth(340)
+        self.setFixedWidth(440)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(10)
 
         # Header row
         header_row = QHBoxLayout()
         self._header_lbl = QLabel("Geführte Tour")
-        self._header_lbl.setStyleSheet("color:#F39C12; font-weight:bold; font-size:11px;")
+        self._header_lbl.setStyleSheet("color:#F39C12; font-weight:bold; font-size:13px;")
         header_row.addWidget(self._header_lbl)
         header_row.addStretch()
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(22, 22)
+        close_btn.setFixedSize(26, 26)
         close_btn.setStyleSheet(
-            "QPushButton{background:transparent;color:#aaa;border:none;font-size:14px;}"
+            "QPushButton{background:transparent;color:#aaa;border:none;font-size:16px;}"
             "QPushButton:hover{color:white;}"
         )
         close_btn.clicked.connect(self.stop)
@@ -869,21 +869,21 @@ class GuideTour(QFrame):
 
         # Title
         self._title_lbl = QLabel()
-        self._title_lbl.setStyleSheet("color:white; font-weight:bold; font-size:13px;")
+        self._title_lbl.setStyleSheet("color:white; font-weight:bold; font-size:16px;")
         self._title_lbl.setWordWrap(True)
         layout.addWidget(self._title_lbl)
 
         # Description
         self._desc_lbl = QLabel()
-        self._desc_lbl.setStyleSheet("color:#BDC3C7; font-size:11px; line-height:1.5;")
+        self._desc_lbl.setStyleSheet("color:#D6DBDF; font-size:13px; line-height:1.6;")
         self._desc_lbl.setWordWrap(True)
-        self._desc_lbl.setMinimumHeight(90)
+        self._desc_lbl.setMinimumHeight(140)
         self._desc_lbl.setAlignment(Qt.AlignTop)
         layout.addWidget(self._desc_lbl)
 
         # Step counter
         self._counter_lbl = QLabel()
-        self._counter_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        self._counter_lbl.setStyleSheet("color:#95A5A6; font-size:12px;")
         self._counter_lbl.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._counter_lbl)
 
@@ -892,7 +892,7 @@ class GuideTour(QFrame):
         self._back_btn = QPushButton("← Zurück")
         self._back_btn.setStyleSheet(
             "QPushButton{background:#2C3E50;color:#BDC3C7;border:1px solid #34495E;"
-            "border-radius:5px;padding:5px 10px;}"
+            "border-radius:6px;padding:7px 14px;font-size:13px;}"
             "QPushButton:hover{background:#34495E;color:white;}"
             "QPushButton:disabled{color:#555;}"
         )
@@ -902,7 +902,7 @@ class GuideTour(QFrame):
         self._next_btn = QPushButton("Weiter →")
         self._next_btn.setStyleSheet(
             "QPushButton{background:#2980B9;color:white;border:none;"
-            "border-radius:5px;padding:5px 10px;font-weight:bold;}"
+            "border-radius:6px;padding:7px 14px;font-size:13px;font-weight:bold;}"
             "QPushButton:hover{background:#3498DB;}"
         )
         self._next_btn.clicked.connect(self._next_step)
