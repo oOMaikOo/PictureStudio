@@ -33,6 +33,7 @@ SECTIONS = [
     ("🎬", "Video-Annotation"),       # 17
     ("🌐", "Fleet-Management"),       # 18
     ("⚡", "Modelle Erweitert"),      # 19
+    ("🔗", "Kontakt & Repository"),   # 20
 ]
 
 # Map sidebar page index → section index
@@ -1265,6 +1266,28 @@ Erstellt in einem gewählten Ordner:</p>
 </ul>
 """),
 
+# ── 20  Kontakt & Repository ─────────────────────────────────────────────────
+20: page("""
+<h1>🔗 Kontakt &amp; Repository</h1>
+<p>PictureStudio ist ein Open-Source-Projekt. Fragen, Fehlerberichte und
+Pull-Requests sind herzlich willkommen.</p>
+<hr>
+
+<h2>GitHub-Repository</h2>
+<p>
+  <a href="https://github.com/oOMaikOo/PictureStudio">https://github.com/oOMaikOo/PictureStudio</a>
+</p>
+<ul>
+  <li><b>Issues</b> — Fehler melden oder Feature-Wünsche eintragen</li>
+  <li><b>Releases</b> — fertige Versionen als ZIP herunterladen</li>
+  <li><b>Wiki</b> — weiterführende Dokumentation</li>
+</ul>
+
+<h2>Feedback &amp; Beiträge</h2>
+<p>Pull Requests sind willkommen. Bitte einen Feature-Branch erstellen und
+einen kurzen Issue anlegen, bevor größere Änderungen umgesetzt werden.</p>
+"""),
+
 }
 
 
@@ -1331,7 +1354,7 @@ class HelpDialog(QDialog):
 
         # ── Right content ─────────────────────────────────────────────────────
         self._browser = QTextBrowser()
-        self._browser.setOpenExternalLinks(False)
+        self._browser.setOpenExternalLinks(True)
         self._browser.setStyleSheet(
             "QTextBrowser {"
             "  background: #0D1117;"
