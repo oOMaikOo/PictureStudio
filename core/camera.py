@@ -4,6 +4,7 @@ Camera capture backend: USB cameras and IP camera streams via OpenCV.
 import json
 import platform
 import subprocess
+import threading
 import time
 from datetime import datetime
 from typing import Union
@@ -12,6 +13,50 @@ import cv2
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QImage
+
+_CAM_PROP_MAP: dict[str, int] = {
+    "brightness":  cv2.CAP_PROP_BRIGHTNESS,
+    "contrast":    cv2.CAP_PROP_CONTRAST,
+    "saturation":  cv2.CAP_PROP_SATURATION,
+    "sharpness":   cv2.CAP_PROP_SHARPNESS,
+    "exposure":    cv2.CAP_PROP_EXPOSURE,
+    "gain":        cv2.CAP_PROP_GAIN,
+}
+
+
+def apply_cam_props(cap: cv2.VideoCapture, props: dict) -> None:
+    """Apply camera property values to an open VideoCapture (silently ignores unsupported props)."""
+    for name, value in props.items():
+        prop_id = _CAM_PROP_MAP.get(name)
+        if prop_id is not None:
+            cap.set(prop_id, value)
+
+
+def apply_frame_filter(frame: np.ndarray, filter_name: str) -> np.ndarray:
+    """
+    Apply a named preprocessing filter and return a BGR frame.
+    filter_name: "none" | "grayscale" | "canny" | "sobel" | "laplacian"
+    """
+    if filter_name == "grayscale":
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    if filter_name == "canny":
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    if filter_name == "sobel":
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        sx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        sy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        mag = np.sqrt(sx**2 + sy**2)
+        mag = np.clip(mag / mag.max() * 255, 0, 255).astype(np.uint8) if mag.max() > 0 else mag.astype(np.uint8)
+        return cv2.cvtColor(mag, cv2.COLOR_GRAY2BGR)
+    if filter_name == "laplacian":
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        lap = cv2.Laplacian(gray, cv2.CV_64F)
+        lap = np.clip(np.abs(lap), 0, 255).astype(np.uint8)
+        return cv2.cvtColor(lap, cv2.COLOR_GRAY2BGR)
+    return frame  # "none" oder unbekannt
 
 # On macOS, CAP_ANY automatically selects AVFoundation — do NOT pass
 # CAP_AVFOUNDATION explicitly as OpenCV 4.x rejects integer-index captures with it.
@@ -165,6 +210,13 @@ class CameraFrameThread(QThread):
         self.source = source
         self._frame_interval = 1.0 / max(fps, 1.0)
         self._running = False
+        self._pending_props: dict = {}
+        self._props_lock = threading.Lock()
+
+    def set_cam_props(self, props: dict) -> None:
+        """Queue camera property updates; applied on the next frame loop tick."""
+        with self._props_lock:
+            self._pending_props.update(props)
 
     def run(self) -> None:
         """Main thread loop: open the device, emit frames, then release on exit."""
@@ -174,6 +226,12 @@ class CameraFrameThread(QThread):
         if not cap.isOpened():
             self.error.emit(f"Kamera konnte nicht geöffnet werden: {self.source}")
             return
+
+        with self._props_lock:
+            pending = dict(self._pending_props)
+            self._pending_props.clear()
+        if pending:
+            apply_cam_props(cap, pending)
 
         try:
             # Some devices (e.g. iPhone Continuity Camera) need up to ~1 s to
@@ -209,6 +267,11 @@ class CameraFrameThread(QThread):
                     continue
                 _consec_fail = 0
                 self.frame_ready.emit(frame)
+                with self._props_lock:
+                    pending = dict(self._pending_props)
+                    self._pending_props.clear()
+                if pending:
+                    apply_cam_props(cap, pending)
                 wait = self._frame_interval - (time.perf_counter() - t0)
                 if wait > 0:
                     time.sleep(wait)

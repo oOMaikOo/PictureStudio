@@ -15,7 +15,10 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from core.camera import list_usb_cameras, apply_timestamp, CameraFrameThread
+from core.camera import (
+    list_usb_cameras, apply_timestamp, CameraFrameThread,
+    apply_cam_props, apply_frame_filter,   # ← neu
+)
 from core.anomaly_detector import AnomalyDetector
 from core.alarm_notifier import AlarmNotifier
 from core.industrial_notifier import IndustrialNotifier
@@ -25,6 +28,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QCheckBox, QGroupBox, QSizePolicy,
     QComboBox, QSplitter, QScrollArea, QFrame, QProgressBar,
     QFileDialog, QMessageBox, QDialog, QTextBrowser, QInputDialog,
+    QSlider, QFormLayout,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, Slot
 from PySide6.QtGui import QImage, QPixmap
@@ -367,6 +371,71 @@ class CameraPage(QWidget):
         except Exception:
             pass
 
+        # ── Camera settings ───────────────────────────────────────────────────
+        cam_settings_grp = QGroupBox("Kamera-Einstellungen")
+        cam_settings_grp.setCheckable(True)
+        cam_settings_grp.setChecked(False)  # collapsed by default
+        cs = QFormLayout(cam_settings_grp)
+        cs.setSpacing(4)
+
+        def _make_prop_slider(minimum, maximum, default, prop_name):
+            row = QHBoxLayout()
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(minimum, maximum)
+            sl.setValue(default)
+            sl.setFixedHeight(18)
+            val_lbl = QLabel(str(default))
+            val_lbl.setFixedWidth(30)
+            val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            row.addWidget(sl)
+            row.addWidget(val_lbl)
+            def _on_change(v):
+                val_lbl.setText(str(v))
+                self._apply_cam_prop(prop_name, v)
+            sl.valueChanged.connect(_on_change)
+            return row, sl
+
+        br_row, self._brightness_sl = _make_prop_slider(-64, 64, 0, "brightness")
+        cs.addRow("Helligkeit:", br_row)
+        ct_row, self._contrast_sl = _make_prop_slider(0, 95, 0, "contrast")
+        cs.addRow("Kontrast:", ct_row)
+        sat_row, self._saturation_sl = _make_prop_slider(0, 100, 0, "saturation")
+        cs.addRow("Sättigung:", sat_row)
+        sh_row, self._sharpness_sl = _make_prop_slider(0, 7, 0, "sharpness")
+        cs.addRow("Schärfe:", sh_row)
+        exp_row, self._exposure_sl = _make_prop_slider(-13, -1, -6, "exposure")
+        cs.addRow("Belichtung:", exp_row)
+
+        reset_cam_btn = QPushButton("Zurücksetzen")
+        reset_cam_btn.setFixedHeight(24)
+        reset_cam_btn.clicked.connect(self._reset_cam_settings)
+        cs.addRow("", reset_cam_btn)
+
+        lv.addWidget(cam_settings_grp)
+        self._cam_settings_grp = cam_settings_grp
+
+        # ── Preprocessing filter ──────────────────────────────────────────────
+        filter_grp = QGroupBox("Vorverarbeitung")
+        ff = QFormLayout(filter_grp)
+        ff.setSpacing(4)
+
+        self._filter_combo = QComboBox()
+        self._filter_combo.addItem("Kein Filter", "none")
+        self._filter_combo.addItem("Graustufen", "grayscale")
+        self._filter_combo.addItem("Canny-Kanten", "canny")
+        self._filter_combo.addItem("Sobel-Gradient", "sobel")
+        self._filter_combo.addItem("Laplacian", "laplacian")
+        ff.addRow("Filter:", self._filter_combo)
+
+        self._filter_scoring_cb = QCheckBox("Auch für Scoring anwenden")
+        self._filter_scoring_cb.setToolTip(
+            "Wenn aktiv, sieht der Autoencoder den gefilterten Frame.\n"
+            "Nur sinnvoll wenn das Modell auch auf gefilterten Frames trainiert wurde."
+        )
+        ff.addRow("", self._filter_scoring_cb)
+
+        lv.addWidget(filter_grp)
+
         lv.addStretch()
         left_scroll.setWidget(left)
         splitter.addWidget(left_scroll)
@@ -623,7 +692,12 @@ class CameraPage(QWidget):
         Always displays the (possibly annotated) frame in the preview label.
         """
         self._last_frame = frame
-        display = frame
+
+        # Apply preprocessing filter to display frame
+        filter_key = self._filter_combo.currentData()
+        display = apply_frame_filter(frame, filter_key) if filter_key != "none" else frame
+        # Optionally also filter the frame used for scoring
+        score_input = display if self._filter_scoring_cb.isChecked() else frame
 
         # First frame after reconnect — restore green status
         if self._reconnect_attempts > 0:
@@ -635,7 +709,7 @@ class CameraPage(QWidget):
                 self._scoring_btn.setEnabled(True)
 
         if self._scoring_btn.isChecked() and self._detector and self._detector.trained:
-            analysis = self._apply_roi_crop(frame)
+            analysis = self._apply_roi_crop(score_input)
             score, _rec, overlay, _bbox = self._detector.score_detailed(analysis)
             if self._heatmap_cb.isChecked():
                 if self._roi:
@@ -972,6 +1046,25 @@ class CameraPage(QWidget):
             )
         except Exception as exc:
             QMessageBox.critical(self, "Fehler", str(exc))
+
+    # ── Camera properties ─────────────────────────────────────────────────────
+
+    def _apply_cam_prop(self, prop_name: str, value: int) -> None:
+        """Forward a single camera property update to the running camera thread."""
+        if self._camera_thread and self._camera_thread.isRunning():
+            self._camera_thread.set_cam_props({prop_name: value})
+
+    def _reset_cam_settings(self) -> None:
+        """Reset all camera sliders to neutral values and send reset to camera."""
+        defaults = {"brightness": 0, "contrast": 0, "saturation": 0, "sharpness": 0, "exposure": -6}
+        for prop_name, default_val in defaults.items():
+            sl = getattr(self, f"_{prop_name}_sl", None)
+            if sl:
+                sl.blockSignals(True)
+                sl.setValue(default_val)
+                sl.blockSignals(False)
+        if self._camera_thread and self._camera_thread.isRunning():
+            self._camera_thread.set_cam_props(defaults)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
