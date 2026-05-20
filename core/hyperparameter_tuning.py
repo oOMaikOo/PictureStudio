@@ -164,3 +164,131 @@ except Exception:
 
         def run(self):
             return self._worker.run()
+
+
+# ── Anomaly-Autoencoder HPT ───────────────────────────────────────────────────
+
+
+class AnomalyHPTWorker:
+    """
+    Optuna-basierte Hyperparameter-Suche für den Anomalie-Autoencoder.
+
+    Suchraum:
+      - base_ch:    8 | 16 | 32   (Kanalbreite des Autoencoders)
+      - lr:         1e-4 … 1e-2   (log-uniform)
+      - batch_size: 8 | 16 | 32
+    """
+
+    def __init__(
+        self,
+        detector,
+        n_trials: int = 10,
+        epochs_per_trial: int = 15,
+        progress_callback=None,
+    ):
+        self._detector = detector
+        self._n_trials = n_trials
+        self._epochs_per_trial = epochs_per_trial
+        self._progress_callback = progress_callback
+
+    def run(self) -> dict:
+        """Run the study and return best params dict."""
+        try:
+            import optuna
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
+        except ImportError:
+            raise ImportError("optuna nicht installiert: pip install optuna")
+
+        from core.anomaly_detector import AnomalyDetector
+
+        # collect frames from the existing detector
+        frames = self._detector._train_frames  # list of collected numpy float32 arrays
+
+        if not frames:
+            raise ValueError("Keine Frames gesammelt — zuerst Frames aufnehmen.")
+
+        best_val = float("inf")
+
+        def objective(trial):
+            nonlocal best_val
+            base_ch = trial.suggest_categorical("base_ch", [8, 16, 32])
+            lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
+            batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
+
+            # Build a fresh detector with these params and the same collected frames
+            det = AnomalyDetector(base_ch=base_ch)
+            for f in frames:
+                det._train_frames.append(f)
+
+            thr = det.train(
+                epochs=self._epochs_per_trial,
+                batch_size=batch_size,
+                lr=lr,
+            )
+            # Use threshold as proxy for reconstruction quality (lower = better fit)
+            val_loss = thr
+            if val_loss < best_val:
+                best_val = val_loss
+            if self._progress_callback:
+                self._progress_callback(trial.number + 1, self._n_trials, best_val)
+            return val_loss
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=self._n_trials)
+
+        best = study.best_params
+        return {
+            "base_ch":    best["base_ch"],
+            "lr":         best["lr"],
+            "batch_size": best["batch_size"],
+            "best_value": study.best_value,
+        }
+
+
+def _make_anomaly_hpt_thread():
+    """Build and return the concrete QThread subclass for Anomaly HPT."""
+    from PySide6.QtCore import QThread, Signal as _Signal
+
+    class _AHT(QThread):
+        progress = _Signal(int, int, float)   # trial, total, best_value
+        finished = _Signal(dict)
+        error = _Signal(str)
+
+        def __init__(self, detector, n_trials: int = 10, epochs_per_trial: int = 15, parent=None):
+            super().__init__(parent)
+            self._worker = AnomalyHPTWorker(
+                detector, n_trials, epochs_per_trial,
+                progress_callback=self._emit_progress,
+            )
+
+        def _emit_progress(self, trial: int, total: int, best: float) -> None:
+            self.progress.emit(trial, total, best)
+
+        def run(self) -> None:
+            try:
+                result = self._worker.run()
+                self.finished.emit(result)
+            except Exception as exc:
+                self.error.emit(str(exc))
+
+    return _AHT
+
+
+try:
+    _AnomalyHPTQThread = _make_anomaly_hpt_thread()
+
+    class AnomalyHPTThread(_AnomalyHPTQThread):  # type: ignore[no-redef]
+        """QThread wrapper for AnomalyHPTWorker.
+
+        Signals: progress(int, int, float), finished(dict), error(str)
+        """
+
+except Exception:
+    class AnomalyHPTThread:  # type: ignore[no-redef]
+        """Stub für Umgebungen ohne PySide6."""
+
+        def __init__(self, detector, n_trials: int = 10, epochs_per_trial: int = 15, parent=None):
+            self._worker = AnomalyHPTWorker(detector, n_trials, epochs_per_trial)
+
+        def run(self):
+            return self._worker.run()

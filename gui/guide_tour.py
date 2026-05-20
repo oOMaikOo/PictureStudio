@@ -529,6 +529,21 @@ TOUR_STEPS = {
          "Das geladene Anomalie-Modell kann mit <b>Als ONNX exportieren</b> für den Einsatz ohne PyTorch gespeichert werden. "
          "Das ONNX-Format läuft auf Raspberry Pi und anderen Edge-Geräten mit <code>pip install onnxruntime</code>.",
          "Als ONNX exportieren"),
+        ("Kamera-Einstellungen",
+         "Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung direkt anpassen — "
+         "Änderungen wirken sofort auf den laufenden Stream.\n\n"
+         "Die Einstellungen werden automatisch in den Trainings-Dialog übernommen.",
+         "Zurücksetzen"),
+        ("Vorverarbeitungsfilter",
+         "Wähle einen Filter (Graustufen, Canny-Kanten, Sobel, Laplacian) der auf "
+         "jeden Frame angewendet wird — für Anzeige und optional auch für das Scoring.\n\n"
+         "Nützlich für industrielle Inspektion: das Modell lernt Kanten statt Texturen.",
+         None),
+        ("Hyperparameter-Suche (Anomalie)",
+         "Nach dem Sammeln von Frames: '⚙ Hyperparameter-Suche…' startet eine "
+         "Optuna-Studie die Architektur, Lernrate und Batch-Größe optimiert.\n\n"
+         "Beste Parameter werden per Klick direkt auf den Autoencoder angewendet.",
+         "Hyperparameter-Suche"),
         ("Batch-Analyse & Live-Aufzeichnung",
          "Batch-Analyse (Tab 📁 Batch):\n"
          "'Ordner wählen…' oder 'Dateien wählen…'\n"

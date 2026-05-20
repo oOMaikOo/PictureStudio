@@ -18,6 +18,10 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 | **Hyperparameter-Suche** | Optuna-basiert (lr, batch_size, architecture, optimizer), beste Parameter werden direkt in die UI übernommen |
 | **Augmentation-Pipeline** | Rotation, Flip H/V, Helligkeit, Kontrast, Blur, Rauschen; konfigurierbare Kopien pro Bild (PIL, kein Torchvision nötig) |
 | **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder auf Normalframes; Live-Scoring, Heatmap, Bounding Box, konfigurierbarer Schwellwert, Schwellwert-Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm |
+| **Kamera-Einstellungen** | Helligkeit, Kontrast, Sättigung, Schärfe, Belichtung live anpassen (USB/UVC); Zurücksetzen auf Neutral |
+| **Vorverarbeitungsfilter** | Graustufen, Canny-Kanten, Sobel-Gradient, Laplacian vor Anzeige und optional vor Scoring |
+| **Settings-Durchleitung** | Filter & Kamera-Props automatisch in Trainings-Dialog übernommen; Modell nach Training direkt in Live-Ansicht geladen |
+| **HPT Anomalie** | Optuna-Suche über Autoencoder-Architektur (base_ch), Lernrate und Batch-Größe; beste Parameter direkt angewendet |
 | **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17/INT8), TorchScript-Export, CoreML-Export (macOS), sortierbare Vergleichs-Tabelle, Run-History, Archivieren/Löschen |
 | **Modell-Kalibrierung** | Temperature Scaling (scipy) für korrekte Konfidenzwerte post-hoc |
 | **Inferenz** | Batch-Inferenz, Top-K-Anzeige, Test-Time Augmentation (TTA), Ensemble-Inferenz, Semi-automatisches Labeling, Konfidenz-Farbkodierung |
@@ -56,6 +60,20 @@ pip install opencv-python   # bereits in requirements.txt
 
 ### Fleet-Management (Stack 14, Videoprojekte)
 Sidebar: **Fleet** — überwacht mehrere remote `monitor.py`-Instanzen. Füge Geräte per URL hinzu; Status-Polling läuft automatisch alle 30 Sekunden.
+
+### Kamera-Einstellungen & Vorverarbeitungsfilter (Live-Monitoring)
+
+Live-Monitoring-Seite → linkes Panel **Kamera-Einstellungen**: Sliders für Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung mit sofortiger Wirkung auf den laufenden Stream. **Vorverarbeitung**-Dropdown: Kein Filter / Graustufen / Canny-Kanten / Sobel-Gradient / Laplacian.
+
+Einstellungen und Filter werden beim Öffnen von **Training & Aufnahme…** automatisch übernommen. Nach dem Training wird das fertige Modell direkt in die Live-Ansicht geladen — ohne Bestätigungsdialog.
+
+### HPT Anomalie — Hyperparameter-Suche für den Autoencoder
+
+Nach dem Sammeln von Normalframes: **⚙ Hyperparameter-Suche…** startet eine Optuna-Studie über Kanalbreite (`base_ch`: 8/16/32), Lernrate (1e-4…1e-2) und Batch-Größe (8/16/32). Beste Parameter werden nach Bestätigung direkt auf den Detektor angewendet.
+
+```bash
+pip install optuna   # optional
+```
 
 ### Edge-Export & Docker
 Modelle-Seite → neue Schaltflächen:

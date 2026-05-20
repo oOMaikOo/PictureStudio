@@ -14,12 +14,12 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QListWidgetItem, QSplitter, QFileDialog,
     QMessageBox, QTabWidget, QWidget, QProgressBar, QCheckBox,
-    QScrollArea,
+    QScrollArea, QInputDialog, QProgressDialog,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QEvent, QRect, QPoint
 from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPainter, QPen, QColor
 
-from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread
+from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread, apply_cam_props, apply_frame_filter
 from utils.logging_utils import get_logger
 
 log = get_logger()
@@ -169,15 +169,20 @@ class _AETrainThread(QThread):
     finished = Signal(float)               # computed threshold
     error = Signal(str)
 
-    def __init__(self, detector, epochs: int, parent=None):
+    def __init__(self, detector, epochs: int, lr: float = 1e-3,
+                 batch_size: int = 16, parent=None):
         super().__init__(parent)
         self._detector = detector
         self._epochs = epochs
+        self._lr = lr
+        self._batch_size = batch_size
 
     def run(self):
         try:
             threshold = self._detector.train(
                 epochs=self._epochs,
+                lr=self._lr,
+                batch_size=self._batch_size,
                 progress_cb=lambda e, t, l: self.epoch_done.emit(e, t, l),
             )
             self.finished.emit(threshold)
@@ -213,10 +218,19 @@ class CameraCaptureDialog(QDialog):
     - Append-only JSONL audit log for model lifecycle events.
     """
 
-    def __init__(self, save_dir: Optional[str] = None, parent=None):
+    def __init__(
+        self,
+        save_dir: Optional[str] = None,
+        cam_props: Optional[dict] = None,   # z.B. {"brightness": 10, "contrast": 50}
+        filter_name: str = "none",          # "none" | "grayscale" | "canny" | "sobel" | "laplacian"
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Kamera aufnehmen")
         self.setMinimumSize(1200, 720)
+
+        self._initial_cam_props: dict = cam_props or {}
+        self._active_filter: str = filter_name
 
         self._save_dir = save_dir or tempfile.gettempdir()
         self._frame_thread: Optional[CameraFrameThread] = None
@@ -226,6 +240,8 @@ class CameraCaptureDialog(QDialog):
 
         # anomaly detection state
         self._detector = None          # AnomalyDetector, lazy-initialized
+        self._lr_override: Optional[float] = None
+        self._batch_override: Optional[int] = None
         self._ae_collecting = False
         self._ae_collect_remaining = 0
         self._ae_train_thread: Optional[_AETrainThread] = None
@@ -680,6 +696,22 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_lbl = QLabel("")
         self._ae_train_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
         tl.addWidget(self._ae_train_lbl)
+
+        self._ae_hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
+        self._ae_hpt_btn.setEnabled(False)
+        self._ae_hpt_btn.setToolTip(
+            "Optuna-basierte Suche nach optimalen Autoencoder-Parametern\n"
+            "(base_ch, lr, batch_size). Benötigt: pip install optuna\n"
+            "Voraussetzung: Frames aufgenommen."
+        )
+        self._ae_hpt_btn.setStyleSheet(
+            "QPushButton{background:#5D4037;color:white;border-radius:4px;padding:4px 10px;}"
+            "QPushButton:enabled:hover{background:#4E342E;}"
+            "QPushButton:disabled{background:#2C3E50;color:#555;}"
+        )
+        self._ae_hpt_btn.clicked.connect(self._start_ae_hpt)
+        tl.addWidget(self._ae_hpt_btn)
+
         g.addWidget(train_grp)
 
         # ── Live scoring ─────────────────────────────────────────────────────
@@ -930,6 +962,8 @@ class CameraCaptureDialog(QDialog):
             self._frame_thread.frame_ready.connect(self._on_frame)
             self._frame_thread.error.connect(self._on_camera_error)
             self._frame_thread.start()
+            if self._initial_cam_props:
+                self._frame_thread.set_cam_props(self._initial_cam_props)
         self._connect_btn.setText("Stopp")
         self._connect_btn.setStyleSheet("background:#E74C3C;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Verbinde…")
@@ -1004,6 +1038,8 @@ class CameraCaptureDialog(QDialog):
         6. Composite the heatmap overlay (ROI-aware) and draw the ROI rectangle.
         7. Display the final frame and update status labels.
         """
+        if self._active_filter != "none":
+            frame = apply_frame_filter(frame, self._active_filter)
         self._current_frame = frame
         h, w = frame.shape[:2]
         self._frame_shape = (h, w)
@@ -1027,6 +1063,7 @@ class CameraCaptureDialog(QDialog):
                 self._ae_collect_bar.setVisible(False)
                 self._ae_collect_btn.setEnabled(True)
                 self._ae_train_btn.setEnabled(True)
+                self._ae_hpt_btn.setEnabled(True)
 
         # ── Motion filter (optional pre-check before anomaly scoring) ────────
         motion_detected = True
@@ -1571,6 +1608,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_collect_lbl.setText("0 Frames gesammelt")
         self._ae_collect_btn.setEnabled(True)
         self._ae_train_btn.setEnabled(False)
+        self._ae_hpt_btn.setEnabled(False)
 
     def _train_autoencoder(self) -> None:
         """Inject camera metadata and start the autoencoder training thread."""
@@ -1589,12 +1627,17 @@ class CameraCaptureDialog(QDialog):
 
         self._ae_train_btn.setEnabled(False)
         self._ae_collect_btn.setEnabled(False)
+        self._ae_hpt_btn.setEnabled(False)
         self._ae_train_bar.setRange(0, epochs)
         self._ae_train_bar.setValue(0)
         self._ae_train_bar.setVisible(True)
         self._ae_train_lbl.setText("Training läuft…")
 
-        self._ae_train_thread = _AETrainThread(self._detector, epochs, parent=self)
+        lr = self._lr_override if self._lr_override is not None else 1e-3
+        batch_size = self._batch_override if self._batch_override is not None else 16
+        self._ae_train_thread = _AETrainThread(
+            self._detector, epochs, lr=lr, batch_size=batch_size, parent=self
+        )
         self._ae_train_thread.epoch_done.connect(self._on_ae_epoch)
         self._ae_train_thread.finished.connect(self._on_ae_trained)
         self._ae_train_thread.error.connect(self._on_ae_error)
@@ -1612,6 +1655,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_bar.setVisible(False)
         self._ae_train_btn.setEnabled(True)
         self._ae_collect_btn.setEnabled(True)
+        self._ae_hpt_btn.setEnabled(True)
         self._ae_threshold_spin.blockSignals(True)
         self._ae_threshold_spin.setValue(threshold)
         self._ae_threshold_spin.blockSignals(False)
@@ -1676,8 +1720,93 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_bar.setVisible(False)
         self._ae_train_btn.setEnabled(True)
         self._ae_collect_btn.setEnabled(True)
+        self._ae_hpt_btn.setEnabled(True)
         self._ae_train_lbl.setText(f"Fehler: {msg}")
         QMessageBox.critical(self, "Trainingsfehler", msg)
+
+    def _start_ae_hpt(self) -> None:
+        """Launch AnomalyHPTThread and apply best params to the detector."""
+        try:
+            from core.hyperparameter_tuning import AnomalyHPTThread
+        except ImportError:
+            QMessageBox.warning(self, "HPT", "Optuna nicht installiert:\npip install optuna")
+            return
+
+        if self._detector is None or self._detector.n_collected() == 0:
+            QMessageBox.warning(self, "HPT", "Zuerst Frames aufnehmen.")
+            return
+
+        n_trials, ok = QInputDialog.getInt(
+            self, "Hyperparameter-Suche",
+            "Anzahl Optuna-Versuche (je mehr, desto besser — dauert länger):",
+            10, 3, 50, 1,
+        )
+        if not ok:
+            return
+
+        self._ae_hpt_btn.setEnabled(False)
+        prog = QProgressDialog("Hyperparameter-Suche läuft…", "Abbrechen", 0, n_trials, self)
+        prog.setWindowTitle("HPT — Anomalie-Autoencoder")
+        prog.setMinimumDuration(0)
+        prog.setValue(0)
+
+        hpt = AnomalyHPTThread(self._detector, n_trials=n_trials, parent=self)
+
+        hpt.progress.connect(lambda cur, tot, val: (
+            prog.setValue(cur),
+            prog.setLabelText(f"Versuch {cur}/{tot}  —  Bester Wert: {val:.5f}"),
+        ))
+
+        def _on_done(result: dict) -> None:
+            prog.close()
+            self._ae_hpt_btn.setEnabled(True)
+
+            lines = [
+                f"base_ch:    {result['base_ch']}",
+                f"lr:         {result['lr']:.6f}",
+                f"batch_size: {result['batch_size']}",
+                f"Bester Wert: {result['best_value']:.5f}",
+            ]
+            reply = QMessageBox.question(
+                self, "HPT abgeschlossen — Parameter übernehmen?",
+                "\n".join(lines) + "\n\nBeste Parameter jetzt anwenden?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply == QMessageBox.Yes:
+                self._apply_ae_hpt_params(result)
+
+        def _on_error(msg: str) -> None:
+            prog.close()
+            self._ae_hpt_btn.setEnabled(True)
+            QMessageBox.critical(self, "HPT-Fehler", msg)
+
+        hpt.finished.connect(_on_done)
+        hpt.error.connect(_on_error)
+        prog.canceled.connect(hpt.terminate)
+        hpt.start()
+
+    def _apply_ae_hpt_params(self, params: dict) -> None:
+        """Re-initialise the detector with best HPT parameters."""
+        from core.anomaly_detector import AnomalyDetector
+
+        base_ch = params["base_ch"]
+        self._lr_override = params["lr"]
+        self._batch_override = params["batch_size"]
+
+        # Recreate detector with new arch, keep collected frames
+        old_frames = list(self._detector._train_frames) if self._detector else []
+        self._detector = AnomalyDetector(base_ch=base_ch)
+        for f in old_frames:
+            self._detector._train_frames.append(f)
+
+        n = self._detector.n_collected()
+        self._ae_collect_lbl.setText(
+            f"{n} Frames gesammelt  |  base_ch={base_ch}  lr={self._lr_override:.5f}"
+            f"  batch={self._batch_override}"
+        )
+        self._ae_train_btn.setEnabled(n > 0)
+        self._ae_hpt_btn.setEnabled(n > 0)
 
     def _on_threshold_changed(self, value: float) -> None:
         """Push the spin-box value directly onto the detector's ``threshold`` attribute."""

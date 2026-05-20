@@ -973,28 +973,36 @@ class CameraPage(QWidget):
             self._stop_stream()
 
         from gui.camera_capture_dialog import CameraCaptureDialog
+
+        # Collect current camera properties from sliders
+        current_cam_props = {}
+        prop_names = ["brightness", "contrast", "saturation", "sharpness", "exposure"]
+        for prop in prop_names:
+            sl = getattr(self, f"_{prop}_sl", None)
+            if sl is not None:
+                current_cam_props[prop] = sl.value()
+
+        # Current preprocessing filter
+        current_filter = getattr(self._filter_combo, "currentData", lambda: "none")() or "none"
+
         save_dir = None
         if self._project and getattr(self._project, "project_path", None):
             save_dir = os.path.join(
                 os.path.dirname(self._project.project_path), "camera_captures"
             )
-        dlg = CameraCaptureDialog(save_dir=save_dir, parent=self)
+
+        dlg = CameraCaptureDialog(
+            save_dir=save_dir,
+            cam_props=current_cam_props,
+            filter_name=current_filter,
+            parent=self,
+        )
         dlg.exec()
 
-        # If a model was trained during the session, offer to load it here
+        # Auto-load trained model without asking
         model_path = dlg.trained_model_path
         if model_path and os.path.exists(model_path):
-            reply = QMessageBox.question(
-                self,
-                "Modell in Live-Monitoring laden?",
-                f"Ein Autoencoder wurde trainiert und gespeichert:\n"
-                f"{os.path.basename(model_path)}\n\n"
-                f"Jetzt ins Live-Monitoring laden?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes,
-            )
-            if reply == QMessageBox.Yes:
-                self._load_model_from_path(model_path)
+            self._load_model_from_path(model_path)
 
         if was_streaming:
             QTimer.singleShot(600, lambda: self._connect_btn.setChecked(True))

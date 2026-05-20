@@ -33,24 +33,28 @@ class _ConvAutoencoder(nn.Module):
     The architecture uses three stride-2 Conv2d layers to compress the input
     and three ConvTranspose2d layers to reconstruct it. A sigmoid output
     constrains pixel values to [0, 1] for MSE loss computation.
+
+    ``base_ch`` controls the width of all conv layers (default 16 matches the
+    original hardcoded values).  Use 8 for a smaller/faster model or 32 for
+    greater capacity.
     """
 
-    def __init__(self):
+    def __init__(self, base_ch: int = 16):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, 3, stride=2, padding=1),   # → 16×64×64
+            nn.Conv2d(3, base_ch, 3, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, 3, stride=2, padding=1),  # → 32×32×32
+            nn.Conv2d(base_ch, base_ch * 2, 3, stride=2, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, 3, stride=2, padding=1),  # → 64×16×16
+            nn.Conv2d(base_ch * 2, base_ch * 4, 3, stride=2, padding=1),
             nn.ReLU(inplace=True),
         )
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),  # → 32×32×32
+            nn.ConvTranspose2d(base_ch * 4, base_ch * 2, 3, stride=2, padding=1, output_padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),  # → 16×64×64
+            nn.ConvTranspose2d(base_ch * 2, base_ch, 3, stride=2, padding=1, output_padding=1),
             nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(16, 3, 3, stride=2, padding=1, output_padding=1),   # → 3×128×128
+            nn.ConvTranspose2d(base_ch, 3, 3, stride=2, padding=1, output_padding=1),
             nn.Sigmoid(),
         )
 
@@ -73,8 +77,9 @@ class AnomalyDetector:
         det.load(path)
     """
 
-    def __init__(self):
-        self._model = _ConvAutoencoder()
+    def __init__(self, base_ch: int = 16):
+        self._base_ch = base_ch
+        self._model = _ConvAutoencoder(base_ch)
         self._device = _best_device()
         self._trained = False
         self._threshold: float = 0.02
@@ -120,6 +125,7 @@ class AnomalyDetector:
         self,
         epochs: int = 20,
         batch_size: int = 16,
+        lr: float = 1e-3,
         progress_cb=None,
         seed: int = 42,
     ) -> float:
@@ -146,7 +152,7 @@ class AnomalyDetector:
 
         self._model.to(self._device)
         self._model.train()
-        opt = torch.optim.Adam(self._model.parameters(), lr=1e-3)
+        opt = torch.optim.Adam(self._model.parameters(), lr=lr)
         criterion = nn.MSELoss()
 
         for epoch in range(1, epochs + 1):
@@ -183,6 +189,7 @@ class AnomalyDetector:
             "train_epochs":    epochs,
             "train_duration_s": round(_time.perf_counter() - t0, 1),
             "threshold":       self._threshold,
+            "base_ch":         self._base_ch,
             "opencv_version":  str(cv2.__version__),
             "torch_version":   str(torch.__version__),
             "model_img_size":  _IMG,
@@ -346,6 +353,7 @@ class AnomalyDetector:
             "model":     self._model.state_dict(),
             "threshold": self._threshold,
             "metadata":  self._metadata,
+            "base_ch":   self._base_ch,
         }, path)
         # Write SHA256 checksum sidecar so integrity can be verified on load
         sha = hashlib.sha256(open(path, "rb").read()).hexdigest()
@@ -381,6 +389,10 @@ class AnomalyDetector:
             raise RuntimeError(f"Integritätsprüfung fehlgeschlagen:\n{msg}")
         # Always load to CPU first to avoid cross-device errors.
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
+        base_ch = int(ckpt.get("base_ch", 16))
+        if base_ch != self._base_ch:
+            self._base_ch = base_ch
+            self._model = _ConvAutoencoder(base_ch)
         self._model.load_state_dict(ckpt["model"])
         self._model.to(self._device)
         self._model.eval()

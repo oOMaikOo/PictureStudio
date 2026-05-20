@@ -822,6 +822,43 @@ PyTorch wird nicht benötigt — nur <code>pip install onnxruntime opencv-python
 <div class="tip">
 Die .meta.json Datei enthält Schwellwert und Metadaten und muss neben der .onnx Datei liegen.
 </div>
+
+<hr>
+<h2>Kamera-Einstellungen</h2>
+<p>Im linken Panel unter <b>Kamera-Einstellungen</b> (eingeklappt): Sliders für
+Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung. Änderungen werden live
+an den laufenden Stream weitergeleitet. <b>Zurücksetzen</b> setzt alle Werte auf Neutral.</p>
+<div class="tip"><b>Hinweis macOS:</b> Nicht alle Properties werden von AVFoundation unterstützt —
+manche Slider haben keinen sichtbaren Effekt je nach Kamera-Treiber.</div>
+
+<h2>Vorverarbeitungsfilter</h2>
+<p>Dropdown unter <b>Vorverarbeitung</b>:</p>
+<ul>
+  <li><b>Kein Filter</b> — Original-Frame</li>
+  <li><b>Graustufen</b> — als BGR zurückgegeben (kompatibel mit Autoencoder)</li>
+  <li><b>Canny-Kanten</b> — Kantenlinien (Schwellwerte 50/150)</li>
+  <li><b>Sobel-Gradient</b> — Gradientenstärke in X und Y</li>
+  <li><b>Laplacian</b> — zweite Ableitung (feine Details)</li>
+</ul>
+<p><b>Auch für Scoring anwenden</b> — nur aktivieren wenn das Modell auf
+gefilterten Frames trainiert wurde.</p>
+
+<h2>Automatische Einstellungsübernahme</h2>
+<p>Beim Öffnen von <b>Training &amp; Aufnahme…</b> werden aktuelle Kamera-Einstellungen
+und Filter automatisch übernommen. Nach dem Training wird das fertige Modell direkt
+in die Live-Ansicht geladen — kein Bestätigungsdialog.</p>
+
+<h2>Hyperparameter-Suche (Anomalie-Autoencoder)</h2>
+<p>Nach dem Sammeln von Frames: Schaltfläche <b>⚙ Hyperparameter-Suche…</b> startet
+eine Optuna-Studie (<code>pip install optuna</code>).</p>
+<p>Suchraum:</p>
+<ul>
+  <li><b>base_ch</b> — Kanalbreite des Autoencoders: 8, 16 oder 32</li>
+  <li><b>lr</b> — Lernrate: 1e-4 bis 1e-2 (log-uniform)</li>
+  <li><b>batch_size</b> — 8, 16 oder 32</li>
+</ul>
+<p>Beste Parameter werden nach Bestätigung direkt auf den Detektor angewendet;
+gesammelte Frames bleiben erhalten.</p>
 """),
 
 # ── 11  Tastenkürzel ──────────────────────────────────────────────────────────
