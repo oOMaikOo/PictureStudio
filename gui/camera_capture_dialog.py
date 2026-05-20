@@ -744,19 +744,6 @@ class CameraCaptureDialog(QDialog):
         ep_row.addWidget(self._ae_epochs)
         tl.addLayout(ep_row)
 
-        self._ae_train_btn = QPushButton("Training starten")
-        self._ae_train_btn.setEnabled(False)
-        self._ae_train_btn.clicked.connect(self._train_autoencoder)
-        tl.addWidget(self._ae_train_btn)
-
-        self._ae_train_bar = QProgressBar()
-        self._ae_train_bar.setVisible(False)
-        tl.addWidget(self._ae_train_bar)
-
-        self._ae_train_lbl = QLabel("")
-        self._ae_train_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
-        tl.addWidget(self._ae_train_lbl)
-
         self._ae_hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
         self._ae_hpt_btn.setEnabled(False)
         self._ae_hpt_btn.setToolTip(
@@ -771,6 +758,19 @@ class CameraCaptureDialog(QDialog):
         )
         self._ae_hpt_btn.clicked.connect(self._start_ae_hpt)
         tl.addWidget(self._ae_hpt_btn)
+
+        self._ae_train_btn = QPushButton("Training starten")
+        self._ae_train_btn.setEnabled(False)
+        self._ae_train_btn.clicked.connect(self._train_autoencoder)
+        tl.addWidget(self._ae_train_btn)
+
+        self._ae_train_bar = QProgressBar()
+        self._ae_train_bar.setVisible(False)
+        tl.addWidget(self._ae_train_bar)
+
+        self._ae_train_lbl = QLabel("")
+        self._ae_train_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
+        tl.addWidget(self._ae_train_lbl)
 
         g.addWidget(train_grp)
 

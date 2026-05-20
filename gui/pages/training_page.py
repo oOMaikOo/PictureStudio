@@ -406,18 +406,7 @@ class TrainingPage(QWidget):
 
         form.addRow(ssh_box)
 
-        # Buttons
-        self.start_btn = QPushButton("Training starten")
-        self.start_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
-        self.start_btn.clicked.connect(self._start)
-        form.addRow(self.start_btn)
-
-        self.stop_btn = QPushButton("Training stoppen")
-        self.stop_btn.setStyleSheet("background:#E74C3C;color:white;padding:8px;")
-        self.stop_btn.setEnabled(False)
-        self.stop_btn.clicked.connect(self._stop_training)
-        form.addRow(self.stop_btn)
-
+        # Buttons — Reihenfolge: HPT → Start → Stop
         self.hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
         self.hpt_btn.setStyleSheet(
             "background:#6C3483;color:white;padding:6px;border-radius:3px;"
@@ -430,6 +419,17 @@ class TrainingPage(QWidget):
         )
         self.hpt_btn.clicked.connect(self._start_hpt)
         form.addRow(self.hpt_btn)
+
+        self.start_btn = QPushButton("Training starten")
+        self.start_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
+        self.start_btn.clicked.connect(self._start)
+        form.addRow(self.start_btn)
+
+        self.stop_btn = QPushButton("Training stoppen")
+        self.stop_btn.setStyleSheet("background:#E74C3C;color:white;padding:8px;")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self._stop_training)
+        form.addRow(self.stop_btn)
 
         return box
 
