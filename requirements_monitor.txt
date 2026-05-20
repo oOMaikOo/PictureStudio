@@ -1,0 +1,22 @@
+# PictureStudio Monitor-Client — minimale Abhängigkeiten
+# Für vollständige GUI-App: requirements.txt verwenden
+
+# Kamera + Bildverarbeitung
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Anomalie-Erkennung mit PyTorch (.pth Modelle)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# ONNX-Modelle (optional — Alternative zu PyTorch, deutlich kleiner)
+# onnxruntime>=1.16.0
+
+# MQTT Alarm-Publishing (optional)
+# paho-mqtt>=1.6.0
+
+# Installation:
+#   pip install -r requirements_monitor.txt
+#
+# Nur ONNX (kein PyTorch, für Raspberry Pi / schlanken Betrieb):
+#   pip install opencv-python numpy onnxruntime

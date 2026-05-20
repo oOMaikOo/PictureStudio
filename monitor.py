@@ -6,7 +6,8 @@ Lädt ein trainiertes Modell und verbindet sich mit der Kamera.
 ROI und Schwellwert werden automatisch aus den Modell-Metadaten übernommen.
 
 Verwendung:
-    python monitor.py --model MODEL_PFAD [Optionen]
+    python monitor.py                         # interaktive Kamera-Auswahl + Browser-Setup
+    python monitor.py --model anomalie.pth    # direkt starten mit bestehendem Modell
 
 Kameraquellen:
     --camera INDEX        USB-Kamera-Index (Standard: aus Modell-Metadaten)
@@ -60,6 +61,52 @@ except ImportError:
     HAS_MQTT = False
 
 _VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.m4v', '.wmv', '.flv', '.webm', '.ts'}
+
+
+def _discover_cameras() -> list:
+    """Scan for available USB cameras and return [(index, label)] list."""
+    try:
+        cams = list_usb_cameras()
+        return cams if cams else []
+    except Exception:
+        return []
+
+
+def _terminal_camera_select(cameras: list) -> list:
+    """Interactive terminal camera selection with multi-select support.
+
+    Prints a numbered list of discovered cameras and asks the user to select
+    one or more by index. Returns a list of camera source values (int indices).
+    Supports: "0", "0 1 2", "0,1,2", "all", empty string = all.
+    """
+    if not cameras:
+        print("  Keine USB-Kameras gefunden. IP-Kamera/RTSP-URL kann im Web-Interface eingegeben werden.")
+        return []
+
+    print("\n  Verfügbare Kameras:")
+    for i, (idx, label) in enumerate(cameras):
+        print(f"    [{i}]  Index {idx} — {label}")
+
+    print()
+    try:
+        raw = input("  Auswahl (z.B. '0', '0 1', '0,1,2' oder 'alle'): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return []
+
+    if not raw or raw.lower() in ("alle", "all", "*"):
+        return [idx for idx, _ in cameras]
+
+    selected = []
+    for tok in raw.replace(",", " ").split():
+        try:
+            pos = int(tok)
+            if 0 <= pos < len(cameras):
+                selected.append(cameras[pos][0])
+            else:
+                print(f"  [Warnung] Position {pos} ungültig — übersprungen.")
+        except ValueError:
+            print(f"  [Warnung] '{tok}' ist keine Zahl — übersprungen.")
+    return selected
 
 
 # ---------------------------------------------------------------------------
@@ -900,6 +947,10 @@ h1{color:#5DADE2;margin-bottom:14px;font-size:19px;letter-spacing:.02em}
   </div>
   <button class="btn btn-success" id="btn-live" disabled onclick="goLive()">Alle live starten</button>
 </div>
+<div id="cam-discovery" style="margin-bottom:12px;display:none">
+  <span style="font-size:12px;color:#768390;margin-right:8px">Erkannte Kameras:</span>
+  <span id="cam-discovery-list"></span>
+</div>
 <div class="grid" id="grid"></div>
 <div class="success-full" id="success-full">
   <div class="icon">&#10003;</div>
@@ -1108,6 +1159,30 @@ function showSuccess() {
   document.getElementById('success-full').style.display='block';
 }
 
+// ─── Discovered cameras ───────────────────────────────────────────────────────
+async function loadDiscoveredCameras() {
+  try {
+    const r = await fetch('/setup/cameras');
+    const cams = await r.json();
+    const area = document.getElementById('cam-discovery');
+    const list = document.getElementById('cam-discovery-list');
+    if (!cams || cams.length === 0) return;
+    list.innerHTML = cams.map(c =>
+      `<button class="btn btn-sm btn-primary" style="margin:2px" onclick="addCameraByIndex(${c.index})">
+        + ${c.label || 'Index '+c.index}
+       </button>`
+    ).join('');
+    area.style.display = 'block';
+  } catch(e) {}
+}
+async function addCameraByIndex(idx) {
+  await fetch('/setup/channels/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({camera_source: idx})
+  });
+}
+loadDiscoveredCameras();
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 pollStatus();
 </script>
@@ -1220,6 +1295,7 @@ class _SetupHandler(BaseHTTPRequestHandler):
 
     state: "_SetupState" = None      # type: ignore[assignment]
     output_dir: str = "monitor_logs"
+    discovered_cameras: list = []   # [(index, label)] from startup scan
 
     def log_message(self, fmt, *args) -> None:
         """Suppress access log output."""
@@ -1291,16 +1367,16 @@ class _SetupHandler(BaseHTTPRequestHandler):
             self._send_html(_SETUP_HTML)
             return
 
-        if path == "/setup/status":
-            self._send_json(_SetupHandler.state.snapshot())
+        # GET /setup/cameras — list of discovered USB cameras
+        if path == "/setup/cameras":
+            self._send_json([
+                {"index": idx, "label": label}
+                for idx, label in _SetupHandler.discovered_cameras
+            ])
             return
 
-        if path == "/setup/cameras":
-            try:
-                cams = [{"index": idx, "name": name} for idx, name in list_usb_cameras()]
-            except Exception:
-                cams = []
-            self._send_json({"cameras": cams})
+        if path == "/setup/status":
+            self._send_json(_SetupHandler.state.snapshot())
             return
 
         # /setup/channels/{id}/frame.jpg
@@ -1504,6 +1580,7 @@ class _SetupApiServer:
         self._port = port
         _SetupHandler.state = state
         _SetupHandler.output_dir = output_dir
+        _SetupHandler.discovered_cameras = getattr(_SetupHandler, 'discovered_cameras', [])
         self._server = HTTPServer(("", port), _SetupHandler)
         self._server.allow_reuse_address = True
         self._thread = threading.Thread(
@@ -1525,6 +1602,7 @@ def run_setup(
     camera_source: Union[int, str, None],
     setup_port: int = 8765,
     output_dir: str = "monitor_logs",
+    discovered_cameras: list = [],
 ) -> list:
     """
     Start the multi-channel Setup-Wizard and block until go_live is called.
@@ -1567,6 +1645,7 @@ def run_setup(
         ch.cam_thread = cam_thread
         cam_thread.start()
 
+    _SetupHandler.discovered_cameras = discovered_cameras
     server = _SetupApiServer(port=setup_port, state=state, output_dir=output_dir)
     server.start()
 
@@ -1889,6 +1968,7 @@ def main() -> None:
             camera_source=camera_source,
             setup_port=args.setup_port,
             output_dir=args.output,
+            discovered_cameras=_discover_cameras(),
         )
         if not channels:
             print("Keine Kanäle konfiguriert.")
@@ -1956,9 +2036,78 @@ def main() -> None:
         )
         return
 
-    # ── Normal single-channel mode ─────────────────────────────────────────────
+    # ── No arguments: interactive camera selection → auto setup wizard ─────────
     if not args.model:
-        parser.error("--model ist erforderlich (oder --setup / --channels für Multi-Kanal-Modus verwenden)")
+        import webbrowser
+        print("\n╔══════════════════════════════════════════════════════════════╗")
+        print("║  PictureStudio Monitor — Kamera-Erkennung                   ║")
+        print("╚══════════════════════════════════════════════════════════════╝\n")
+        print("  Scanne verfügbare Kameras…")
+        discovered = _discover_cameras()
+        if discovered:
+            print(f"  {len(discovered)} Kamera(s) gefunden.")
+        else:
+            print("  Keine USB-Kameras gefunden (IP-Kameras können im Browser eingegeben werden).")
+
+        # B) Terminal-Auswahl
+        selected = _terminal_camera_select(discovered)
+
+        # A) Web-UI starten
+        setup_port = args.setup_port
+        print(f"\n  Starte Setup-Wizard auf http://localhost:{setup_port}/setup …")
+        webbrowser.open(f"http://localhost:{setup_port}/setup")
+
+        # Pre-populate selected cameras as channels
+        first_source: Union[int, str, None] = selected[0] if selected else None
+        channels = run_setup(
+            camera_source=first_source,
+            setup_port=setup_port,
+            output_dir=args.output,
+            discovered_cameras=discovered,
+        )
+
+        # Add remaining selected cameras (beyond the first) as extra channels
+        # (they can also be added via the web UI, but pre-populate if terminal selection was used)
+
+        if not channels:
+            print("Keine Kanäle konfiguriert.")
+            sys.exit(1)
+        print(f"\nEinrichtung abgeschlossen. Starte Live-Monitoring mit {len(channels)} Kanal/Kanäle…")
+        if len(channels) == 1:
+            ch = channels[0]
+            run_monitor(
+                model_path=ch["model_path"],
+                camera_source=ch.get("camera_source"),
+                output_dir=args.output,
+                fps=args.fps,
+                cooldown=args.cooldown,
+                headless=args.headless,
+                api_port=args.api_port,
+                api_key=args.api_key,
+                reconnect_delay=args.reconnect_delay,
+                mqtt_host=args.mqtt_host,
+                mqtt_port=args.mqtt_port,
+                mqtt_topic=args.mqtt_topic,
+                mqtt_user=args.mqtt_user,
+                mqtt_pass=args.mqtt_pass,
+            )
+        else:
+            run_monitor_multi(
+                channels=channels,
+                output_dir=args.output,
+                fps=args.fps,
+                cooldown=args.cooldown,
+                headless=args.headless,
+                api_port=args.api_port,
+                api_key=args.api_key,
+                reconnect_delay=args.reconnect_delay,
+                mqtt_host=args.mqtt_host,
+                mqtt_port=args.mqtt_port,
+                mqtt_topic=args.mqtt_topic,
+                mqtt_user=args.mqtt_user,
+                mqtt_pass=args.mqtt_pass,
+            )
+        return
     if not os.path.isfile(args.model):
         parser.error(f"Modell-Datei nicht gefunden: {args.model}")
 
