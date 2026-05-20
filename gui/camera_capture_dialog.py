@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox,
     QListWidget, QListWidgetItem, QSplitter, QFileDialog,
     QMessageBox, QTabWidget, QWidget, QProgressBar, QCheckBox,
-    QScrollArea, QInputDialog, QProgressDialog,
+    QScrollArea, QInputDialog, QProgressDialog, QSlider, QFormLayout,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QEvent, QRect, QPoint
 from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPainter, QPen, QColor
@@ -379,6 +379,66 @@ class CameraCaptureDialog(QDialog):
         self._status_lbl.setStyleSheet("color:#E74C3C;")
         conn_row.addWidget(self._status_lbl)
         lv.addLayout(conn_row)
+
+        # ── Camera settings ──────────────────────────────────────────────────
+        cam_settings_grp = QGroupBox("Kamera-Einstellungen")
+        cam_settings_grp.setCheckable(True)
+        cam_settings_grp.setChecked(False)
+        cs = QFormLayout(cam_settings_grp)
+        cs.setSpacing(4)
+
+        _SLIDER_DEFS = [
+            ("Helligkeit:", "brightness", -64, 64, 0),
+            ("Kontrast:",   "contrast",    0, 95,  0),
+            ("Sättigung:",  "saturation",  0, 100, 0),
+            ("Schärfe:",    "sharpness",   0, 7,   0),
+            ("Belichtung:", "exposure",  -13, -1,  -6),
+        ]
+        self._cam_sliders: dict[str, QSlider] = {}
+        for label, prop, lo, hi, default in _SLIDER_DEFS:
+            row = QHBoxLayout()
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(lo, hi)
+            init_val = self._initial_cam_props.get(prop, default)
+            sl.setValue(init_val)
+            sl.setFixedHeight(18)
+            val_lbl = QLabel(str(init_val))
+            val_lbl.setFixedWidth(30)
+            val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            row.addWidget(sl)
+            row.addWidget(val_lbl)
+            def _on_change(v, p=prop, lbl=val_lbl):
+                lbl.setText(str(v))
+                self._apply_cam_prop(p, v)
+            sl.valueChanged.connect(_on_change)
+            self._cam_sliders[prop] = sl
+            cs.addRow(label, row)
+
+        reset_cam_btn = QPushButton("Zurücksetzen")
+        reset_cam_btn.setFixedHeight(24)
+        reset_cam_btn.clicked.connect(self._reset_cam_settings)
+        cs.addRow("", reset_cam_btn)
+        lv.addWidget(cam_settings_grp)
+
+        # ── Preprocessing filter ─────────────────────────────────────────────
+        filter_grp = QGroupBox("Vorverarbeitung")
+        ff = QFormLayout(filter_grp)
+        ff.setSpacing(4)
+        self._filter_combo_dlg = QComboBox()
+        for display, key in [
+            ("Kein Filter", "none"),
+            ("Graustufen", "grayscale"),
+            ("Canny-Kanten", "canny"),
+            ("Sobel-Gradient", "sobel"),
+            ("Laplacian", "laplacian"),
+        ]:
+            self._filter_combo_dlg.addItem(display, key)
+        idx = self._filter_combo_dlg.findData(self._active_filter)
+        if idx >= 0:
+            self._filter_combo_dlg.setCurrentIndex(idx)
+        self._filter_combo_dlg.currentIndexChanged.connect(self._on_filter_changed)
+        ff.addRow("Filter:", self._filter_combo_dlg)
+        lv.addWidget(filter_grp)
 
         # ── Capture controls ─────────────────────────────────────────────────
         cap_group = QGroupBox("Aufnahme")
@@ -969,8 +1029,9 @@ class CameraCaptureDialog(QDialog):
             self._frame_thread.frame_ready.connect(self._on_frame)
             self._frame_thread.error.connect(self._on_camera_error)
             self._frame_thread.start()
-            if self._initial_cam_props:
-                self._frame_thread.set_cam_props(self._initial_cam_props)
+            current_props = {p: sl.value() for p, sl in self._cam_sliders.items()}
+            if any(v != 0 for v in current_props.values()):
+                self._frame_thread.set_cam_props(current_props)
         self._connect_btn.setText("Stopp")
         self._connect_btn.setStyleSheet("background:#E74C3C;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Verbinde…")
@@ -1011,6 +1072,25 @@ class CameraCaptureDialog(QDialog):
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Video fertig analysiert")
         self._status_lbl.setStyleSheet("color:#3FB950;")
+
+    def _apply_cam_prop(self, prop_name: str, value: int) -> None:
+        """Forward a single camera property change to the live frame thread (if connected)."""
+        if self._frame_thread and self._frame_thread.isRunning():
+            self._frame_thread.set_cam_props({prop_name: value})
+
+    def _reset_cam_settings(self) -> None:
+        """Reset all camera sliders to neutral defaults and apply to camera."""
+        defaults = {"brightness": 0, "contrast": 0, "saturation": 0, "sharpness": 0, "exposure": -6}
+        for prop, val in defaults.items():
+            sl = self._cam_sliders.get(prop)
+            if sl is not None:
+                sl.setValue(val)
+        if self._frame_thread and self._frame_thread.isRunning():
+            self._frame_thread.set_cam_props(defaults)
+
+    def _on_filter_changed(self, _index: int) -> None:
+        """Update the active preprocessing filter from the combo selection."""
+        self._active_filter = self._filter_combo_dlg.currentData() or "none"
 
     def _resolve_source(self):
         """Return an integer device index (USB) or URL string (IP) for the selected source tab.
