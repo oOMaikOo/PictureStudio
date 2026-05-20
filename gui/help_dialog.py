@@ -347,7 +347,14 @@ Klasse und Pinselgröße über die Toolbar wählen.<br>
   <tr><td>Klassenausgleich</td><td>bei Ungleichgewicht</td><td>WeightedRandomSampler ausgleichen</td></tr>
 </table>
 
+<h2>Hyperparameter-Suche (optional)</h2>
+<div class="step"><b>⚙ Hyperparameter-Suche…</b><br>
+Schaltfläche <i>Hyperparameter-Suche…</i> klicken (<code>pip install optuna</code> erforderlich).<br>
+Optuna testet automatisch Kombinationen aus Lernrate, Batch-Größe, Architektur und Optimizer.<br>
+Beste Parameter werden direkt in die Trainings-Konfiguration übernommen.</div>
+
 <h2>Training starten &amp; überwachen</h2>
+<div class="tip"><b>Button-Reihenfolge:</b> ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen</div>
 <div class="step"><b>Training starten</b><br>
 Klicke <i>Training starten</i>. Live-Anzeige:<br>
 • <b>Train-Loss</b> und <b>Val-Loss</b> – sinken idealerweise gemeinsam<br>
@@ -825,14 +832,22 @@ Die .meta.json Datei enthält Schwellwert und Metadaten und muss neben der .onnx
 
 <hr>
 <h2>Kamera-Einstellungen</h2>
-<p>Im linken Panel unter <b>Kamera-Einstellungen</b> (eingeklappt): Sliders für
-Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung. Änderungen werden live
-an den laufenden Stream weitergeleitet. <b>Zurücksetzen</b> setzt alle Werte auf Neutral.</p>
+<p>Sliders für <b>Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung</b> sind an zwei Stellen verfügbar:</p>
+<ul>
+  <li><b>CameraPage (Anomalie-Erkennung):</b> Im linken Panel unter „Kamera-Einstellungen" (eingeklappt). Änderungen wirken live auf den laufenden Stream.</li>
+  <li><b>Aufnahme-Dialog (Bildklassifikation):</b> Direkt im <i>CameraCaptureDialog</i> — auch bei der Bildaufnahme über die Daten-Seite stehen diese Einstellungen zur Verfügung. Von der CameraPage übergebene Werte werden als Startwerte übernommen.</li>
+</ul>
+<p><b>Zurücksetzen</b> setzt alle Slider auf Neutral-Werte zurück.</p>
 <div class="tip"><b>Hinweis macOS:</b> Nicht alle Properties werden von AVFoundation unterstützt —
 manche Slider haben keinen sichtbaren Effekt je nach Kamera-Treiber.</div>
 
 <h2>Vorverarbeitungsfilter</h2>
-<p>Dropdown unter <b>Vorverarbeitung</b>:</p>
+<p>Der Filter-Dropdown (<b>Graustufen, Canny-Kanten, Sobel, Laplacian</b>) ist ebenfalls an beiden Stellen verfügbar:</p>
+<ul>
+  <li><b>CameraPage (Anomalie-Erkennung):</b> Dropdown unter „Vorverarbeitung".</li>
+  <li><b>Aufnahme-Dialog (Bildklassifikation):</b> Direkt im Dialog auswählbar — nützlich um das Aufnahmematerial vorzuverarbeiten bevor es ins Projekt übernommen wird.</li>
+</ul>
+<p>Filter-Optionen:</p>
 <ul>
   <li><b>Kein Filter</b> — Original-Frame</li>
   <li><b>Graustufen</b> — als BGR zurückgegeben (kompatibel mit Autoencoder)</li>
@@ -851,6 +866,9 @@ in die Live-Ansicht geladen — kein Bestätigungsdialog.</p>
 <h2>Hyperparameter-Suche (Anomalie-Autoencoder)</h2>
 <p>Nach dem Sammeln von Frames: Schaltfläche <b>⚙ Hyperparameter-Suche…</b> startet
 eine Optuna-Studie (<code>pip install optuna</code>).</p>
+<div class="tip"><b>Button-Reihenfolge im Aufnahme-Dialog:</b>
+① Hyperparameter-Suche → ② Training starten → ③ Training stoppen<br>
+Die gleiche logische Reihenfolge gilt auch auf der Bildklassifikations-Trainingsseite.</div>
 <p>Suchraum:</p>
 <ul>
   <li><b>base_ch</b> — Kanalbreite des Autoencoders: 8, 16 oder 32</li>
@@ -1268,6 +1286,9 @@ Kalibrierung und Edge-Deployment.</p>
 Optuna testet automatisch verschiedene Kombinationen aus Lernrate, Batch-Größe,
 Architektur und Optimizer. Jeder Versuch trainiert 5 Epochen. Am Ende werden die
 besten Parameter direkt in die Trainings-Konfiguration übernommen.</div>
+<div class="tip"><b>Button-Reihenfolge (Trainingsseite &amp; Aufnahme-Dialog):</b><br>
+① Hyperparameter-Suche → ② Training starten → ③ Training stoppen<br>
+Diese Reihenfolge gilt einheitlich für Bildklassifikation und Anomalie-Erkennung.</div>
 <div class="warn"><b>Benötigt: optuna</b><br><code>pip install optuna</code></div>
 
 <h2>Modell-Vergleich (Dialog)</h2>

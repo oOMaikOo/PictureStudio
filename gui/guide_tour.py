@@ -167,6 +167,8 @@ TOUR_STEPS = {
          "  (WeightedRandomSampler) aktivieren",
          None),
         ("Training starten",
+         "Button-Reihenfolge:\n"
+         "① Hyperparameter-Suche → ② Training starten → ③ Stoppen\n\n"
          "Klicke 'Training starten'.\n"
          "Kurven (Loss, Accuracy) aktualisieren live.\n"
          "Das beste Checkpoint wird automatisch\n"
@@ -532,17 +534,23 @@ TOUR_STEPS = {
         ("Kamera-Einstellungen",
          "Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung direkt anpassen — "
          "Änderungen wirken sofort auf den laufenden Stream.\n\n"
-         "Die Einstellungen werden automatisch in den Trainings-Dialog übernommen.",
+         "Diese Einstellungen sind auch direkt im Aufnahme-Dialog\n"
+         "für Bildklassifikation verfügbar (Daten-Seite → Kamera-Button).\n"
+         "Von der CameraPage übergebene Werte werden als Startwerte übernommen.",
          "Zurücksetzen"),
         ("Vorverarbeitungsfilter",
          "Wähle einen Filter (Graustufen, Canny-Kanten, Sobel, Laplacian) der auf "
          "jeden Frame angewendet wird — für Anzeige und optional auch für das Scoring.\n\n"
+         "Der Filter-Dropdown steht ebenfalls im Aufnahme-Dialog für\n"
+         "Bildklassifikation zur Verfügung.\n\n"
          "Nützlich für industrielle Inspektion: das Modell lernt Kanten statt Texturen.",
          None),
         ("Hyperparameter-Suche (Anomalie)",
          "Nach dem Sammeln von Frames: '⚙ Hyperparameter-Suche…' startet eine "
          "Optuna-Studie die Architektur, Lernrate und Batch-Größe optimiert.\n\n"
-         "Beste Parameter werden per Klick direkt auf den Autoencoder angewendet.",
+         "Beste Parameter werden per Klick direkt auf den Autoencoder angewendet.\n\n"
+         "Button-Reihenfolge:\n"
+         "① Hyperparameter-Suche → ② Training starten → ③ Stoppen",
          "Hyperparameter-Suche"),
         ("Batch-Analyse & Live-Aufzeichnung",
          "Batch-Analyse (Tab 📁 Batch):\n"

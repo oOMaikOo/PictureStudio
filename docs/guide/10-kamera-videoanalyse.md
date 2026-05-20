@@ -63,20 +63,29 @@ Tab „📁 Batch" → Ordner oder Dateien wählen → *Batch starten* → CSV e
 
 ## Kamera-Einstellungen
 
-Sliders für Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung im linken Panel.
+Sliders für **Helligkeit, Kontrast, Sättigung, Schärfe und Belichtung** stehen an zwei Stellen zur Verfügung:
+
+- **CameraPage (Anomalie-Erkennung):** Im linken Panel unter „Kamera-Einstellungen" (eingeklappt). Änderungen wirken live auf den laufenden Stream.
+- **Aufnahme-Dialog (Bildklassifikation):** Direkt im *CameraCaptureDialog* — auch beim Kamera-Button auf der Daten-Seite verfügbar. Von der CameraPage übergebene Werte werden als Startwerte übernommen.
+
+**Zurücksetzen** setzt alle Slider auf Neutral-Werte zurück.
 
 ## Vorverarbeitungsfilter
 
-  - Kein Filter** — Original-Frame
-  - **Graustufen** — als BGR zurückgegeben
-  - **Canny-Kanten** — Kantenlinien (Schwellwerte 50/150)
-  - **Sobel-Gradient** — Gradientenstärke in X und Y
-  - **Laplacian** — zweite Ableitung (feine Details)
+Der Filter-Dropdown ist ebenfalls in beiden Dialogen verfügbar (Anomalie-Erkennung *und* Bildklassifikations-Aufnahme):
+
+- **Kein Filter** — Original-Frame
+- **Graustufen** — als BGR zurückgegeben
+- **Canny-Kanten** — Kantenlinien (Schwellwerte 50/150)
+- **Sobel-Gradient** — Gradientenstärke in X und Y
+- **Laplacian** — zweite Ableitung (feine Details)
 
 ## Hyperparameter-Suche (Anomalie-Autoencoder)
 
 Schaltfläche **⚙ Hyperparameter-Suche…** startet eine Optuna-Studie.
 
 Suchraum: base_ch (8/16/32), lr (1e-4 bis 1e-2), batch_size (8/16/32).
+
+**Button-Reihenfolge im Aufnahme-Dialog:** ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen
 
 > ⚠️ `pip install optuna`
