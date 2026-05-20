@@ -726,6 +726,13 @@ class CameraCaptureDialog(QDialog):
         )
         sl.addWidget(self._ae_heatmap_cb)
 
+        self._ae_gradcam_cb = QCheckBox("Grad-CAM anzeigen")
+        self._ae_gradcam_cb.setToolTip(
+            "Grad-CAM Aktivierungskarte über dem Live-Frame.\n"
+            "Zeigt welche Regionen den Rekonstruktionsfehler verursachen."
+        )
+        sl.addWidget(self._ae_gradcam_cb)
+
         smooth_row = QHBoxLayout()
         smooth_row.addWidget(QLabel("Glättung:"))
         self._ae_smooth_n = QSpinBox()
@@ -1163,6 +1170,13 @@ class CameraCaptureDialog(QDialog):
                 display = self._last_heatmap.copy()
             if self._ts_preview_cb.isChecked():
                 display = self._apply_timestamp(display)
+        if self._ae_gradcam_cb.isChecked() and self._detector and self._detector.trained:
+            from core.gradcam import compute_gradcam_anomaly
+            try:
+                display_frame = display
+                display = compute_gradcam_anomaly(self._detector, display_frame)
+            except Exception:
+                pass
         display = self._draw_roi_overlay(display)
         pix = QPixmap.fromImage(frame_to_qimage(display))
         pix = pix.scaled(self._preview_lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)

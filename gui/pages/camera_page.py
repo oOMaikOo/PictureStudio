@@ -304,6 +304,13 @@ class CameraPage(QWidget):
         )
         df.addWidget(self._heatmap_cb)
 
+        self._gradcam_cb = QCheckBox("Grad-CAM anzeigen")
+        self._gradcam_cb.setToolTip(
+            "Grad-CAM: zeigt welche Bildregionen den Anomalie-Score verursachen.\n"
+            "Langsamer als Heatmap — deaktiviert Heatmap automatisch wenn aktiv."
+        )
+        df.addWidget(self._gradcam_cb)
+
         thr_row = QHBoxLayout()
         thr_row.addWidget(QLabel("Schwellwert:"))
         self._thr_spin = QDoubleSpinBox()
@@ -723,6 +730,13 @@ class CameraPage(QWidget):
                     )
                 else:
                     display = overlay
+            # Grad-CAM overlay (mutually exclusive with heatmap for performance)
+            if self._gradcam_cb.isChecked():
+                from core.gradcam import compute_gradcam_anomaly
+                try:
+                    display = compute_gradcam_anomaly(self._detector, display)
+                except Exception:
+                    pass
             self._update_score(score)
 
         # Draw cyan ROI rectangle so the monitored region is always visible

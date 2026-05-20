@@ -261,3 +261,101 @@ def compute_gradcam_overlay(
     overlay = PILImage.alpha_composite(orig_rgba, heatmap).convert("RGB")
 
     return original, overlay
+
+
+# ---------------------------------------------------------------------------
+# Grad-CAM for _ConvAutoencoder (anomaly detection)
+# ---------------------------------------------------------------------------
+
+def compute_gradcam_anomaly(
+    detector: "AnomalyDetector",
+    frame_bgr: "np.ndarray",
+) -> "np.ndarray":
+    """
+    Compute a Grad-CAM heatmap for an anomaly frame using the reconstruction error
+    as the backward signal.
+
+    Returns a BGR numpy array the same size as *frame_bgr* with the Grad-CAM
+    overlay composited at 50 % opacity.  Returns *frame_bgr* unchanged if PyTorch
+    is not available or the detector is not trained.
+    """
+    if not HAS_TORCH or not HAS_PIL:
+        return frame_bgr
+    if not detector.trained:
+        return frame_bgr
+
+    import cv2
+    import numpy as np
+
+    model = detector._model
+    h, w = frame_bgr.shape[:2]
+
+    # Preprocess — replicate AnomalyDetector._preprocess()
+    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    rgb_resized = cv2.resize(rgb, (128, 128), interpolation=cv2.INTER_AREA)
+    # Always run Grad-CAM on CPU: inplace ReLU + MPS backward hooks are incompatible
+    t = torch.from_numpy(rgb_resized.astype("float32") / 255.0).permute(2, 0, 1).unsqueeze(0)
+
+    # Temporarily move model to CPU for Grad-CAM (avoids MPS inplace-op + hook conflict)
+    try:
+        original_device = next(model.parameters()).device
+    except StopIteration:
+        original_device = torch.device("cpu")
+    model.cpu()
+    t = t.cpu()
+
+    # Target layer: last Conv2d in encoder (index 4)
+    target_layer = model.encoder[4]
+
+    # Use tensor-level hooks to avoid the inplace-ReLU + module-backward-hook conflict.
+    feats_holder = []
+    grads_holder = []
+
+    def _fwd_hook(module, inp, out):
+        # Clone to detach from the inplace graph; retain grad via tensor hook
+        feats = out.clone()
+        feats.retain_grad()
+        feats_holder.append(feats)
+        return feats  # replace output so grad flows through our clone
+
+    fwd_handle = target_layer.register_forward_hook(_fwd_hook)
+
+    try:
+        model.eval()
+        model.zero_grad()
+        reconstruction = model(t)
+        # Backward signal: mean squared reconstruction error
+        loss = ((reconstruction - t) ** 2).mean()
+        loss.backward()
+
+        feats = feats_holder[0]
+        grads = feats.grad if feats.grad is not None else torch.zeros_like(feats)
+
+        weights = grads.mean(dim=[2, 3], keepdim=True)
+        cam = (weights * feats).sum(dim=1, keepdim=True)
+        cam = F.relu(cam)
+        cam = F.interpolate(cam, size=(128, 128), mode="bilinear", align_corners=False)
+        cam = cam.squeeze().cpu().detach().numpy()
+
+        cam_min, cam_max = cam.min(), cam.max()
+        if cam_max > cam_min:
+            cam = (cam - cam_min) / (cam_max - cam_min)
+        else:
+            cam = np.zeros_like(cam)
+    finally:
+        fwd_handle.remove()
+        # Restore model to its original device
+        model.to(original_device)
+
+    # Resize CAM to original frame size
+    cam_resized = cv2.resize(cam, (w, h), interpolation=cv2.INTER_LINEAR)
+
+    # Build jet-coloured RGBA overlay via PIL
+    cam_pil = cam_to_heatmap_pil(cam_resized)
+
+    # Composite onto original frame
+    orig_pil = PILImage.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)).convert("RGBA")
+    overlay_pil = PILImage.alpha_composite(orig_pil, cam_pil).convert("RGB")
+
+    result_bgr = cv2.cvtColor(np.array(overlay_pil), cv2.COLOR_RGB2BGR)
+    return result_bgr
