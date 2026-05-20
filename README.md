@@ -1,4 +1,4 @@
-# Picture Studio
+# Picture Studio v2.0.0
 
 Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung und Batch-Inferenz — entwickelt mit **PySide6** und **PyTorch**.
 
@@ -10,17 +10,64 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 |---|---|
 | **Projektverwaltung** | Zwei Projekttypen (Bild / Video), versionierte JSON-Projekte, atomares Speichern, automatische Backups, Projekt-Dashboard, Bildvalidierung & Pfadkorrektur |
 | **Datenverwaltung** | Ordner-Import, Videoimport mit Frame-Extraktion, Drag & Drop, Kameraaufnahme (USB/IP/RTSP), MD5-Duplikaterkennung |
+| **Datensatz-Statistiken** | Klassenverteilung, Format-/Größenstatistiken, Label-Rate, perceptual-hash Duplikaterkennung (imagehash, optional) |
+| **Video-Annotation** | Frame-für-Frame-Annotation aus Videos (cv2 Slider-Navigation), direktes Hinzufügen zum Projekt |
 | **Labeling** | Schnellzuweisung 1–9, Multi-Label-Modus, Label-Hierarchien, Undo/Redo, Audit-Trail, Pixel-Segmentierungsmasken (5 Klassen) |
 | **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; ROI-Vorlagen; Batch-Übertragung auf alle Bilder |
 | **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), SSH-Ferntraining |
+| **Hyperparameter-Suche** | Optuna-basiert (lr, batch_size, architecture, optimizer), beste Parameter werden direkt in die UI übernommen |
+| **Augmentation-Pipeline** | Rotation, Flip H/V, Helligkeit, Kontrast, Blur, Rauschen; konfigurierbare Kopien pro Bild (PIL, kein Torchvision nötig) |
 | **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder auf Normalframes; Live-Scoring, Heatmap, Bounding Box, konfigurierbarer Schwellwert, Schwellwert-Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm |
-| **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17), TorchScript-Export, Accuracy/F1-Vergleich, Run-History, Archivieren/Löschen |
+| **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17/INT8), TorchScript-Export, CoreML-Export (macOS), sortierbare Vergleichs-Tabelle, Run-History, Archivieren/Löschen |
+| **Modell-Kalibrierung** | Temperature Scaling (scipy) für korrekte Konfidenzwerte post-hoc |
 | **Inferenz** | Batch-Inferenz, Top-K-Anzeige, Test-Time Augmentation (TTA), Ensemble-Inferenz, Semi-automatisches Labeling, Konfidenz-Farbkodierung |
+| **Fleet-Management** | Zentrale Überwachung mehrerer remote `monitor.py`-Instanzen (URL-Polling, Auto-Refresh, QSettings-Persistenz) |
+| **Docker-Deployment** | Einzeilen-Generator für `Dockerfile`, `docker-compose.yml`, Startskript und README — aus der Modelle-Seite |
 | **Metriken & Berichte** | Accuracy, F1, gewichteter F1, ROC/AUC, Top-K, HTML- und Excel-Trainingsbericht, Konfusionsmatrix |
-| **REST-API** | `POST /api/classify` (Pfad oder Base64-Bild), `GET /api/status`, `GET /api/labels`, `GET /api/scores`, `GET /api/events`, `GET /dashboard` — für externe Integration und Web-Monitoring |
-| **24/7-Daemon** | `scripts/monitor_daemon.py` — headless, kein GUI, ONNX/PyTorch, CSV-Log, MQTT; Autostart via launchd (macOS) oder systemd (Linux) |
+| **REST-API** | `POST /api/classify`, `GET /api/status`, `GET /api/labels`, `GET /api/scores`, `GET /api/events`, `GET /dashboard`, per-Kanal Multi-Kamera-Endpunkte |
+| **Standalone Monitor** | `monitor.py` — headless, kein GUI, ONNX/PyTorch, RTSP/HTTP/Video-Datei, MQTT, REST-API + Dashboard, Auto-Reconnect |
 | **Export** | COCO JSON, YOLO TXT, CSV-Annotationen; Excel-Inferenzergebnisse (konfigurierbare Spalten) |
 | **UX** | Modernes Dark-Theme (GitHub-Dark Palette), Sidebar-Navigation (gesperrt bis Projekt geladen), geführte Tour, F1-Hilfe, QSettings-Persistenz |
+
+---
+
+## Neue Features in v2.0.0
+
+### Hyperparameter-Suche (Optuna)
+Training-Seite → **⚙ Hyperparameter-Suche…** öffnet einen Konfigurations-Dialog (Anzahl Versuche, Zeitlimit, Gerät). Optuna testet automatisch Kombinationen aus Lernrate, Batch-Größe, Architektur und Optimizer. Beste Parameter werden direkt in die UI übernommen.
+
+```bash
+pip install optuna   # optional
+```
+
+### Datensatz-Statistiken (Stack 12)
+Sidebar: **Datensatz** — zeigt Klassenverteilung, Bildformat-/Größenstatistiken, Label-Rate und findet perceptuell ähnliche Bilder (Duplikate) via `imagehash`.
+
+```bash
+pip install imagehash   # optional, für Duplikaterkennung
+```
+
+### Video-Annotation (Stack 13, Videoprojekte)
+Sidebar: **Video-Annotation** — lädt Videodateien, Frame-Navigation per Schieberegler, direktes Labeln und Hinzufügen einzelner Frames zum Projekt.
+
+```bash
+pip install opencv-python   # bereits in requirements.txt
+```
+
+### Fleet-Management (Stack 14, Videoprojekte)
+Sidebar: **Fleet** — überwacht mehrere remote `monitor.py`-Instanzen. Füge Geräte per URL hinzu; Status-Polling läuft automatisch alle 30 Sekunden.
+
+### Edge-Export & Docker
+Modelle-Seite → neue Schaltflächen:
+- **ONNX INT8 exportieren…** — INT8-quantisiertes ONNX (2–4× kleiner als FP32)
+- **CoreML exportieren…** — Apple `.mlpackage` (macOS + coremltools)
+- **Docker-Deployment generieren…** — fertiges `Dockerfile` + `docker-compose.yml`
+
+```bash
+pip install onnxruntime      # für INT8 Quantisierung (optional)
+pip install coremltools      # für CoreML (nur macOS, optional)
+pip install scipy            # für Temperature Scaling (optional)
+```
 
 ---
 

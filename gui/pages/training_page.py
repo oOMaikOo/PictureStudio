@@ -418,6 +418,19 @@ class TrainingPage(QWidget):
         self.stop_btn.clicked.connect(self._stop_training)
         form.addRow(self.stop_btn)
 
+        self.hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
+        self.hpt_btn.setStyleSheet(
+            "background:#6C3483;color:white;padding:6px;border-radius:3px;"
+        )
+        self.hpt_btn.setToolTip(
+            "Automatische Hyperparameter-Suche mit Optuna starten.\n"
+            "Testet verschiedene Lernraten, Batch-Größen und Architekturen\n"
+            "und gibt die besten Parameter zurück.\n\n"
+            "Benötigt: pip install optuna"
+        )
+        self.hpt_btn.clicked.connect(self._start_hpt)
+        form.addRow(self.hpt_btn)
+
         return box
 
     def _build_progress_panel(self) -> QWidget:
@@ -646,6 +659,102 @@ class TrainingPage(QWidget):
         if self._thread:
             self._thread.request_stop()
         self.stop_btn.setEnabled(False)
+
+    def _start_hpt(self) -> None:
+        """Launch Optuna hyperparameter search dialog, then run HPTThread."""
+        if not self.project:
+            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            return
+        try:
+            from core.hyperparameter_tuning import HPTThread
+        except ImportError:
+            QMessageBox.warning(self, "Optuna fehlt",
+                                "Hyperparameter-Suche benötigt Optuna:\npip install optuna")
+            return
+
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QFormLayout, QSpinBox,
+            QComboBox, QDialogButtonBox, QProgressDialog,
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Hyperparameter-Suche konfigurieren")
+        v = QVBoxLayout(dlg)
+        form = QFormLayout()
+        n_spin = QSpinBox()
+        n_spin.setRange(5, 200)
+        n_spin.setValue(20)
+        form.addRow("Anzahl Versuche:", n_spin)
+        t_spin = QSpinBox()
+        t_spin.setRange(60, 7200)
+        t_spin.setValue(300)
+        t_spin.setSuffix(" s")
+        form.addRow("Zeitlimit:", t_spin)
+        dev_combo = QComboBox()
+        dev_combo.addItems(["cpu", "cuda", "mps"])
+        form.addRow("Gerät:", dev_combo)
+        v.addLayout(form)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        n_trials = n_spin.value()
+        prog = QProgressDialog("Hyperparameter-Suche läuft…", "Abbrechen", 0, n_trials, self)
+        prog.setWindowTitle("Hyperparameter-Suche")
+        prog.setWindowModality(Qt.WindowModal)
+        prog.setValue(0)
+
+        hpt = HPTThread(
+            project=self.project,
+            n_trials=n_trials,
+            timeout=float(t_spin.value()),
+            device=dev_combo.currentText(),
+            parent=self,
+        )
+
+        hpt.progress.connect(lambda cur, tot, val: (
+            prog.setLabelText(f"Versuch {cur}/{tot}  —  beste Val-Acc: {val*100:.2f}%"),
+            prog.setValue(cur),
+        ))
+
+        def _on_hpt_done(result: dict) -> None:
+            prog.close()
+            params = result.get("best_params", {})
+            best = result.get("best_value", 0.0)
+            lines = [f"Beste Val-Accuracy: {best*100:.2f}%\n", "Beste Parameter:"]
+            for k, val in params.items():
+                lines.append(f"  {k}: {val}")
+            lines.append("\nParameter in Konfiguration übernehmen?")
+            reply = QMessageBox.question(self, "HPT abgeschlossen", "\n".join(lines),
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self._apply_hpt_params(params)
+
+        hpt.finished.connect(_on_hpt_done)
+        hpt.error.connect(lambda e: (prog.close(),
+                                     QMessageBox.critical(self, "HPT-Fehler", e)))
+        prog.canceled.connect(hpt.stop)
+        hpt.start()
+        prog.exec()
+
+    def _apply_hpt_params(self, params: dict) -> None:
+        """Copy best HPT parameters into the UI controls."""
+        from models.classifier import get_available_models
+        if "model_type" in params:
+            models = get_available_models()
+            if params["model_type"] in models:
+                self.model_combo.setCurrentText(params["model_type"])
+        if "batch_size" in params:
+            self.batch_spin.setValue(int(params["batch_size"]))
+        if "lr" in params:
+            self.lr_spin.setValue(float(params["lr"]))
+        if "optimizer" in params:
+            idx = self.opt_combo.findText(params["optimizer"])
+            if idx >= 0:
+                self.opt_combo.setCurrentIndex(idx)
 
     @Slot(int, int, float, float, float, float)
     def _on_progress(self, epoch, total, tl, vl, ta, va) -> None:

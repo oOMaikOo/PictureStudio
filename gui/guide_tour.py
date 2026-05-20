@@ -705,6 +705,88 @@ TOUR_STEPS = {
          "CSV-Datei speichern.",
          "Batch starten"),
     ],
+    12: [  # Datensatz-Statistiken
+        ("Datensatz-Statistiken – Überblick",
+         "Die Datensatz-Statistiken-Seite analysiert\n"
+         "den aktuellen Datensatz auf Qualität und\n"
+         "Ausgewogenheit.\n\n"
+         "• Klassenverteilung mit Balken\n"
+         "• Format- und Größenstatistiken\n"
+         "• Label-Rate (% annotierter Bilder)\n"
+         "• Perceptual-Hash-Duplikaterkennung",
+         None),
+        ("Klassenverteilung prüfen",
+         "Die Balken zeigen Anzahl und Anteil\n"
+         "jeder Klasse.\n\n"
+         "Starkes Ungleichgewicht (z. B. 90%:10%)\n"
+         "führt zu schlechtem Modell für die\n"
+         "kleinere Klasse.\n\n"
+         "Lösung: WeightedRandomSampler auf der\n"
+         "Training-Seite aktivieren oder mehr\n"
+         "Bilder der kleinen Klasse beschaffen.",
+         None),
+        ("Duplikaterkennung",
+         "'Analyse aktualisieren' starten.\n\n"
+         "Die Seite erkennt visuell ähnliche\n"
+         "Bilder via perceptual hashing.\n\n"
+         "Duplikate können das Training verzerren\n"
+         "(Overfitting auf wiederholte Bilder).\n\n"
+         "Benötigt: pip install imagehash",
+         "Analyse aktualisieren"),
+    ],
+    13: [  # Video-Annotation
+        ("Video-Annotation – Überblick",
+         "Annotiere einzelne Frames direkt aus\n"
+         "einer Videodatei ohne vorherigen Export.\n\n"
+         "Ideal für:\n"
+         "• Kurze Trainingsvideos\n"
+         "• Auswahl interessanter Frames\n"
+         "• Schnelle Datensatz-Erweiterung",
+         None),
+        ("Video laden & navigieren",
+         "'Video laden…' → Datei wählen\n"
+         "(MP4, AVI, MOV, MKV, …)\n\n"
+         "Schieberegler = Frame-Navigation\n"
+         "Frame-Nummer und Zeitstempel werden\n"
+         "oben angezeigt.\n\n"
+         "Benötigt: pip install opencv-python",
+         "Video laden"),
+        ("Frame extrahieren & labeln",
+         "'Frame extrahieren' → Bild speichern\n\n"
+         "Label aus Dropdown wählen.\n\n"
+         "'Zum Projekt hinzufügen' → Frame + Label\n"
+         "werden dem aktuellen Projekt hinzugefügt.\n\n"
+         "Danach auf der Labeling-Seite prüfen.",
+         "Frame extrahieren"),
+    ],
+    14: [  # Fleet-Management
+        ("Fleet-Management – Überblick",
+         "Überwache mehrere remote monitor.py-\n"
+         "Instanzen (Edge-Geräte, Server, VMs)\n"
+         "von einer zentralen Stelle.\n\n"
+         "Jedes Gerät wird per HTTP-Poll abgefragt:\n"
+         "• Online/Offline-Status\n"
+         "• Letzter Score\n"
+         "• Letzter Alarm-Zeitstempel",
+         None),
+        ("Gerät hinzufügen",
+         "Klicke '+ Gerät hinzufügen'.\n\n"
+         "Name: frei wählbar\n"
+         "URL: Basis-URL des monitor.py-Servers\n"
+         "z. B. http://192.168.1.100:8765\n"
+         "API-Key: wenn --api-key gesetzt\n\n"
+         "Auf dem Gerät muss laufen:\n"
+         "python monitor.py --api-port 8765",
+         "+ Gerät hinzufügen"),
+        ("Status & Auto-Refresh",
+         "'Alle aktualisieren' → einmalige Abfrage\n\n"
+         "'Auto-Refresh (30 s)' → aktiviert\n"
+         "automatische Abfrage alle 30 Sekunden.\n\n"
+         "'Dashboard' in Aktionen → öffnet das\n"
+         "Web-Dashboard des Geräts im Browser.\n\n"
+         "Gerätliste wird in QSettings gespeichert.",
+         "Alle aktualisieren"),
+    ],
 }
 
 

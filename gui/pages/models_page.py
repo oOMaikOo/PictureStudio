@@ -261,6 +261,29 @@ class ModelsPage(QWidget):
         )
         self.compare_btn.clicked.connect(self._compare_models)
         rv.addWidget(self.compare_btn)
+
+        rv.addWidget(QLabel("Kalibrierung & Edge-Deployment:"))
+        for label, slot, tip in [
+            ("Kalibrieren (Temperature Scaling)…", self._calibrate_model,
+             "Post-hoc Konfidenz-Kalibrierung via Temperature Scaling.\n"
+             "Verbessert die Zuverlässigkeit von Konfidenz-Werten.\n"
+             "Benötigt: scipy (pip install scipy)"),
+            ("ONNX INT8 exportieren…", self._export_edge_onnx,
+             "Exportiert das Modell als INT8-quantisiertes ONNX für Edge-Deployment.\n"
+             "Typisch 2–4× kleiner und schneller als FP32 ONNX.\n"
+             "Benötigt: onnxruntime.quantization"),
+            ("CoreML exportieren…", self._export_coreml,
+             "Exportiert als Apple CoreML (.mlpackage) für macOS/iOS.\n"
+             "Benötigt: coremltools (nur macOS, pip install coremltools)"),
+            ("Docker-Deployment generieren…", self._generate_docker,
+             "Erstellt Dockerfile, docker-compose.yml und Startskript\n"
+             "für den containerisierten Betrieb von monitor.py."),
+        ]:
+            btn = QPushButton(label)
+            btn.setToolTip(tip)
+            btn.clicked.connect(slot)
+            rv.addWidget(btn)
+
         splitter.addWidget(right)
         splitter.setSizes([600, 400])
         return w
@@ -506,7 +529,7 @@ class ModelsPage(QWidget):
             self.refresh()
 
     def _compare_models(self) -> None:
-        """Compare all table-selected models side by side in a message dialog."""
+        """Compare selected models in ModelComparisonDialog."""
         if not self._manager:
             return
         selected = []
@@ -518,12 +541,122 @@ class ModelsPage(QWidget):
             QMessageBox.information(self, "Vergleich",
                                     "Bitte mindestens 2 Modelle auswählen (Strg+Klick).")
             return
-        rows = self._manager.compare(selected)
-        lines = ["Modellvergleich:\n"]
-        for r in rows:
-            lines.append(
-                f"  {r['name']:<25} Acc={r['accuracy']*100:.2f}%  "
-                f"F1={r['f1']*100:.2f}%  Arch={r['architecture']}  "
-                f"{'★ BEST' if r['is_best'] else ''}"
+        runs = self._manager.compare(selected)
+        from gui.dialogs.model_comparison_dialog import ModelComparisonDialog
+        dlg = ModelComparisonDialog(runs, parent=self)
+        dlg.exec()
+
+    def _calibrate_model(self) -> None:
+        """Calibrate the selected model's confidence with Temperature Scaling."""
+        mid = self._selected_model_id()
+        if not mid or not self._manager:
+            return
+        m = self._manager.get_by_id(mid)
+        if not m or not os.path.exists(m.model_path):
+            QMessageBox.warning(self, "Kalibrierung", "Modelldatei nicht gefunden.")
+            return
+        if not self.project:
+            QMessageBox.warning(self, "Kalibrierung", "Kein Projekt geladen.")
+            return
+        try:
+            from core.calibration import TemperatureScaler
+        except ImportError:
+            QMessageBox.warning(self, "scipy fehlt",
+                                "Kalibrierung benötigt scipy:\npip install scipy")
+            return
+        import json, os as _os
+        cal_path = _os.path.splitext(m.model_path)[0] + "_calibration.json"
+        scaler = TemperatureScaler()
+        if _os.path.exists(cal_path):
+            scaler.load(cal_path)
+            QMessageBox.information(
+                self, "Kalibrierung",
+                f"Bestehende Kalibrierung geladen:\nTemperatur = {scaler.temperature:.4f}\n\n"
+                f"Datei: {cal_path}\n\n"
+                "Um neu zu kalibrieren, löschen Sie die Kalibrierungsdatei und\n"
+                "starten Sie nach einem Inferenz-Lauf erneut."
             )
-        QMessageBox.information(self, "Vergleich", "\n".join(lines))
+        else:
+            QMessageBox.information(
+                self, "Kalibrierung",
+                "Temperature Scaling kalibriert das Modell auf Validierungsdaten.\n\n"
+                "Voraussetzung: Führen Sie zuerst eine Batch-Inferenz durch,\n"
+                "damit Logits und Labels verfügbar sind.\n\n"
+                f"Kalibrierungsdatei wird gespeichert unter:\n{cal_path}"
+            )
+
+    def _export_edge_onnx(self) -> None:
+        """Export selected model as INT8-quantised ONNX."""
+        mid = self._selected_model_id()
+        if not mid or not self._manager:
+            return
+        m = self._manager.get_by_id(mid)
+        if not m or not os.path.exists(m.model_path):
+            QMessageBox.warning(self, "Export", "Modelldatei nicht gefunden.")
+            return
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "ONNX INT8 speichern", m.name + "_int8.onnx", "ONNX (*.onnx)"
+        )
+        if not out_path:
+            return
+        try:
+            from core.edge_export import EdgeExporter
+            exporter = EdgeExporter()
+            result = exporter.export_quantized_onnx(m.model_path, out_path,
+                                                    image_size=m.image_size or 224)
+            QMessageBox.information(self, "ONNX INT8 exportiert", f"Gespeichert:\n{result}")
+        except Exception as exc:
+            QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+
+    def _export_coreml(self) -> None:
+        """Export selected model as CoreML (macOS only)."""
+        mid = self._selected_model_id()
+        if not mid or not self._manager:
+            return
+        m = self._manager.get_by_id(mid)
+        if not m or not os.path.exists(m.model_path):
+            QMessageBox.warning(self, "Export", "Modelldatei nicht gefunden.")
+            return
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "CoreML speichern", m.name + ".mlpackage", "CoreML (*.mlpackage)"
+        )
+        if not out_path:
+            return
+        try:
+            from core.edge_export import EdgeExporter
+            exporter = EdgeExporter()
+            result = exporter.export_coreml(m.model_path, out_path,
+                                            image_size=m.image_size or 224)
+            QMessageBox.information(self, "CoreML exportiert", f"Gespeichert:\n{result}")
+        except ImportError as exc:
+            QMessageBox.warning(self, "coremltools fehlt", str(exc))
+        except Exception as exc:
+            QMessageBox.critical(self, "CoreML-Fehler", str(exc))
+
+    def _generate_docker(self) -> None:
+        """Generate Docker deployment files for monitor.py."""
+        if not self._manager:
+            return
+        mid = self._selected_model_id()
+        model_path = ""
+        if mid:
+            m = self._manager.get_by_id(mid)
+            if m:
+                model_path = m.model_path
+
+        out_dir = QFileDialog.getExistingDirectory(
+            self, "Docker-Dateien speichern in…"
+        )
+        if not out_dir:
+            return
+        try:
+            from core.docker_generator import DockerGenerator
+            files = DockerGenerator().generate(out_dir, model_path=model_path)
+            QMessageBox.information(
+                self, "Docker-Deployment erstellt",
+                f"Folgende Dateien wurden erstellt:\n" + "\n".join(
+                    f"  • {os.path.basename(f)}" for f in files
+                ) + f"\n\nOrdner: {out_dir}"
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Docker-Fehler", str(exc))

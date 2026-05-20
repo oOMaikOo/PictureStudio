@@ -106,6 +106,9 @@ class MainWindow(QMainWindow):
         from gui.pages.batch_inference_page    import BatchInferencePage
         from gui.pages.multi_camera_page       import MultiCameraPage
         from gui.pages.anomaly_clustering_page import AnomalyClusteringPage
+        from gui.pages.dataset_stats_page      import DatasetStatsPage
+        from gui.pages.video_annotation_page   import VideoAnnotationPage
+        from gui.pages.fleet_page              import FleetPage
 
         self.dashboard_page          = DashboardPage()
         self.data_page               = DataPage()
@@ -119,6 +122,9 @@ class MainWindow(QMainWindow):
         self.batch_page              = BatchInferencePage()
         self.multi_camera_page       = MultiCameraPage()
         self.anomaly_clustering_page = AnomalyClusteringPage()
+        self.dataset_stats_page      = DatasetStatsPage()
+        self.video_annotation_page   = VideoAnnotationPage()
+        self.fleet_page              = FleetPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
@@ -127,6 +133,9 @@ class MainWindow(QMainWindow):
             self.batch_page,                # index 9
             self.multi_camera_page,         # index 10
             self.anomaly_clustering_page,   # index 11
+            self.dataset_stats_page,        # index 12
+            self.video_annotation_page,     # index 13
+            self.fleet_page,                # index 14
         ]:
             self.stack.addWidget(page)
 
@@ -281,8 +290,13 @@ class MainWindow(QMainWindow):
             ("Kamera – Hilfe",          10),
             ("Tastenkürzel",            11),
             ("Fehlerbehebung",          12),
-            ("Monitor-Client – Hilfe",  13),
-            ("Multi-Kamera – Hilfe",    14),
+            ("Monitor-Client – Hilfe",    13),
+            ("Multi-Kamera – Hilfe",     14),
+            ("Anomalie-Clustering – Hilfe", 15),
+            ("Datensatz-Statistiken – Hilfe", 16),
+            ("Video-Annotation – Hilfe", 17),
+            ("Fleet-Management – Hilfe", 18),
+            ("Modell-Erweitert – Hilfe", 19),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
@@ -441,6 +455,9 @@ class MainWindow(QMainWindow):
         self.export_page.set_project(project)
         self.batch_page.set_project(project)
         self.anomaly_clustering_page.set_project(project)
+        self.dataset_stats_page.set_project(project)
+        self.video_annotation_page.set_project(project)
+        self.fleet_page.set_project(project)
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)

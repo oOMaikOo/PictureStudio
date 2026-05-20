@@ -4,6 +4,38 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.0.0] – 2026-05-20
+
+### Added
+
+**Phase A – Training & Model Intelligence**
+- **Hyperparameter-Suche (Optuna)** — `core/hyperparameter_tuning.py`: `HPTWorker` + `HPTThread` mit Optuna-Studie (lr, batch_size, architecture, optimizer). Training-Seite: Schaltfläche "⚙ Hyperparameter-Suche…" öffnet Konfigurations-Dialog, startet Suche und übernimmt beste Parameter in die UI.
+- **Temperature Scaling (Kalibrierung)** — `core/calibration.py`: `TemperatureScaler` passt Konfidenzwerte post-hoc an (scipy). Modelle-Seite: "Kalibrieren (Temperature Scaling)…"-Schaltfläche.
+- **Modell-Vergleichs-Dialog** — `gui/dialogs/model_comparison_dialog.py`: `ModelComparisonDialog` zeigt sortierbare Tabelle (Accuracy, F1, Architektur, ★ Bestes Modell in Gold). Ersetzt den einfachen `QMessageBox`-Vergleich.
+
+**Phase B – Datensatz & Annotation**
+- **Datensatz-Statistiken** — `gui/pages/dataset_stats_page.py`: Klassenverteilung (QProgressBars), Format-/Größenstatistiken (200-Bilder-Sample), perceptual-hash Duplikaterkennung (imagehash, optional), Label-Rate. Sidebar-Eintrag "Datensatz" (Stack-Index 12).
+- **Augmentation-Pipeline** — `core/augmentation_pipeline.py`: `AugmentationPipeline` (PIL: Rotation ±15°, Flip H/V, Helligkeit, Kontrast, Blur, Rauschen, `copies_per_image=3`), `AugmentationWorker`, `AugmentationThread`.
+- **Video-Annotation** — `gui/pages/video_annotation_page.py`: Frame-Navigation per Schieberegler (cv2), Label-Auswahl, direktes Hinzufügen von Frames zum Projekt. Sidebar-Eintrag "Video-Annotation" (Stack-Index 13) für Video-Projekte.
+
+**Phase C – Fleet & Edge-Deployment**
+- **Fleet-Management** — `gui/pages/fleet_page.py`: `FleetPage` überwacht mehrere remote `monitor.py`-Instanzen. QTableWidget (Name/URL/Status/Score/Letzter Alarm/Aktionen), `_PollThread` (urllib GET /api/status), `_AddDeviceDialog` (URL-Validierung), QSettings-Persistenz, Auto-Refresh-Timer (30 s). Sidebar-Eintrag "Fleet" (Stack-Index 14) für Video-Projekte.
+- **Docker-Deployment-Generator** — `core/docker_generator.py`: `DockerGenerator.generate()` erstellt 5 Deployment-Dateien: `Dockerfile` (python:3.11-slim, EXPOSE, CMD monitor.py), `docker-compose.yml` (ports, volumes, restart: unless-stopped), `requirements_monitor.txt`, `run_monitor.sh`, `README_deploy.md`. Modelle-Seite: "Docker-Deployment generieren…"-Schaltfläche.
+- **Edge-Exporter** — `core/edge_export.py`: `EdgeExporter.export_quantized_onnx()` (torch.onnx.export + optionaler INT8 `quantize_dynamic`), `export_coreml()` (coremltools, nur macOS). `has_coreml()` / `has_quantization()` Statik-Methoden. Modelle-Seite: "ONNX INT8 exportieren…" und "CoreML exportieren…".
+
+### Changed
+- **Modelle-Seite** — `_compare_models()` verwendet jetzt `ModelComparisonDialog` statt `QMessageBox`. Neue Schaltflächen: Kalibrieren, ONNX INT8, CoreML, Docker-Deployment.
+- **Sidebar** — `_IMAGE_PAGES` um "Datensatz" (Index 12) erweitert. `_VIDEO_PAGES` um "Video-Annotation" (Index 13) und "Fleet" (Index 14) erweitert.
+- **Help-Dialog** — 4 neue Abschnitte (16–19): Datensatz-Statistiken, Video-Annotation, Fleet-Management, Modelle Erweitert. Feature-Übersichtstabelle aktualisiert.
+- **Guided Tour** — Neue Tour-Schritte für Stack-Index 12 (DatasetStats), 13 (VideoAnnotation), 14 (Fleet).
+- `APP_VERSION` → `2.0.0`
+- `requirements.txt` — neue optionale Abhängigkeiten dokumentiert (optuna, imagehash, scipy, coremltools, onnxscript).
+
+### Tests
+- 54 neue Tests (Phasen A, B, C): 17 + 18 + 19 = 54 grüne Tests; Gesamt 664 → 664+ bestanden.
+
+---
+
 ## [1.3.0] – 2026-05-19
 
 ### Added

@@ -26,13 +26,21 @@ SECTIONS = [
     ("📷", "Kamera & Videoanalyse"),
     ("⌨", "Tastenkürzel"),
     ("🔧", "Fehlerbehebung"),
-    ("💻", "Monitor-Client"),   # 13
-    ("📹", "Multi-Kamera"),    # 14
-    ("🔬", "Anomalie-Clustering"),  # 15
+    ("💻", "Monitor-Client"),         # 13
+    ("📹", "Multi-Kamera"),           # 14
+    ("🔬", "Anomalie-Clustering"),    # 15
+    ("📈", "Datensatz-Statistiken"),  # 16
+    ("🎬", "Video-Annotation"),       # 17
+    ("🌐", "Fleet-Management"),       # 18
+    ("⚡", "Modelle Erweitert"),      # 19
 ]
 
 # Map sidebar page index → section index
-PAGE_TO_SECTION = {0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 10: 14, 11: 15}
+PAGE_TO_SECTION = {
+    0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
+    10: 14, 11: 15,
+    12: 16, 13: 17, 14: 18,
+}
 
 # ---------------------------------------------------------------------------
 # Shared CSS
@@ -184,6 +192,14 @@ Gehe zur <b>Export-Seite</b>:<br>
   <tr><td><b>Multi-Kamera</b></td><td>1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG-Saving pro Kanal, per-Kanal REST-API</td></tr>
   <tr><td><b>Anomalie-Erkennung</b></td><td>Conv-Autoencoder, ROI-Bereich, Bewegungsfilter, Schwellwert-Kalibrierung, Heatmap, Bounding-Box, Alarm-Pause, Audit-Log, False-Positive-Markierung</td></tr>
   <tr><td><b>Batch-Analyse</b></td><td>Ordner oder Dateien auf Anomalien prüfen, CSV-Export der Ergebnisse</td></tr>
+  <tr><td><b>Datensatz-Statistiken</b></td><td>Klassenverteilung, Format-/Größenstatistiken, Label-Rate, perceptual-hash Duplikaterkennung</td></tr>
+  <tr><td><b>Video-Annotation</b></td><td>Frame-für-Frame-Annotation aus Videodateien, Slider-Navigation, direktes Hinzufügen zum Projekt</td></tr>
+  <tr><td><b>Fleet-Management</b></td><td>Zentrale Überwachung mehrerer monitor.py-Instanzen, Status-Polling, Auto-Refresh, QSettings-Persistenz</td></tr>
+  <tr><td><b>Hyperparameter-Suche</b></td><td>Optuna-basierte Suche (lr, batch_size, architecture, optimizer), bestes Ergebnis direkt in UI übernehmen</td></tr>
+  <tr><td><b>Modell-Kalibrierung</b></td><td>Temperature Scaling (scipy) für korrektere Konfidenzwerte</td></tr>
+  <tr><td><b>Edge-Export</b></td><td>ONNX INT8 (onnxruntime.quantization), Apple CoreML (.mlpackage via coremltools)</td></tr>
+  <tr><td><b>Docker-Deployment</b></td><td>Einzeilen-Generator für Dockerfile, docker-compose.yml, Startskript und README</td></tr>
+  <tr><td><b>Augmentation-Pipeline</b></td><td>Rotation, Flip, Helligkeit, Kontrast, Blur, Rauschen; konfigurierbare Kopien pro Bild</td></tr>
 </table>
 
 <h2>Unterstützte Architekturen</h2>
@@ -1107,6 +1123,146 @@ k-Means benötigt mindestens so viele Bilder wie Cluster. Bei weniger als 10 Ano
 Clustering gruppiert nach visueller Ähnlichkeit, nicht nach technischer Fehlerursache.
 Die inhaltliche Interpretation der Cluster (z. B. „Cluster 0 = Risse, Cluster 1 = Flecken")
 muss manuell erfolgen.</div>
+"""),
+
+# ── 16  Datensatz-Statistiken ──────────────────────────────────────────────────
+16: page("""
+<h1>📈 Datensatz-Statistiken</h1>
+<p>Die <b>Datensatz-Statistiken-Seite</b> (Sidebar: Datensatz) analysiert den aktuellen
+Datensatz und zeigt detaillierte Qualitätsmetriken.</p>
+
+<h2>Klassenverteilung</h2>
+<p>Horizontale Balken zeigen für jede Klasse Anzahl und prozentualen Anteil.
+Ein ausgeglichener Datensatz hat alle Balken annähernd gleich lang.
+Starkes Ungleichgewicht verschlechtert die Modell-Performance für unterrepräsentierte Klassen.</p>
+<div class="tip"><b>Tipp: Klassenausgleich</b><br>
+Bei Ungleichgewicht: <b>WeightedRandomSampler</b> auf der Training-Seite aktivieren oder
+mehr Bilder der unterrepräsentierten Klassen beschaffen.</div>
+
+<h2>Format- & Größenstatistiken</h2>
+<p>Zeigt Bildformate (JPEG, PNG …) und Auflösungsstatistiken (min, max, Median).
+Sehr unterschiedliche Größen können die Training-Performance beeinflussen — ggf. Bilder vorverarbeiten.</p>
+
+<h2>Label-Rate</h2>
+<p>Zeigt wie viele Bilder bereits ein Label haben. Eine niedrige Label-Rate bedeutet viel noch zu erledigende
+Annotation-Arbeit.</p>
+
+<h2>Duplikaterkennung</h2>
+<p>Verwendet <b>perceptual hashing (phash)</b> um visuell identische oder sehr ähnliche Bilder zu finden.
+Duplikate können das Training verzerren (Overfitting auf wiederholte Bilder).</p>
+<div class="warn"><b>Benötigt: imagehash</b><br>
+<code>pip install imagehash</code> — ohne dieses Paket wird die Duplikaterkennung übersprungen.</div>
+
+<h2>Analyse aktualisieren</h2>
+<p>Klicke <b>Analyse aktualisieren</b> nach dem Hinzufügen neuer Bilder oder Labels.</p>
+"""),
+
+# ── 17  Video-Annotation ───────────────────────────────────────────────────────
+17: page("""
+<h1>🎬 Video-Annotation</h1>
+<p>Die <b>Video-Annotation-Seite</b> ermöglicht das direkte Annotieren einzelner Video-Frames
+ohne vorherigen Frame-Export.</p>
+
+<h2>Video laden</h2>
+<div class="step"><b>Schritt 1</b> – Klicke <b>Video laden…</b> und wähle eine Videodatei
+(MP4, AVI, MOV, MKV, …).<br>
+Das Video wird geladen und der erste Frame angezeigt.</div>
+
+<h2>Frame-Navigation</h2>
+<div class="step"><b>Schritt 2</b> – Verschiebe den <b>Schieberegler</b> um zum gewünschten Frame zu springen.
+Die Frame-Nummer und der Zeitstempel werden oben angezeigt.</div>
+
+<h2>Frame extrahieren & labeln</h2>
+<div class="step"><b>Schritt 3</b> – Klicke <b>Frame extrahieren</b> um den aktuellen Frame als Bild zu speichern.<br>
+Wähle das Label aus dem Dropdown.<br>
+Klicke <b>Zum Projekt hinzufügen</b> um Frame + Label dem aktuellen Projekt hinzuzufügen.</div>
+
+<div class="tip"><b>Tipp: Mehrere Frames</b><br>
+Navigiere zu verschiedenen Frames und füge jeden relevanten Frame einzeln hinzu.
+So bekommst du einen vielfältigen Trainingsdatensatz aus einem einzigen Video.</div>
+
+<div class="warn"><b>Benötigt: OpenCV</b><br>
+<code>pip install opencv-python</code> — ohne OpenCV ist Frame-Extraktion nicht möglich.</div>
+"""),
+
+# ── 18  Fleet-Management ───────────────────────────────────────────────────────
+18: page("""
+<h1>🌐 Fleet-Management</h1>
+<p>Die <b>Fleet-Seite</b> überwacht mehrere remote <code>monitor.py</code>-Instanzen
+(z. B. auf Edge-Geräten, Industrierechnern oder Cloud-VMs) von einer zentralen Stelle aus.</p>
+
+<h2>Gerät hinzufügen</h2>
+<div class="step"><b>Schritt 1</b> – Klicke <b>+ Gerät hinzufügen</b>.<br>
+Gib einen Namen, die Basis-URL (z. B. <code>http://192.168.1.100:8765</code>) und
+optional einen API-Key ein.<br>
+Die URL muss auf einen laufenden <code>monitor.py --api-port</code> Prozess zeigen.</div>
+
+<h2>Status prüfen</h2>
+<div class="step"><b>Schritt 2</b> – Klicke <b>Alle aktualisieren</b> oder aktiviere
+<b>Auto-Refresh (30 s)</b>.<br>
+Die Tabelle zeigt für jedes Gerät: Online/Offline, letzten Score und letzten Alarm-Zeitstempel.</div>
+
+<h2>Dashboard öffnen</h2>
+<p>Klicke <b>Dashboard</b> in der Aktionen-Spalte um das Web-Dashboard des Geräts im Browser zu öffnen.</p>
+
+<h2>Persistenz</h2>
+<p>Die Gerätliste wird in QSettings gespeichert und beim nächsten Start automatisch geladen.</p>
+
+<h2>monitor.py starten</h2>
+<p>Auf jedem Edge-Gerät:</p>
+<pre style="background:#0D1117;color:#F8C471;padding:8px;border-radius:4px;font-size:11px">
+python monitor.py --model modell.onnx --api-port 8765 --api-key MEIN_SCHLÜSSEL
+</pre>
+<div class="tip"><b>Docker-Deployment</b><br>
+Auf der Modelle-Seite → <b>Docker-Deployment generieren…</b> erzeugt ein fertiges
+<code>Dockerfile</code> + <code>docker-compose.yml</code> für containerisierten Betrieb.</div>
+"""),
+
+# ── 19  Modelle Erweitert ──────────────────────────────────────────────────────
+19: page("""
+<h1>⚡ Modelle Erweitert</h1>
+<p>Fortgeschrittene Werkzeuge auf der <b>Modellbibliothek-Seite</b> für Hyperparameter-Suche,
+Kalibrierung und Edge-Deployment.</p>
+
+<h2>Hyperparameter-Suche (Optuna)</h2>
+<p>Auf der <b>Training-Seite</b> → Schaltfläche <b>⚙ Hyperparameter-Suche…</b></p>
+<div class="step"><b>Wie es funktioniert</b><br>
+Optuna testet automatisch verschiedene Kombinationen aus Lernrate, Batch-Größe,
+Architektur und Optimizer. Jeder Versuch trainiert 5 Epochen. Am Ende werden die
+besten Parameter direkt in die Trainings-Konfiguration übernommen.</div>
+<div class="warn"><b>Benötigt: optuna</b><br><code>pip install optuna</code></div>
+
+<h2>Modell-Vergleich (Dialog)</h2>
+<p>Mehrere Modelle in der Tabelle auswählen (Strg+Klick) → <b>Ausgewählte vergleichen</b><br>
+Zeigt eine sortierbare Tabelle mit Accuracy%, F1%, Architektur und Best-Markierung (★ Gold).</p>
+
+<h2>Kalibrierung (Temperature Scaling)</h2>
+<p>Modell auswählen → <b>Kalibrieren (Temperature Scaling)…</b><br>
+Post-hoc Kalibrierung verbessert die Zuverlässigkeit von Konfidenzwerten.
+Ein schlecht kalibriertes Modell sagt 95% vorher obwohl es nur 70% Trefferquote hat.</p>
+<div class="warn"><b>Benötigt: scipy</b><br><code>pip install scipy</code></div>
+
+<h2>ONNX INT8 Export</h2>
+<p>Modell auswählen → <b>ONNX INT8 exportieren…</b><br>
+Erstellt ein INT8-quantisiertes ONNX-Modell: typisch 2–4× kleiner und schneller als FP32,
+ideal für CPU-Inferenz auf Edge-Geräten.</p>
+<div class="warn"><b>Benötigt: onnxruntime</b><br><code>pip install onnxruntime</code></div>
+
+<h2>CoreML Export (macOS)</h2>
+<p>Modell auswählen → <b>CoreML exportieren…</b><br>
+Erstellt ein <code>.mlpackage</code> für native Apple-Performance (Neural Engine auf M-Chips).</p>
+<div class="warn"><b>Benötigt: coremltools (nur macOS)</b><br><code>pip install coremltools</code></div>
+
+<h2>Docker-Deployment</h2>
+<p>Modell auswählen → <b>Docker-Deployment generieren…</b><br>
+Erstellt in einem gewählten Ordner:</p>
+<ul>
+  <li><code>Dockerfile</code> — Python 3.11-slim, EXPOSE Port, CMD monitor.py</li>
+  <li><code>docker-compose.yml</code> — Ports, Volumes, restart: unless-stopped</li>
+  <li><code>requirements_monitor.txt</code> — minimale Abhängigkeiten</li>
+  <li><code>run_monitor.sh</code> — Startskript</li>
+  <li><code>README_deploy.md</code> — Schritt-für-Schritt Anleitung</li>
+</ul>
 """),
 
 }

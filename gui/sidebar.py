@@ -31,6 +31,7 @@ _IMAGE_PAGES: List[Tuple[str, str, int]] = [
     ("Export",         "📤", 6),
     ("Einstellungen",  "⚙",  7),
     ("Clustering",     "🔬", 11),
+    ("Datensatz",      "📈", 12),
 ]
 
 _VIDEO_PAGES: List[Tuple[str, str, int]] = [
@@ -38,6 +39,8 @@ _VIDEO_PAGES: List[Tuple[str, str, int]] = [
     ("Daten",           "📁", 1),
     ("Live & Anomalie", "🎥", 8),
     ("Multi-Kamera",    "📹", 10),
+    ("Video-Annotation","🎬", 13),
+    ("Fleet",           "🌐", 14),
     ("Modelle",         "📊", 4),
     ("Export",          "📤", 6),
     ("Einstellungen",   "⚙",  7),
