@@ -163,6 +163,10 @@ class _CameraThread(threading.Thread):
             cap = cv2.VideoCapture(self._source)
             if not cap.isOpened():
                 self.error = f"Quelle konnte nicht geöffnet werden: {self._source}"
+                if attempt == 1 and isinstance(self._source, int) and os.uname().sysname == "Darwin":
+                    print(f"[Kamera] Kamera-Index {self._source} konnte nicht geöffnet werden.")
+                    print("[Kamera] macOS: Bitte Terminal-Kamerazugriff erlauben:")
+                    print("[Kamera]   Systemeinstellungen → Datenschutz & Sicherheit → Kamera → Terminal ✓")
                 if self._reconnect_delay > 0 and not self._is_video:
                     if self._on_status:
                         self._on_status(
@@ -1056,21 +1060,11 @@ function refreshCard(card, ch) {
 
 // ─── Frame polling per channel ────────────────────────────────────────────────
 function startFramePoll(id) {
-  let _objUrl = null;
-  async function poll() {
+  function poll() {
     const img = document.getElementById('img-'+id);
     if (!img) return; // card removed
-    try {
-      const r = await fetch('/setup/channels/'+id+'/frame.jpg?t='+Date.now());
-      if (r.ok && r.status === 200) {
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        img.src = url;
-        if (_objUrl) URL.revokeObjectURL(_objUrl);
-        _objUrl = url;
-      }
-    } catch(e) {}
-    setTimeout(poll, 300);
+    img.src = '/setup/channels/'+id+'/frame.jpg?t='+Date.now();
+    setTimeout(poll, 400);
   }
   poll();
 }
