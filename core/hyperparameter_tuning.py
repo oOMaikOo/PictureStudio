@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import threading
 from typing import Optional, Callable
 import numpy as np
 
@@ -30,6 +31,7 @@ class HPTWorker:
         self._device = device
         self._progress_callback = progress_callback
         self._study = None
+        self._stop_event = threading.Event()
 
     def run(self) -> dict:
         """
@@ -48,10 +50,14 @@ class HPTWorker:
 
         from core.training import TrainingWorker
 
+        self._stop_event.clear()
         study = optuna.create_study(direction="maximize")
         self._study = study
 
         def objective(trial):
+            if self._stop_event.is_set():
+                study.stop()
+                raise optuna.exceptions.TrialPruned()
             cfg = {
                 "learning_rate": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
                 "batch_size": trial.suggest_categorical("batch_size", [8, 16, 32]),
@@ -109,8 +115,7 @@ class HPTWorker:
 
     def stop(self) -> None:
         """Stoppt die laufende Optuna-Studie (graceful)."""
-        if self._study:
-            self._study.stop()
+        self._stop_event.set()
 
 
 def _make_hpt_thread():
@@ -190,6 +195,7 @@ class AnomalyHPTWorker:
         self._n_trials = n_trials
         self._epochs_per_trial = epochs_per_trial
         self._progress_callback = progress_callback
+        self._stop_event = threading.Event()
 
     def run(self) -> dict:
         """Run the study and return best params dict."""
@@ -207,10 +213,14 @@ class AnomalyHPTWorker:
         if not frames:
             raise ValueError("Keine Frames gesammelt — zuerst Frames aufnehmen.")
 
+        self._stop_event.clear()
         best_val = float("inf")
 
         def objective(trial):
             nonlocal best_val
+            if self._stop_event.is_set():
+                study.stop()
+                raise optuna.exceptions.TrialPruned()
             base_ch = trial.suggest_categorical("base_ch", [8, 16, 32])
             lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
             batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
@@ -244,6 +254,10 @@ class AnomalyHPTWorker:
             "best_value": study.best_value,
         }
 
+    def stop(self) -> None:
+        """Stoppt die laufende Optuna-Studie (graceful)."""
+        self._stop_event.set()
+
 
 def _make_anomaly_hpt_thread():
     """Build and return the concrete QThread subclass for Anomaly HPT."""
@@ -270,6 +284,9 @@ def _make_anomaly_hpt_thread():
                 self.finished.emit(result)
             except Exception as exc:
                 self.error.emit(str(exc))
+
+        def stop(self) -> None:
+            self._worker.stop()
 
     return _AHT
 
