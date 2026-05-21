@@ -88,4 +88,19 @@ Suchraum: base_ch (8/16/32), lr (1e-4 bis 1e-2), batch_size (8/16/32).
 
 **Button-Reihenfolge im Aufnahme-Dialog:** ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen
 
+### Live-Fortschrittsanzeige
+
+Ein Dialogfenster zeigt den Verlauf der Suche:
+
+- **Fortschrittsbalken** — Versuch X / Gesamt
+- **Bester Threshold** — aktuell niedrigster Rekonstruktionsfehler
+- **Scrollendes Log** — eine Zeile pro Versuch mit Parametern und Ergebnis
+
+```
+[Trial  1/10]  base_ch=16  lr=1.2341e-03  batch=16  →  Threshold: 0.01234  ★ Neu bestes!
+[Trial  2/10]  base_ch=32  lr=5.6780e-03  batch= 8  →  Threshold: 0.01891
+```
+
+Ein **★** markiert jeden neuen Bestwert. Nach Abschluss: *Schließen* oder Parameter direkt übernehmen.
+
 > ⚠️ `pip install optuna`

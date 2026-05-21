@@ -25,6 +25,22 @@ CNN-Modell trainieren – lokal oder auf GPU-Server via SSH.
 
 Schaltfläche **⚙ Hyperparameter-Suche…** klicken (`pip install optuna` erforderlich).
 Optuna testet automatisch Kombinationen aus Lernrate, Batch-Größe, Architektur und Optimizer.
+
+### Live-Fortschrittsanzeige
+
+Während die Suche läuft, öffnet sich ein Dialogfenster mit:
+
+- **Fortschrittsbalken** — Versuch X / Gesamt
+- **Status-Zeile** — aktuelle beste Val-Accuracy
+- **Scrollendes Log** — eine Zeile pro abgeschlossenem Versuch mit Parametern und Ergebnis
+
+```
+[Trial  1/20]  lr=3.2414e-03  batch=16  model=resnet18  opt=adam  →  Acc: 84.21%  ★ Neu bestes!
+[Trial  2/20]  lr=8.1450e-04  batch=32  model=resnet50  opt=sgd   →  Acc: 79.05%
+```
+
+Ein **★** markiert jeden neuen Bestwert. Der Button wechselt nach Abschluss von *Abbrechen* zu *Schließen*.
+
 Beste Parameter werden direkt in die Trainings-Konfiguration übernommen.
 
 ## Training starten & überwachen

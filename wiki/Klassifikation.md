@@ -20,6 +20,8 @@ Ensemble:** mehrere Modelle per *+ Modell hinzufügen* kombinieren für stabiler
 **2 – Bildordner wählen****
 *Ordner…* → Ordner mit neuen Bildern wählen.
 
+**Unterordner einschließen** (Checkbox): Scannt den gewählten Überordner **rekursiv** — alle Bilder in allen Unterordnern werden klassifiziert. Der Dateiname in der Ergebnistabelle zeigt dann `Unterordner/Dateiname`, sodass der Ursprung jedes Bildes klar erkennbar ist.
+
 TTA (Test-Time Augmentation):** Spinner auf 3–5 → mehrere augmentierte Versionen
 je Bild, Durchschnitt = genauere Ergebnisse bei Grenzfällen.
 

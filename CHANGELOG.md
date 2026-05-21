@@ -4,6 +4,26 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.3] – 2026-05-21
+
+### Added
+- **HPT Live-Log-Dialog** — `gui/widgets/hpt_progress_dialog.py`: `HptProgressDialog` ersetzt den einfachen `QProgressDialog` bei der Hyperparameter-Suche. Zeigt Fortschrittsbalken, Status-Zeile (beste Val-Acc / Threshold) und ein scrollendes Monospace-Log mit einer Zeile pro Optuna-Trial. Jede Zeile enthält alle ausprobierter Parameter und das Ergebnis; ein **★** markiert neue Bestmarken. Button wechselt von *Abbrechen* zu *Schließen* nach Abschluss.
+- **Rekursive Unterordner-Klassifikation** — `core/inference.py` `predict_folder()` hat neuen Parameter `recursive=False`. Bei `recursive=True` wird `os.walk()` verwendet; der Dateiname in der Ergebnistabelle zeigt `Unterordner/Dateiname`. `InferencePage` erhält Checkbox **"Unterordner einschließen"** im Eingabe-Panel.
+
+### Fixed
+- **HPT Stop-Fehler** (`RuntimeError: Study.stop is supposed to be invoked inside an objective function`) — `HPTWorker` und `AnomalyHPTWorker` nutzen jetzt `threading.Event`; `stop()` setzt das Event, `objective()` prüft es und ruft `study.stop()` aus dem gültigen Kontext auf.
+- **HPT GC-Crash** (`QThread: Destroyed while thread is still running`) — `HPTThread` und `AnomalyHPTThread` werden jetzt als `self._hpt_thread` / `self._ae_hpt_thread` gehalten um vorzeitige Python-GC zu verhindern.
+- **HPT `study.best_value` ValueError** — Aufruf von `study.best_value` im `finally`-Block während der Trial noch läuft warf `ValueError('No trials are completed yet.')`. Ersetzt durch `self._best_val_seen` welcher bereits im selben Block aktualisiert wird.
+- **Rekursives Bilder-Laden** — `DataPage._load_images()` und `_on_files_dropped()` nutzen `os.walk()` statt `os.listdir()`. Unterordner werden automatisch eingeschlossen.
+- **Unterordner-Anzeige im Labeling** — `LazyThumbnailList` zeigt `Unterordner/Dateiname` wenn Bilder aus Unterordnern geladen wurden.
+
+### Changed
+- `AnomalyHPTThread` erhält `stop()`-Methode (fehlte bisher).
+- `HPTThread` und `AnomalyHPTThread` erhalten `log = Signal(str)` für per-Trial-Nachrichten.
+- Dokumentation: Training, Klassifikation, Daten, Kamera-Videoanalyse aktualisiert.
+
+---
+
 ## [2.0.0] – 2026-05-20
 
 ### Added

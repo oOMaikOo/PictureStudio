@@ -11,11 +11,13 @@ Bilder laden, Datensatz analysieren, Annotationen exportieren.
 ## Bilder laden
 
 **Bilder laden…****
-Wähle einen Ordner – alle `.jpg .png .bmp .tiff .webp` Dateien werden hinzugefügt.
+Wähle einen Ordner – alle `.jpg .png .bmp .tiff .webp` Dateien werden **rekursiv aus allen Unterordnern** geladen.
 
-Alternativ: Bilder direkt ins Fenster ziehen (Drag & Drop).
+Alternativ: Bilder oder Ordner direkt ins Fenster ziehen (Drag & Drop – Unterordner ebenfalls rekursiv).
 
 Bilder werden nicht kopiert, der Pfad wird gespeichert.
+
+> 💡 Im Labeling-Reiter wird der Dateiname als **`Unterordner/Dateiname`** angezeigt, damit die Herkunft jedes Bildes auf einen Blick erkennbar ist.
 
 Video importieren…****
 Video-Datei (MP4, AVI, MOV, MKV, WebM) wählen.
