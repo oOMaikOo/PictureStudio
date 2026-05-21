@@ -1846,16 +1846,21 @@ class CameraCaptureDialog(QDialog):
         prog.show()
 
         hpt = AnomalyHPTThread(self._detector, n_trials=n_trials, parent=self)
+        # Keep a strong Python reference so the thread is not GC'd while running.
+        self._ae_hpt_thread = hpt
 
         hpt.progress.connect(
             lambda cur, tot, val: prog.update_progress(cur, tot, f"Bester Threshold: {val:.5f}")
         )
         hpt.log.connect(prog.append_log)
 
-        def _on_done(result: dict) -> None:
-            prog.set_done()
+        def _ae_hpt_cleanup() -> None:
+            self._ae_hpt_thread = None
             self._ae_hpt_btn.setEnabled(True)
 
+        def _on_done(result: dict) -> None:
+            _ae_hpt_cleanup()
+            prog.set_done()
             lines = [
                 f"base_ch:    {result['base_ch']}",
                 f"lr:         {result['lr']:.6f}",
@@ -1872,8 +1877,8 @@ class CameraCaptureDialog(QDialog):
                 self._apply_ae_hpt_params(result)
 
         def _on_error(msg: str) -> None:
+            _ae_hpt_cleanup()
             prog.close()
-            self._ae_hpt_btn.setEnabled(True)
             QMessageBox.critical(self, "HPT-Fehler", msg)
 
         hpt.finished.connect(_on_done)

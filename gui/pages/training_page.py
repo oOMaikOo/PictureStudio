@@ -714,13 +714,21 @@ class TrainingPage(QWidget):
             device=dev_combo.currentText(),
             parent=self,
         )
+        # Keep a strong Python reference so the thread is not GC'd while running.
+        self._hpt_thread = hpt
+        self.hpt_btn.setEnabled(False)
 
         hpt.progress.connect(
             lambda cur, tot, val: prog.update_progress(cur, tot, f"Beste Val-Acc: {val*100:.2f}%")
         )
         hpt.log.connect(prog.append_log)
 
+        def _hpt_cleanup() -> None:
+            self._hpt_thread = None
+            self.hpt_btn.setEnabled(True)
+
         def _on_hpt_done(result: dict) -> None:
+            _hpt_cleanup()
             prog.set_done()
             params = result.get("best_params", {})
             best = result.get("best_value", 0.0)
@@ -734,6 +742,7 @@ class TrainingPage(QWidget):
                 self._apply_hpt_params(params)
 
         def _on_hpt_error(msg: str) -> None:
+            _hpt_cleanup()
             prog.close()
             QMessageBox.critical(self, "HPT-Fehler", msg)
 
