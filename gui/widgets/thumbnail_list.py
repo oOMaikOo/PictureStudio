@@ -98,18 +98,21 @@ class LazyThumbnailList(QListWidget):
         self._pool.setMaxThreadCount(4)
         self._items: Dict[str, QListWidgetItem] = {}   # path -> item
         self._cache: _LRUPixmapCache = _LRUPixmapCache(500)
+        self._pending: set = set()
         self._root_dir: Optional[str] = None           # base dir for relative display names
+
+        self.setIconSize(QSize(thumb_size, thumb_size * 3 // 4))
+        self.setSpacing(2)
+        self.setResizeMode(QListWidget.Adjust)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.itemSelectionChanged.connect(self._on_selection_changed)
 
     def set_root_dir(self, path: Optional[str]) -> None:
         """Set the root directory used to compute relative subfolder display names."""
         self._root_dir = path
 
     def _display_name(self, image_path: str) -> str:
-        """Return the display name for *image_path*.
-
-        Shows 'subfolder/filename' when the image lives in a subfolder of the
-        root dir, or just 'filename' when at the root level or no root is set.
-        """
+        """Return 'subfolder/filename' when inside a subfolder, else just 'filename'."""
         fname = os.path.basename(image_path)
         if self._root_dir:
             try:
@@ -119,13 +122,6 @@ class LazyThumbnailList(QListWidget):
             except ValueError:
                 pass  # different drive on Windows
         return fname
-        self._pending: set = set()
-
-        self.setIconSize(QSize(thumb_size, thumb_size * 3 // 4))
-        self.setSpacing(2)
-        self.setResizeMode(QListWidget.Adjust)
-        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self.itemSelectionChanged.connect(self._on_selection_changed)
 
     # ------------------------------------------------------------------ public
 
