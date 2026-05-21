@@ -88,8 +88,8 @@ class DataPage(QWidget):
         load_btn.setToolTip(
             "Ordner mit Bildern auswählen.\n"
             "Unterstützte Formate: JPG, PNG, BMP, TIFF, WebP.\n"
-            "Alle Bilder im Ordner werden zum Projekt hinzugefügt.\n"
-            "Tipp: Bilder per Drag & Drop ins Fenster ziehen geht auch."
+            "Alle Bilder im Ordner UND in Unterordnern werden geladen.\n"
+            "Tipp: Bilder oder Ordner per Drag & Drop ins Fenster ziehen geht auch."
         )
         load_btn.clicked.connect(self._load_images)
         cv.addWidget(load_btn)
@@ -257,25 +257,42 @@ class DataPage(QWidget):
             self.images_loaded.emit(added)
 
     def _on_files_dropped(self, paths: list) -> None:
-        """Handle image files dropped onto the widget; add them to the project."""
+        """Handle files/folders dropped onto the widget; scan subfolders recursively."""
         if not self._check_project():
             return
+        from utils.config import IMAGE_FORMATS
         added = 0
+        total = 0
+        first_dir = None
         for path in paths:
-            if self.project.add_image(path):
-                added += 1
-        if added and paths:
-            first_dir = os.path.dirname(paths[0])
+            if os.path.isdir(path):
+                # Dropped a folder → scan recursively
+                if first_dir is None:
+                    first_dir = path
+                for root, _dirs, files in os.walk(path):
+                    for fname in sorted(files):
+                        if os.path.splitext(fname)[1].lower() in IMAGE_FORMATS:
+                            total += 1
+                            if self.project.add_image(os.path.join(root, fname)):
+                                added += 1
+            else:
+                if os.path.splitext(path)[1].lower() in IMAGE_FORMATS:
+                    total += 1
+                    if first_dir is None:
+                        first_dir = os.path.dirname(path)
+                    if self.project.add_image(path):
+                        added += 1
+        if added and first_dir:
             self.project.config.image_dir = first_dir
-        QMessageBox.information(
-            self, "Bilder per Drag & Drop geladen",
-            f"{added} neue Bilder hinzugefügt."
-            + (f"\n{len(paths) - added} bereits im Projekt." if added < len(paths) else "")
-        )
+        already = total - added
+        msg = f"{added} neue Bilder hinzugefügt."
+        if already:
+            msg += f"\n{already} bereits im Projekt."
+        QMessageBox.information(self, "Bilder per Drag & Drop geladen", msg)
         self.images_loaded.emit(added)
 
     def _load_images(self) -> None:
-        """Open a folder chooser and add all supported image files to the project."""
+        """Open a folder chooser and add all supported image files recursively."""
         if not self._check_project():
             return
         folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
@@ -283,15 +300,21 @@ class DataPage(QWidget):
             return
         from utils.config import IMAGE_FORMATS
         added = 0
-        for fname in sorted(os.listdir(folder)):
-            if os.path.splitext(fname)[1].lower() in IMAGE_FORMATS:
-                path = os.path.join(folder, fname)
-                if self.project.add_image(path):
-                    added += 1
+        total = 0
+        for root, _dirs, files in os.walk(folder):
+            for fname in sorted(files):
+                if os.path.splitext(fname)[1].lower() in IMAGE_FORMATS:
+                    total += 1
+                    path = os.path.join(root, fname)
+                    if self.project.add_image(path):
+                        added += 1
         if added:
             self.project.config.image_dir = folder
-        QMessageBox.information(self, "Bilder geladen",
-                                f"{added} neue Bilder hinzugefügt aus:\n{folder}")
+        already = total - added
+        msg = f"{added} neue Bilder hinzugefügt aus:\n{folder}"
+        if already:
+            msg += f"\n{already} bereits im Projekt."
+        QMessageBox.information(self, "Bilder geladen", msg)
         self.images_loaded.emit(added)
 
     # ------------------------------------------------------------------ analysis
