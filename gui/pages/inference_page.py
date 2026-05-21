@@ -22,7 +22,8 @@ class InferenceThread(QThread):
     finished = Signal(list)
     error    = Signal(str)
 
-    def __init__(self, inferencer, folder: str, top_k: int, roi_templates: list, tta_passes: int = 1):
+    def __init__(self, inferencer, folder: str, top_k: int, roi_templates: list,
+                 tta_passes: int = 1, recursive: bool = False):
         """
         Parameters
         ----------
@@ -31,6 +32,7 @@ class InferenceThread(QThread):
         top_k         : Number of top predictions to include per image.
         roi_templates : Optional ROI crop templates applied to every image.
         tta_passes    : Test-time augmentation passes (1 = disabled).
+        recursive     : When True, scan all subfolders recursively.
         """
         super().__init__()
         self.inferencer = inferencer
@@ -38,6 +40,7 @@ class InferenceThread(QThread):
         self.top_k = top_k
         self.roi_templates = roi_templates
         self.tta_passes = tta_passes
+        self.recursive = recursive
 
     def run(self) -> None:
         """Run folder inference and emit ``finished`` with the result list, or ``error``."""
@@ -48,6 +51,7 @@ class InferenceThread(QThread):
                 top_k=self.top_k,
                 progress_callback=lambda c, t: self.progress.emit(c, t),
                 tta_passes=self.tta_passes,
+                recursive=self.recursive,
             )
             self.finished.emit(results)
         except Exception as exc:
@@ -179,6 +183,12 @@ class InferencePage(QWidget):
         fb.clicked.connect(self._select_folder)
         folder_row.addWidget(fb)
         iv.addLayout(folder_row)
+        self._recursive_cb = QCheckBox("Unterordner einschließen")
+        self._recursive_cb.setToolTip(
+            "Scannt den gewählten Ordner und alle Unterordner rekursiv.\n"
+            "Der Dateiname in der Tabelle zeigt 'Unterordner/Dateiname'."
+        )
+        iv.addWidget(self._recursive_cb)
         self.classify_btn = QPushButton("Alle Bilder klassifizieren")
         self.classify_btn.setStyleSheet("background:#3498DB;color:white;font-weight:bold;padding:6px;")
         self.classify_btn.clicked.connect(self._classify_folder)
@@ -489,6 +499,7 @@ class InferencePage(QWidget):
         self._thread = InferenceThread(
             self.inferencer, folder, self.topk_spin.value(), roi_templates,
             tta_passes=self.tta_spin.value(),
+            recursive=self._recursive_cb.isChecked(),
         )
         self._thread.progress.connect(lambda c, t: self.progress_bar.setValue(int(c / t * 100)))
         self._thread.finished.connect(self._on_finished)

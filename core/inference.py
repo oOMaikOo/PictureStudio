@@ -162,26 +162,39 @@ class Inferencer:
         top_k: int = 3,
         progress_callback=None,
         tta_passes: int = 1,
+        recursive: bool = False,
     ) -> List[Dict]:
-        """Classify all images in a folder. Optional ROI templates applied per image."""
+        """Classify all images in a folder (and optionally all subfolders)."""
         from datetime import datetime
 
-        files = sorted([
-            f for f in os.listdir(folder_path)
-            if os.path.splitext(f)[1].lower() in IMAGE_FORMATS
-        ])
+        if recursive:
+            file_pairs: List[tuple] = []
+            for root, _dirs, files in os.walk(folder_path):
+                for f in sorted(files):
+                    if os.path.splitext(f)[1].lower() in IMAGE_FORMATS:
+                        full = os.path.join(root, f)
+                        try:
+                            rel_dir = os.path.relpath(root, folder_path)
+                            display = f if rel_dir == "." else f"{rel_dir}/{f}"
+                        except ValueError:
+                            display = f
+                        file_pairs.append((display, full))
+            file_pairs.sort(key=lambda x: x[0])
+        else:
+            file_pairs = [
+                (f, os.path.join(folder_path, f))
+                for f in sorted(os.listdir(folder_path))
+                if os.path.splitext(f)[1].lower() in IMAGE_FORMATS
+            ]
+
         results = []
+        roi = roi_templates[0].get("roi") if roi_templates else None
 
-        for i, fname in enumerate(files):
-            img_path = os.path.join(folder_path, fname)
-            roi = None
-            if roi_templates:
-                roi = roi_templates[0].get("roi") if roi_templates else None
-
+        for i, (display_name, img_path) in enumerate(file_pairs):
             try:
                 pred = self.predict_image(img_path, roi=roi, top_k=top_k, tta_passes=tta_passes)
                 results.append({
-                    "filename": fname,
+                    "filename": display_name,
                     "path": img_path,
                     "predicted_label": pred["predicted_label"],
                     "confidence": pred["confidence"],
@@ -194,9 +207,9 @@ class Inferencer:
                     "error": None,
                 })
             except Exception as exc:
-                log.warning("Fehler bei %s: %s", fname, exc)
+                log.warning("Fehler bei %s: %s", display_name, exc)
                 results.append({
-                    "filename": fname,
+                    "filename": display_name,
                     "path": img_path,
                     "predicted_label": "ERROR",
                     "confidence": 0.0,
@@ -210,7 +223,7 @@ class Inferencer:
                 })
 
             if progress_callback:
-                progress_callback(i + 1, len(files))
+                progress_callback(i + 1, len(file_pairs))
 
         return results
 
