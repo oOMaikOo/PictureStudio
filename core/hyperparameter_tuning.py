@@ -111,7 +111,7 @@ class HPTWorker:
                     )
                     self._log_callback(line)
                 if self._progress_callback:
-                    best = study.best_value if study.trials else 0.0
+                    best = max(self._best_val_seen, 0.0)
                     self._progress_callback(trial.number + 1, self._n_trials, best)
             return val_acc
 
