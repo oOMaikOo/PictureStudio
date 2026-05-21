@@ -98,6 +98,27 @@ class LazyThumbnailList(QListWidget):
         self._pool.setMaxThreadCount(4)
         self._items: Dict[str, QListWidgetItem] = {}   # path -> item
         self._cache: _LRUPixmapCache = _LRUPixmapCache(500)
+        self._root_dir: Optional[str] = None           # base dir for relative display names
+
+    def set_root_dir(self, path: Optional[str]) -> None:
+        """Set the root directory used to compute relative subfolder display names."""
+        self._root_dir = path
+
+    def _display_name(self, image_path: str) -> str:
+        """Return the display name for *image_path*.
+
+        Shows 'subfolder/filename' when the image lives in a subfolder of the
+        root dir, or just 'filename' when at the root level or no root is set.
+        """
+        fname = os.path.basename(image_path)
+        if self._root_dir:
+            try:
+                rel = os.path.relpath(os.path.dirname(image_path), self._root_dir)
+                if rel and rel != ".":
+                    return f"{rel}/{fname}"
+            except ValueError:
+                pass  # different drive on Windows
+        return fname
         self._pending: set = set()
 
         self.setIconSize(QSize(thumb_size, thumb_size * 3 // 4))
@@ -118,8 +139,8 @@ class LazyThumbnailList(QListWidget):
         """
         if image_path in self._items:
             return
-        fname = os.path.basename(image_path)
-        item = QListWidgetItem(fname + (f"\n[{label}]" if label else ""))
+        dname = self._display_name(image_path)
+        item = QListWidgetItem(dname + (f"\n[{label}]" if label else ""))
         item.setData(Qt.UserRole, image_path)
         item.setData(Qt.UserRole + 1, label)
         if label_color:
@@ -139,8 +160,8 @@ class LazyThumbnailList(QListWidget):
         """Update the displayed label text and foreground colour for *image_path*."""
         item = self._items.get(image_path)
         if item:
-            fname = os.path.basename(image_path)
-            item.setText(fname + (f"\n[{label}]" if label else ""))
+            dname = self._display_name(image_path)
+            item.setText(dname + (f"\n[{label}]" if label else ""))
             item.setData(Qt.UserRole + 1, label)
             if color:
                 item.setForeground(QColor(color))
@@ -201,7 +222,7 @@ class LazyThumbnailList(QListWidget):
         for path, item in self._items.items():
             item_label = item.data(Qt.UserRole + 1) or ""
             hide = False
-            if q and q not in os.path.basename(path).lower() and q not in item_label.lower():
+            if q and q not in self._display_name(path).lower() and q not in item_label.lower():
                 hide = True
             if label_set is not None:
                 if item_label not in label_set:

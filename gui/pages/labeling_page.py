@@ -766,6 +766,7 @@ class LabelingPage(QWidget):
         self.thumb_list.clear_all()
         if not self.project:
             return
+        self.thumb_list.set_root_dir(self.project.config.image_dir or None)
         for img_path in self.project.images:
             if self.project.is_multi_label:
                 lbls = self.project.get_image_multi_labels(img_path)
