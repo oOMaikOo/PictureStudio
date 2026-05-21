@@ -1838,21 +1838,22 @@ class CameraCaptureDialog(QDialog):
         if not ok:
             return
 
+        from gui.widgets.hpt_progress_dialog import HptProgressDialog
+
         self._ae_hpt_btn.setEnabled(False)
-        prog = QProgressDialog("Hyperparameter-Suche läuft…", "Abbrechen", 0, n_trials, self)
-        prog.setWindowTitle("HPT — Anomalie-Autoencoder")
-        prog.setMinimumDuration(0)
-        prog.setValue(0)
+        prog = HptProgressDialog(n_trials, title="HPT — Anomalie-Autoencoder", parent=self)
+        prog.setModal(True)
+        prog.show()
 
         hpt = AnomalyHPTThread(self._detector, n_trials=n_trials, parent=self)
 
-        hpt.progress.connect(lambda cur, tot, val: (
-            prog.setValue(cur),
-            prog.setLabelText(f"Versuch {cur}/{tot}  —  Bester Wert: {val:.5f}"),
-        ))
+        hpt.progress.connect(
+            lambda cur, tot, val: prog.update_progress(cur, tot, f"Bester Threshold: {val:.5f}")
+        )
+        hpt.log.connect(prog.append_log)
 
         def _on_done(result: dict) -> None:
-            prog.close()
+            prog.set_done()
             self._ae_hpt_btn.setEnabled(True)
 
             lines = [
@@ -1877,7 +1878,7 @@ class CameraCaptureDialog(QDialog):
 
         hpt.finished.connect(_on_done)
         hpt.error.connect(_on_error)
-        prog.canceled.connect(hpt.terminate)
+        prog.rejected.connect(hpt.stop)
         hpt.start()
 
     def _apply_ae_hpt_params(self, params: dict) -> None:

@@ -24,14 +24,17 @@ class HPTWorker:
         timeout: float = 300.0,
         device: str = "cpu",
         progress_callback: Optional[Callable[[int, int, float], None]] = None,
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         self._project = project
         self._n_trials = n_trials
         self._timeout = timeout
         self._device = device
         self._progress_callback = progress_callback
+        self._log_callback = log_callback
         self._study = None
         self._stop_event = threading.Event()
+        self._best_val_seen = -float("inf")
 
     def run(self) -> dict:
         """
@@ -51,6 +54,7 @@ class HPTWorker:
         from core.training import TrainingWorker
 
         self._stop_event.clear()
+        self._best_val_seen = -float("inf")
         study = optuna.create_study(direction="maximize")
         self._study = study
 
@@ -81,20 +85,35 @@ class HPTWorker:
                     "scale": False,
                 },
             }
+            val_acc = 0.0
             try:
                 import tempfile
                 save_dir = tempfile.mkdtemp(prefix="hpt_trial_")
                 worker = TrainingWorker(self._project, cfg, save_dir)
                 result = worker.run()
-                val_acc = result.get("metrics", {}).get("accuracy", 0.0)
-                return float(val_acc)
+                val_acc = float(result.get("metrics", {}).get("accuracy", 0.0))
             except Exception as exc:
                 log.warning("HPT Trial %d fehlgeschlagen: %s", trial.number, exc)
-                return 0.0
             finally:
+                is_best = val_acc > self._best_val_seen
+                if is_best:
+                    self._best_val_seen = val_acc
+                if self._log_callback:
+                    p = trial.params
+                    line = (
+                        f"[Trial {trial.number + 1:>3}/{self._n_trials}]"
+                        f"  lr={p.get('lr', 0):.4e}"
+                        f"  batch={p.get('batch_size', '?')}"
+                        f"  model={p.get('model_type', '?')}"
+                        f"  opt={p.get('optimizer', '?')}"
+                        f"  →  Acc: {val_acc * 100:.2f}%"
+                        + ("  ★ Neu bestes!" if is_best else "")
+                    )
+                    self._log_callback(line)
                 if self._progress_callback:
                     best = study.best_value if study.trials else 0.0
                     self._progress_callback(trial.number + 1, self._n_trials, best)
+            return val_acc
 
         study.optimize(objective, n_trials=self._n_trials, timeout=self._timeout)
 
@@ -126,6 +145,7 @@ def _make_hpt_thread():
         progress = _Signal(int, int, float)  # trial_num, total_trials, best_value
         finished = _Signal(dict)
         error = _Signal(str)
+        log = _Signal(str)
 
         def __init__(self, project, n_trials: int = 20, timeout: float = 300.0,
                      device: str = "cpu", parent=None):
@@ -133,6 +153,7 @@ def _make_hpt_thread():
             self._worker = HPTWorker(
                 project, n_trials, timeout, device,
                 progress_callback=self._on_progress,
+                log_callback=self.log.emit,
             )
 
         def _on_progress(self, trial_num: int, total: int, best: float) -> None:
@@ -190,12 +211,15 @@ class AnomalyHPTWorker:
         n_trials: int = 10,
         epochs_per_trial: int = 15,
         progress_callback=None,
+        log_callback: Optional[Callable[[str], None]] = None,
     ):
         self._detector = detector
         self._n_trials = n_trials
         self._epochs_per_trial = epochs_per_trial
         self._progress_callback = progress_callback
+        self._log_callback = log_callback
         self._stop_event = threading.Event()
+        self._best_val_seen = float("inf")
 
     def run(self) -> dict:
         """Run the study and return best params dict."""
@@ -214,10 +238,9 @@ class AnomalyHPTWorker:
             raise ValueError("Keine Frames gesammelt — zuerst Frames aufnehmen.")
 
         self._stop_event.clear()
-        best_val = float("inf")
+        self._best_val_seen = float("inf")
 
         def objective(trial):
-            nonlocal best_val
             if self._stop_event.is_set():
                 study.stop()
                 raise optuna.exceptions.TrialPruned()
@@ -225,22 +248,30 @@ class AnomalyHPTWorker:
             lr = trial.suggest_float("lr", 1e-4, 1e-2, log=True)
             batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
 
-            # Build a fresh detector with these params and the same collected frames
             det = AnomalyDetector(base_ch=base_ch)
             for f in frames:
                 det._train_frames.append(f)
 
-            thr = det.train(
+            val_loss = det.train(
                 epochs=self._epochs_per_trial,
                 batch_size=batch_size,
                 lr=lr,
             )
-            # Use threshold as proxy for reconstruction quality (lower = better fit)
-            val_loss = thr
-            if val_loss < best_val:
-                best_val = val_loss
+            is_best = val_loss < self._best_val_seen
+            if is_best:
+                self._best_val_seen = val_loss
+            if self._log_callback:
+                line = (
+                    f"[Trial {trial.number + 1:>3}/{self._n_trials}]"
+                    f"  base_ch={base_ch}"
+                    f"  lr={lr:.4e}"
+                    f"  batch={batch_size}"
+                    f"  →  Threshold: {val_loss:.5f}"
+                    + ("  ★ Neu bestes!" if is_best else "")
+                )
+                self._log_callback(line)
             if self._progress_callback:
-                self._progress_callback(trial.number + 1, self._n_trials, best_val)
+                self._progress_callback(trial.number + 1, self._n_trials, self._best_val_seen)
             return val_loss
 
         study = optuna.create_study(direction="minimize")
@@ -267,12 +298,14 @@ def _make_anomaly_hpt_thread():
         progress = _Signal(int, int, float)   # trial, total, best_value
         finished = _Signal(dict)
         error = _Signal(str)
+        log = _Signal(str)
 
         def __init__(self, detector, n_trials: int = 10, epochs_per_trial: int = 15, parent=None):
             super().__init__(parent)
             self._worker = AnomalyHPTWorker(
                 detector, n_trials, epochs_per_trial,
                 progress_callback=self._emit_progress,
+                log_callback=self.log.emit,
             )
 
         def _emit_progress(self, trial: int, total: int, best: float) -> None:

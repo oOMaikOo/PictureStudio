@@ -674,8 +674,9 @@ class TrainingPage(QWidget):
 
         from PySide6.QtWidgets import (
             QDialog, QVBoxLayout, QFormLayout, QSpinBox,
-            QComboBox, QDialogButtonBox, QProgressDialog,
+            QComboBox, QDialogButtonBox,
         )
+        from gui.widgets.hpt_progress_dialog import HptProgressDialog
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Hyperparameter-Suche konfigurieren")
@@ -702,10 +703,9 @@ class TrainingPage(QWidget):
             return
 
         n_trials = n_spin.value()
-        prog = QProgressDialog("Hyperparameter-Suche läuft…", "Abbrechen", 0, n_trials, self)
-        prog.setWindowTitle("Hyperparameter-Suche")
-        prog.setWindowModality(Qt.WindowModal)
-        prog.setValue(0)
+        prog = HptProgressDialog(n_trials, parent=self)
+        prog.setModal(True)
+        prog.show()
 
         hpt = HPTThread(
             project=self.project,
@@ -715,13 +715,13 @@ class TrainingPage(QWidget):
             parent=self,
         )
 
-        hpt.progress.connect(lambda cur, tot, val: (
-            prog.setLabelText(f"Versuch {cur}/{tot}  —  beste Val-Acc: {val*100:.2f}%"),
-            prog.setValue(cur),
-        ))
+        hpt.progress.connect(
+            lambda cur, tot, val: prog.update_progress(cur, tot, f"Beste Val-Acc: {val*100:.2f}%")
+        )
+        hpt.log.connect(prog.append_log)
 
         def _on_hpt_done(result: dict) -> None:
-            prog.close()
+            prog.set_done()
             params = result.get("best_params", {})
             best = result.get("best_value", 0.0)
             lines = [f"Beste Val-Accuracy: {best*100:.2f}%\n", "Beste Parameter:"]
@@ -733,12 +733,14 @@ class TrainingPage(QWidget):
             if reply == QMessageBox.Yes:
                 self._apply_hpt_params(params)
 
+        def _on_hpt_error(msg: str) -> None:
+            prog.close()
+            QMessageBox.critical(self, "HPT-Fehler", msg)
+
         hpt.finished.connect(_on_hpt_done)
-        hpt.error.connect(lambda e: (prog.close(),
-                                     QMessageBox.critical(self, "HPT-Fehler", e)))
-        prog.canceled.connect(hpt.stop)
+        hpt.error.connect(_on_hpt_error)
+        prog.rejected.connect(hpt.stop)
         hpt.start()
-        prog.exec()
 
     def _apply_hpt_params(self, params: dict) -> None:
         """Copy best HPT parameters into the UI controls."""
