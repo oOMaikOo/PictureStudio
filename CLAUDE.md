@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source .venv/bin/activate
 python main.py
 
-# Run all tests (705 pass; integration tests take ~30 s each)
+# Run all tests (696 pass, 3 skipped; integration tests take ~30 s each)
 .venv/bin/python -m pytest tests/ -v
 
 # Skip slow ML integration tests
@@ -23,9 +23,10 @@ python main.py
 python3 -c "import ast; ast.parse(open('gui/pages/camera_page.py').read()); print('OK')"
 
 # Run the standalone monitor daemon
-python monitor.py --model models/anomalie.pth
-python monitor.py --setup          # multi-channel setup wizard (web UI on :8765)
-python monitor.py --channels cfg.json  # load pre-configured channels
+python monitor.py                      # interactive camera scan + browser setup wizard
+python monitor.py --model anomalie.pth
+python monitor.py --setup             # multi-channel setup wizard (web UI on :8765)
+python monitor.py --channels cfg.json # load pre-configured channels
 ```
 
 Integration tests (`test_integration.py`) train a small model on 12 synthetic images on CPU and take ~10–30 seconds each. All other tests run in milliseconds.
@@ -80,9 +81,15 @@ All label/ROI changes go through `QUndoStack` via command objects in `gui/labeli
 
 Commands: `SetImageLabelCommand`, `BulkSetImageLabelCommand`, `SetMultiLabelsCommand`, `SetLabelFlagCommand`, `AddROICommand`, `DeleteROICommand`, `AssignROILabelCommand`, `MoveROICommand`.
 
+### Data loading: `gui/pages/data_page.py`
+
+`_load_images()` uses `os.walk()` to scan the selected folder **and all subfolders** recursively. Drag & drop also handles dropped folders recursively — no need to flatten image directories before import. Train/test split is applied automatically at training time; users do not pre-separate images.
+
 ### Classification training pipeline
 
 `TrainingPage` wraps `TrainingWorker` (plain class) inside `TrainingThread(QThread)`. Multi-label mode detected in two places: `create_datasets()` in `core/dataset.py` and `TrainingWorker.run()` (switches loss to `BCEWithLogitsLoss`).
+
+Button order on `TrainingPage`: ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen.
 
 SSH remote training: `RemoteTrainingThread` (`core/remote_training.py`) zips images via `core/remote_ssh.py`, uploads, runs `scripts/remote_train.py` (self-contained, no local imports), streams logs, downloads checkpoint.
 
@@ -101,6 +108,8 @@ The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPag
 
 **HPT for anomaly**: `AnomalyHPTWorker` + `AnomalyHPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `base_ch` (8/16/32), `lr`, `batch_size`. Triggered from `CameraCaptureDialog`.
 
+**Grad-CAM**: `core/gradcam.py` — `compute_gradcam_anomaly(detector, frame_bgr)` targets `model.encoder[4]`, returns BGR overlay. Available as checkbox in `CameraPage` and `CameraCaptureDialog`.
+
 ### Camera and preprocessing
 
 `core/camera.py` provides:
@@ -109,11 +118,11 @@ The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPag
 - `apply_frame_filter(frame, name)` — returns BGR frame after `"grayscale"` / `"canny"` / `"sobel"` / `"laplacian"` (or original for `"none"`)
 - `list_usb_cameras()` — enumerates USB cameras; on macOS uses a Swift subprocess for reliable names
 
-`CameraPage` (stack 8) has two GroupBoxes in the left panel added in v2.3.0:
+`CameraPage` (stack 8) has two GroupBoxes in the left panel:
 - **Kamera-Einstellungen** — sliders forwarded live via `set_cam_props()`
-- **Vorverarbeitung** — filter dropdown; settings are passed to `CameraCaptureDialog` on open
+- **Vorverarbeitung** — filter dropdown; settings are passed to `CameraCaptureDialog` as start values on open
 
-`CameraCaptureDialog` (`gui/camera_capture_dialog.py`) is opened from `CameraPage` via "Training & Aufnahme…". It accepts `cam_props=` and `filter_name=` and auto-loads the trained model back into `CameraPage` on close (no confirmation dialog).
+`CameraCaptureDialog` (`gui/camera_capture_dialog.py`) contains its own camera settings sliders and filter dropdown — these are available regardless of which page opens the dialog (DataPage or CameraPage). Button order inside the dialog: ① Hyperparameter-Suche → ② Training starten. After training, model is auto-loaded back into `CameraPage` without a confirmation dialog.
 
 ### Multi-camera
 
@@ -131,12 +140,20 @@ Docker deployment (`core/docker_generator.py`): generates `Dockerfile`, `docker-
 
 ### Standalone monitor daemon: `monitor.py`
 
-Runs without the GUI. Key modes:
+Runs without the GUI. Designed for headless Windows/Linux deployment. Key modes:
+
+- **No arguments**: scans USB cameras via `_discover_cameras()`, shows interactive terminal selection (`_terminal_camera_select()`), auto-opens browser to setup wizard
 - **Normal** (`--model path`): single-camera anomaly detection
 - **Multi-channel** (`--channels cfg.json`): `run_monitor_multi()` with N parallel channels
-- **Setup wizard** (`--setup`): web UI on `--setup-port` (default 8765) for camera preview, ROI drawing, and model deploy (multipart POST); no training on the daemon
+- **Setup wizard** (`--setup`): web UI on `--setup-port` (default 8765) — camera preview (JPEG polling at `/setup/channels/{id}/frame.jpg`), ROI drawing, model deploy via multipart POST; no training on the daemon
+
+The setup wizard web UI exposes `/setup/cameras` (GET) which returns the pre-scanned camera list for one-click channel creation buttons.
+
+On macOS, `cv2.VideoCapture` for the built-in camera needs up to 60 read() calls before the first frame arrives — the `_CameraThread` warmup limit is set accordingly. Camera permission must be granted to Terminal in System Settings → Privacy & Security → Camera.
 
 Embedded REST API (`--api-port`): `GET /api/status`, `/api/scores`, `/api/latest_alarm`, `/api/frame/<file>`, `/dashboard`. Auth via `--api-key`. MQTT publishing via `--mqtt-host`.
+
+Minimal dependencies for monitor-only deployment: `requirements_monitor.txt` (no PySide6, no GUI).
 
 ### REST API: `api/rest_server.py`
 
