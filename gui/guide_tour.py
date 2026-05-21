@@ -58,10 +58,13 @@ TOUR_STEPS = {
          None),
         ("Bilder laden",
          "Klicke 'Bilder laden…' → Ordner wählen.\n"
-         "Alle .jpg, .png, .bmp, .tiff im Ordner\n"
-         "werden automatisch hinzugefügt.\n\n"
-         "Alternativ: Bilder direkt ins Fenster ziehen\n"
-         "(Drag & Drop funktioniert überall in der App).",
+         "Alle .jpg, .png, .bmp, .tiff werden\n"
+         "rekursiv aus allen Unterordnern geladen.\n\n"
+         "Alternativ: Ordner oder Bilder ins Fenster\n"
+         "ziehen (Drag & Drop – Unterordner ebenfalls\n"
+         "rekursiv eingeschlossen).\n\n"
+         "Im Labeling-Reiter erscheint der Dateiname\n"
+         "als 'Unterordner/Dateiname'.",
          "Bilder laden"),
         ("Video importieren",
          "Klicke 'Video importieren…' um ein Video\n"
@@ -166,14 +169,16 @@ TOUR_STEPS = {
          "• Klassenausgleich: bei ungleichen Klassen\n"
          "  (WeightedRandomSampler) aktivieren",
          None),
-        ("Training starten",
+        ("Hyperparameter-Suche & Training starten",
          "Button-Reihenfolge:\n"
          "① Hyperparameter-Suche → ② Training starten → ③ Stoppen\n\n"
-         "Klicke 'Training starten'.\n"
-         "Kurven (Loss, Accuracy) aktualisieren live.\n"
-         "Das beste Checkpoint wird automatisch\n"
-         "gespeichert. Jederzeit abbrechen mit\n"
-         "'Training stoppen'.\n\n"
+         "⚙ Hyperparameter-Suche (optional):\n"
+         "Optuna testet Lernrate, Batch-Größe,\n"
+         "Architektur und Optimizer automatisch.\n"
+         "Ein Live-Log zeigt jeden Versuch mit\n"
+         "Parametern und Ergebnis. ★ = neuer Bestwert.\n\n"
+         "Training starten → Kurven aktualisieren live.\n"
+         "Bestes Checkpoint wird automatisch gespeichert.\n\n"
          "Nach dem Training:\n"
          "• HTML- oder Excel-Bericht erstellen\n"
          "• Modell auf der Modelle-Seite verwalten",
@@ -242,10 +247,12 @@ TOUR_STEPS = {
          "Modell laden"),
         ("Ordner klassifizieren",
          "1. 'Ordner…' → Ordner mit neuen Bildern\n"
+         "   ☑ Unterordner einschließen → scannt\n"
+         "   alle Unterordner rekursiv. Dateiname\n"
+         "   zeigt dann 'Unterordner/Dateiname'.\n"
          "2. TTA (Test-Time Augmentation):\n"
          "   Spinner auf 3–5 → mehrere augmentierte\n"
-         "   Versionen je Bild, Durchschnitt gebildet\n"
-         "   → genauere Ergebnisse bei Grenzfällen\n"
+         "   Versionen je Bild → genauere Ergebnisse\n"
          "3. 'Alle Bilder klassifizieren'\n\n"
          "Farben: Grün >90% | Gelb 70–90% | Rot <70%",
          "Alle Bilder klassifizieren"),
@@ -547,7 +554,9 @@ TOUR_STEPS = {
          None),
         ("Hyperparameter-Suche (Anomalie)",
          "Nach dem Sammeln von Frames: '⚙ Hyperparameter-Suche…' startet eine "
-         "Optuna-Studie die Architektur, Lernrate und Batch-Größe optimiert.\n\n"
+         "Optuna-Studie die Architektur (base_ch), Lernrate und Batch-Größe optimiert.\n\n"
+         "Ein Live-Log-Fenster zeigt jeden Versuch:\n"
+         "base_ch · lr · batch → Threshold  ★ Neu bestes!\n\n"
          "Beste Parameter werden per Klick direkt auf den Autoencoder angewendet.\n\n"
          "Button-Reihenfolge:\n"
          "① Hyperparameter-Suche → ② Training starten → ③ Stoppen",
