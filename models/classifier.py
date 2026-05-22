@@ -38,6 +38,16 @@ def create_model(model_type: str, num_classes: int, pretrained: bool = True):
         model = models.efficientnet_b0(weights=weights_arg)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
 
+    elif model_type == "efficientnet_b3":
+        model = models.efficientnet_b3(weights=weights_arg)
+        model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
+
+    elif model_type == "convnext_tiny":
+        model = models.convnext_tiny(weights=weights_arg)
+        # ConvNeXt head: Sequential(LayerNorm, Flatten, Linear)
+        in_features = model.classifier[2].in_features
+        model.classifier[2] = nn.Linear(in_features, num_classes)
+
     elif model_type == "simple_cnn":
         model = SimpleCNN(num_classes)
 
@@ -91,4 +101,9 @@ def load_checkpoint(model, path: str):
 
 
 def get_available_models():
-    return ["resnet18", "resnet50", "mobilenet_v2", "efficientnet_b0", "simple_cnn"]
+    return [
+        "resnet18", "resnet50", "mobilenet_v2",
+        "efficientnet_b0", "efficientnet_b3",
+        "convnext_tiny",
+        "simple_cnn",
+    ]

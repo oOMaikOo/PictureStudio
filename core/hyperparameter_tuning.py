@@ -13,7 +13,7 @@ class HPTWorker:
     SEARCH_SPACE = {
         "lr": (1e-4, 1e-2, "log"),
         "batch_size": [8, 16, 32],
-        "model_type": ["resnet18", "resnet50", "mobilenetv2", "efficientnet_b0"],
+        "model_type": ["resnet18", "resnet50", "mobilenet_v2", "efficientnet_b0", "efficientnet_b3", "convnext_tiny"],
         "optimizer": ["adam", "sgd"],
     }
 
@@ -66,7 +66,10 @@ class HPTWorker:
                 "learning_rate": trial.suggest_float("lr", 1e-4, 1e-2, log=True),
                 "batch_size": trial.suggest_categorical("batch_size", [8, 16, 32]),
                 "model_type": trial.suggest_categorical(
-                    "model_type", ["resnet18", "resnet50", "mobilenetv2", "efficientnet_b0"]
+                    "model_type", [
+                        "resnet18", "resnet50", "mobilenet_v2",
+                        "efficientnet_b0", "efficientnet_b3", "convnext_tiny",
+                    ]
                 ),
                 "optimizer": trial.suggest_categorical("optimizer", ["adam", "sgd"]),
                 "epochs": 5,

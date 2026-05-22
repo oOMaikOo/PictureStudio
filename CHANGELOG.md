@@ -4,6 +4,18 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.5] – 2026-05-22
+
+### Added
+- **EfficientNet-B3** — `models/classifier.py`: Neue Architektur (~82% ImageNet-Acc, +5% vs B0). Direkt auswählbar in der Training-Seite und im HPT-Suchraum.
+- **ConvNeXt-Tiny** — `models/classifier.py`: Modernste CNN-Architektur (~82% ImageNet-Acc). Besonders gut bei kleinen Datensätzen durch stärkeres Vortraining. Direkt auswählbar in der Training-Seite und im HPT-Suchraum.
+- **HPT-Suchraum erweitert** — `core/hyperparameter_tuning.py`: EfficientNet-B3 und ConvNeXt-Tiny werden bei der Hyperparameter-Suche automatisch mit evaluiert.
+
+### Changed
+- Architektur-Tooltip in der Training-Seite zeigt Empfehlung (★) für EfficientNet-B3 und ConvNeXt-Tiny.
+
+---
+
 ## [2.3.4] – 2026-05-22
 
 ### Added

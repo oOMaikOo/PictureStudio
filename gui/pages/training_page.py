@@ -135,7 +135,10 @@ class TrainingPage(QWidget):
             "• ResNet-18 — schnell, guter Startpunkt, ~11 M Parameter\n"
             "• ResNet-50 — höhere Kapazität, ~25 M Parameter\n"
             "• MobileNetV2 — sehr effizient, gut für CPU-Deployment\n"
-            "• EfficientNet-B0 — bestes Genauigkeits-/Größe-Verhältnis\n"
+            "• EfficientNet-B0 — kompakt, ~77% ImageNet-Acc\n"
+            "• EfficientNet-B3 — deutlich besser als B0, ~82% ImageNet-Acc ★\n"
+            "• ConvNeXt-Tiny — modernste CNN-Architektur, ~82% ImageNet-Acc ★\n"
+            "  Empfehlung: EfficientNet-B3 oder ConvNeXt-Tiny für beste Ergebnisse\n"
             "• SimpleCNN — kein Transfer Learning, ideal für Tests"
         )
         form.addRow("Architektur:", self.model_combo)
