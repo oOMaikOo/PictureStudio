@@ -97,6 +97,8 @@ SSH remote training: `RemoteTrainingThread` (`core/remote_training.py`) zips ima
 
 Hyperparameter search: `HPTWorker` + `HPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `lr`, `batch_size`, `architecture`, `optimizer`. Requires `pip install optuna`.
 
+**Active Learning**: `ActiveLearningSampler` + `ActiveLearningThread` in `core/active_learning.py`. After training, TrainingPage shows a "🔄 Active Learning" tab — runs inference on all unlabeled project images and fills `project.active_learning_queue` with the most uncertain candidates (lowest confidence, below threshold). Review panel is in `LabelingPage` (already existed). Signal chain: `training_page.al_queue_updated` → `main_window._on_al_queue_updated()` → `labeling_page.refresh_al_queue_panel()`.
+
 ### Anomaly detection pipeline
 
 `AnomalyDetector` (`core/anomaly_detector.py`) wraps a `_ConvAutoencoder` (configurable via `base_ch=16`). Key API:

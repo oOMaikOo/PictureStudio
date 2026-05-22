@@ -36,6 +36,7 @@ SECTIONS = [
     ("🔗", "Kontakt & Repository"),   # 20
     ("🎯", "Objekterkennung"),        # 21
     ("📉", "Data Drift"),             # 22
+    ("🔄", "Active Learning"),        # 23
 ]
 
 # Map sidebar page index → section index
@@ -1500,6 +1501,71 @@ Falls OpenCV vorhanden ist, werden Schärfe und Kantendichte präziser berechnet
 <b>KS-Test (mit scipy):</b> Wenn <code>pip install scipy</code> installiert ist,
 kann zusätzlich ein statistischer Kolmogorov-Smirnov-Test durchgeführt werden
 für p-Wert-basierte Auswertung.
+</div>
+"""),
+
+# ── 23  Active Learning ──────────────────────────────────────────────────────
+23: page("""
+<h1>🔄 Active Learning</h1>
+<p>Active Learning reduziert den Labeling-Aufwand drastisch: Das Modell wählt
+selbst, welche Bilder als nächstes gelabelt werden sollen — nämlich genau die,
+bei denen es am unsichersten ist.</p>
+
+<h2>Warum Active Learning?</h2>
+<ul>
+<li>Gleiches Modell, deutlich weniger Labeling-Arbeit</li>
+<li>Keine zufällige Stichprobenauswahl — gezielte Verbesserung der Schwachstellen</li>
+<li>Besonders effektiv bei seltenen Klassen und Grenzfällen</li>
+</ul>
+
+<h2>Workflow</h2>
+
+<div class="step">
+<b>Schritt 1 – Trainieren</b><br>
+Erst ein initiales Modell trainieren (Training-Seite). Auch mit wenigen Bildern pro
+Klasse möglich — das Modell wird iterativ verbessert.
+</div>
+
+<div class="step">
+<b>Schritt 2 – AL-Scan starten</b><br>
+Training-Seite → Tab <b>„🔄 Active Learning"</b> → <i>Unsicherheits-Schwellwert</i>
+und <i>Max. Kandidaten</i> einstellen → <b>„🔍 AL-Scan starten"</b>.<br>
+Das Modell klassifiziert alle ungelabelten Projektbilder. Bilder mit
+Confidence &lt; Schwellwert gelten als unsicher und werden in die AL-Queue eingetragen,
+sortiert nach aufsteigender Confidence (unsicherste zuerst).
+</div>
+
+<div class="step">
+<b>Schritt 3 – Queue reviewen (Labeling-Seite)</b><br>
+Das orange AL-Panel erscheint automatisch. Aktionen pro Bild:<br>
+• <b>→ Nächstes</b> — springt zum nächsten ungelabelten Queue-Bild<br>
+• <b>⚡ Übernehmen</b> — Modell-Vorschlag akzeptieren und weiter<br>
+• <b>✓ Gelabelt</b> — manuell gelabelt, aus Queue entfernen<br>
+• <b>⚡ Alle ≥ 80% übernehmen</b> — Bulk-Accept für hochkonfidente Kandidaten
+</div>
+
+<div class="step">
+<b>Schritt 4 – Neu trainieren</b><br>
+Nach Abschluss der Queue erscheint eine Rückfrage: sofort neu trainieren?
+Das Modell verbessert sich mit den neuen Labels — danach wieder AL-Scan starten
+für den nächsten Iterations-Zyklus.
+</div>
+
+<h2>Parameter</h2>
+<table>
+<tr><th>Parameter</th><th>Beschreibung</th><th>Empfehlung</th></tr>
+<tr><td>Unsicherheits-Schwellwert</td><td>Confidence &lt; dieser Wert → in Queue</td><td>0.70</td></tr>
+<tr><td>Max. Kandidaten</td><td>Maximale Queue-Größe pro Scan</td><td>50</td></tr>
+</table>
+
+<div class="tip">
+<b>Iterativer Prozess:</b> Train → Scan → Label → Train → … Jede Iteration
+verbessert das Modell mit den informativsten Bildern. Typisch reichen 3–5 Iterationen
+für eine deutliche Qualitätssteigerung.
+</div>
+<div class="tip">
+<b>ROI-Support:</b> Wenn das Projekt einen ROI enthält, wird beim Scan automatisch
+der erste Projekt-ROI als Ausschnitt-Template verwendet — genau wie beim Training.
 </div>
 """),
 

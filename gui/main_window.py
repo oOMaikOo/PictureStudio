@@ -185,8 +185,9 @@ class MainWindow(QMainWindow):
         self.settings_page.alarm_notifier_config_changed.connect(self._on_notifier_config_changed)
         self.settings_page.industrial_config_changed.connect(self._on_industrial_config_changed)
 
-        # Active Learning: inference → labeling queue → retrain
+        # Active Learning: inference/training → labeling queue → retrain
         self.inference_page.al_queue_updated.connect(self._on_al_queue_updated)
+        self.training_page.al_queue_updated.connect(self._on_al_queue_updated)
         self.inference_page.labels_applied.connect(self._on_labels_applied)
         self.labeling_page.al_retrain_requested.connect(
             lambda: self._switch_page(3)  # 3 = Training page

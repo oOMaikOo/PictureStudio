@@ -87,17 +87,20 @@ class TrainingPage(QWidget):
     """
 
     training_finished = Signal(dict)
+    al_queue_updated  = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.project = None
         self._thread: Optional[QThread] = None
+        self._al_thread = None
         self._history: Dict = {k: [] for k in ["train_loss", "val_loss", "train_acc", "val_acc"]}
         self._audit = None
         self._settings = None
         self._ssh_profiles: List[Dict] = []
         self._test_predictions: List[Dict] = []
         self._last_class_names: List[str] = []
+        self._last_model_path: str = ""
         self._build_ui()
 
     def set_project(self, project, audit=None) -> None:
@@ -107,6 +110,17 @@ class TrainingPage(QWidget):
         save_dir = os.path.join(project.get_project_dir(), "models") if project.get_project_dir() else "models"
         self.save_dir_label.setText(save_dir)
         self._load_config()
+        # Re-enable AL scan if the project already has a model
+        model_path = getattr(project, "current_model_path", "")
+        if model_path and os.path.isfile(model_path):
+            self._last_model_path = model_path
+            self._al_scan_btn.setEnabled(True)
+            self._al_status.setText(
+                f"Modell geladen. Ungelabelte Bilder: {len(project.get_unlabeled_images())}"
+            )
+        else:
+            self._al_scan_btn.setEnabled(False)
+            self._al_status.setText("")
 
     def set_settings(self, settings) -> None:
         """Inject the application settings and populate the SSH profile combo."""
@@ -515,6 +529,9 @@ class TrainingPage(QWidget):
         # ── Test-Ergebnisse tab ──────────────────────────────────────────────
         self.tabs.addTab(self._build_test_tab(), "🔬 Test-Ergebnisse")
 
+        # ── Active Learning tab ──────────────────────────────────────────────
+        self.tabs.addTab(self._build_al_tab(), "🔄 Active Learning")
+
         v.addWidget(self.tabs)
 
         # Export button
@@ -562,6 +579,141 @@ class TrainingPage(QWidget):
         splitter.setSizes([280, 300])
         v.addWidget(splitter)
         return w
+
+    def _build_al_tab(self) -> QWidget:
+        """Active Learning scan: find unlabeled images where the model is most uncertain."""
+        from PySide6.QtWidgets import QFormLayout
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(8, 8, 8, 8)
+        v.setSpacing(8)
+
+        info = QLabel(
+            "Nach dem Training die ungelabelten Bilder des Projekts scannen und die\n"
+            "unsichersten Vorhersagen in die AL-Queue (Labeling-Seite) eintragen."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(
+            "background:#1A3A5C; color:#AED6F1; padding:10px; "
+            "border-radius:5px; font-size:11px;"
+        )
+        v.addWidget(info)
+
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+
+        self._al_thr_spin = QDoubleSpinBox()
+        self._al_thr_spin.setRange(0.30, 0.99)
+        self._al_thr_spin.setSingleStep(0.05)
+        self._al_thr_spin.setValue(0.70)
+        self._al_thr_spin.setToolTip(
+            "Bilder mit Confidence unterhalb dieses Schwellwerts gelten als unsicher."
+        )
+        form.addRow("Unsicherheits-Schwellwert:", self._al_thr_spin)
+
+        self._al_n_spin = QSpinBox()
+        self._al_n_spin.setRange(5, 500)
+        self._al_n_spin.setValue(50)
+        self._al_n_spin.setToolTip("Maximale Anzahl Bilder, die in die AL-Queue eingetragen werden.")
+        form.addRow("Max. Kandidaten:", self._al_n_spin)
+
+        v.addLayout(form)
+
+        self._al_scan_btn = QPushButton("🔍 AL-Scan starten")
+        self._al_scan_btn.setEnabled(False)
+        self._al_scan_btn.setStyleSheet(
+            "background:#1565C0; color:white; font-weight:bold; "
+            "border-radius:4px; padding:5px 10px;"
+        )
+        self._al_scan_btn.clicked.connect(self._start_al_scan)
+        v.addWidget(self._al_scan_btn)
+
+        self._al_progress = QProgressBar()
+        self._al_progress.setValue(0)
+        self._al_progress.hide()
+        v.addWidget(self._al_progress)
+
+        self._al_status = QLabel("")
+        self._al_status.setWordWrap(True)
+        self._al_status.setStyleSheet("font-size:11px; color:#B0BEC5;")
+        v.addWidget(self._al_status)
+
+        v.addStretch()
+        return w
+
+    def _start_al_scan(self) -> None:
+        """Run ActiveLearningThread on all unlabeled project images."""
+        if not self.project or not self._last_model_path:
+            return
+
+        unlabeled = self.project.get_unlabeled_images()
+        if not unlabeled:
+            self._al_status.setText("Keine ungelabelten Bilder im Projekt.")
+            return
+
+        from core.active_learning import ActiveLearningThread
+
+        self._al_scan_btn.setEnabled(False)
+        self._al_progress.setValue(0)
+        self._al_progress.show()
+        self._al_status.setText(f"Scanne {len(unlabeled)} ungelabelte Bilder…")
+
+        roi_template = None
+        if self.project.rois:
+            first_path = next(iter(self.project.rois))
+            rois = self.project.rois[first_path]
+            if rois:
+                roi_template = rois[0]
+
+        self._al_thread = ActiveLearningThread(
+            model_path=self._last_model_path,
+            image_paths=unlabeled,
+            confidence_threshold=self._al_thr_spin.value(),
+            n_samples=self._al_n_spin.value(),
+            roi_template=roi_template,
+            parent=self,
+        )
+        self._al_thread.progress.connect(
+            lambda c, t: self._al_progress.setValue(int(c / t * 100))
+        )
+        self._al_thread.finished.connect(self._on_al_finished)
+        self._al_thread.error.connect(self._on_al_error)
+        self._al_thread.start()
+
+    def _on_al_finished(self, candidates: list) -> None:
+        self._al_progress.hide()
+        self._al_scan_btn.setEnabled(True)
+
+        if not candidates:
+            self._al_status.setText(
+                "Keine unsicheren Vorhersagen gefunden "
+                f"(Schwellwert {self._al_thr_spin.value():.0%})."
+            )
+            return
+
+        added = skipped = 0
+        for r in candidates:
+            ok = self.project.add_to_al_queue(
+                r["path"], r["predicted_label"], r["confidence"]
+            )
+            if ok:
+                added += 1
+            else:
+                skipped += 1
+
+        parts = [f"✅ {added} Bilder in AL-Queue eingetragen"]
+        if skipped:
+            parts.append(f"({skipped} bereits vorhanden)")
+        parts.append("→ Labeling-Seite öffnen, um zu reviewen.")
+        self._al_status.setText("  ".join(parts))
+
+        if added > 0:
+            self.al_queue_updated.emit()
+
+    def _on_al_error(self, msg: str) -> None:
+        self._al_progress.hide()
+        self._al_scan_btn.setEnabled(True)
+        self._al_status.setText(f"Fehler: {msg}")
 
     # ------------------------------------------------------------------ augmentation preview
 
@@ -910,6 +1062,15 @@ class TrainingPage(QWidget):
         self._test_predictions = result.get("test_predictions", [])
         if self._audit:
             self._audit.log_training_finished(result.get("run_id", ""), test_metrics)
+
+        # Enable AL scan now that we have a model
+        self._last_model_path = result.get("best_model_path", "")
+        if self._last_model_path and os.path.isfile(self._last_model_path):
+            self._al_scan_btn.setEnabled(True)
+            self._al_status.setText(
+                f"Modell bereit. Ungelabelte Bilder: "
+                f"{len(self.project.get_unlabeled_images()) if self.project else '?'}"
+            )
 
         # Jump straight to Test-Ergebnisse tab
         self.tabs.setCurrentIndex(4)

@@ -205,6 +205,19 @@ TOUR_STEPS = {
          "Der Log streamt live. Das Checkpoint\n"
          "wird automatisch heruntergeladen.",
          "Verbindung testen"),
+        ("Active Learning nach dem Training",
+         "Tab '🔄 Active Learning' erscheint nach\n"
+         "dem Training automatisch mit dem Modell.\n\n"
+         "Ablauf:\n"
+         "① Schwellwert einstellen (Standard 0.70)\n"
+         "② Max. Kandidaten festlegen (Standard 50)\n"
+         "③ '🔍 AL-Scan starten'\n\n"
+         "Das Modell klassifiziert alle ungelabelten\n"
+         "Bilder und trägt die unsichersten in die\n"
+         "AL-Queue (Labeling-Seite) ein.\n\n"
+         "Dann: Labeling-Seite öffnen und\n"
+         "Queue-Einträge reviewen → neu trainieren.",
+         "🔍 AL-Scan starten"),
     ],
     4: [  # Modelle
         ("Modellbibliothek",
