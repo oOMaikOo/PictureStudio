@@ -38,6 +38,24 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 
 ---
 
+## Wettbewerbs-Vergleich
+
+| Feature | PictureStudio | Roboflow | LandingLens | HALCON |
+|---|---|---|---|---|
+| Klassifikation | ✅ | ✅ | ✅ | ✅ |
+| Anomalie-Erkennung | ✅ | ❌ | ✅ | ✅ |
+| Object Detection | ✅ | ✅ | ✅ | ✅ |
+| OPC-UA / Modbus | ✅ | ❌ | ❌ | ✅ |
+| Fleet / Edge-Deployment | ✅ | teilweise | ✅ | ✅ |
+| Pre-Labeling | ✅ | ✅ | ✅ | — |
+| Data Drift Detection | ✅ | ✅ | ✅ | — |
+| Active Learning | ✅ | ✅ | ✅ | — |
+| Lokal / kein Abo | ✅ | ❌ | ❌ | ✅ |
+| Open Source | ✅ | ❌ | ❌ | ❌ |
+| **Preis** | **kostenlos** | ab 249 $/Mo | Enterprise | ~10 k€ |
+
+---
+
 ## Neue Features in v2.4.x
 
 ### Active Learning — Automatischer Unsicherheits-Scan (v2.4.0)
