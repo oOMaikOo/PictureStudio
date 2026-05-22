@@ -35,6 +35,9 @@ scikit-learn>=1.3.0
 # Hyperparameter optimization (optional — enables HPT on Training page)
 # optuna>=3.0.0
 
+# Object Detection (optional — enables Object Detection page with YOLOv8)
+# ultralytics>=8.0.0
+
 # Image hashing (optional — enables perceptual duplicate detection)
 # imagehash>=4.3.0
 

@@ -32,6 +32,7 @@ _IMAGE_PAGES: List[Tuple[str, str, int]] = [
     ("Einstellungen",  "⚙",  7),
     ("Clustering",     "🔬", 11),
     ("Datensatz",      "📈", 12),
+    ("Objekterkennung","🎯", 15),
 ]
 
 _VIDEO_PAGES: List[Tuple[str, str, int]] = [

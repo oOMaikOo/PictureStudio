@@ -4,6 +4,18 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.7] – 2026-05-22
+
+### Added
+- **Objekterkennung (YOLOv8)** — `core/object_detection.py`: `ObjectDetector`-Klasse als schlanker Wrapper um ultralytics. Unterstützt `load(path)`, `predict_image()` (gibt Liste mit `label`, `confidence`, `x1/y1/x2/y2`, `w/h` zurück), `predict_folder()` (inkl. rekursivem Modus) und `export_onnx()`. Optionale Abhängigkeit: `pip install ultralytics`.
+- **YOLO-Dataset-Vorbereitung** — `core/detection_dataset.py`: `prepare_yolo_dataset()` konvertiert Projekt-ROIs ins YOLO-Format (normalisierte Koordinaten 0–1), erstellt `images/train/`, `images/val/`, `labels/train/`, `labels/val/` und `data.yaml`. Nur annotierte Bilder (mit beschriftetem ROI) werden einbezogen.
+- **Objekterkennung-Seite** — `gui/pages/object_detection_page.py` (Stack-Index 15): Dreispaltiges Layout: Links Trainings-Konfiguration (Modellgröße yolov8n/s/m/l, Epochen, Bildgröße, Batch, Gerät), Mitte Bild-Preview mit eingezeichneten Bounding-Boxes + Trainingslog, Rechts Ordner-Inferenz mit Ergebnistabelle und CSV-Export. Startet Training im Hintergrund-Thread mit Fortschrittsbalken und Epoch-Log.
+- **Modellgrößen** — yolov8n (~3 M Parameter, sehr schnell), yolov8s (~11 M), yolov8m (~26 M), yolov8l (~44 M, sehr genau). Alle Größen direkt in der UI auswählbar.
+- **Sidebar + Hilfe + Tour** — Objekterkennung in `_IMAGE_PAGES` (Sidebar), `help_dialog.py` (Sektion 21 mit Workflow-Beschreibung und Tipps), `guide_tour.py` (5-Schritt-Tour für Stack-Index 15).
+- **14 Unit-Tests** — `tests/test_object_detection.py`: `TestObjectDetector` (7 Tests inkl. Mock-YOLO-Ausgabe-Parsing) und `TestDetectionDataset` (7 Tests inkl. YOLO-Label-Format, data.yaml-Inhalt, Multi-Klassen, Label-Filterung).
+
+---
+
 ## [2.3.6] – 2026-05-22
 
 ### Added

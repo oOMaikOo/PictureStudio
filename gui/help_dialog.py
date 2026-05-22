@@ -34,6 +34,7 @@ SECTIONS = [
     ("🌐", "Fleet-Management"),       # 18
     ("⚡", "Modelle Erweitert"),      # 19
     ("🔗", "Kontakt & Repository"),   # 20
+    ("🎯", "Objekterkennung"),        # 21
 ]
 
 # Map sidebar page index → section index
@@ -41,6 +42,7 @@ PAGE_TO_SECTION = {
     0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
     10: 14, 11: 15,
     12: 16, 13: 17, 14: 18,
+    15: 21,
 }
 
 # ---------------------------------------------------------------------------
@@ -1344,6 +1346,74 @@ Pull-Requests sind herzlich willkommen.</p>
 <h2>Feedback &amp; Beiträge</h2>
 <p>Pull Requests sind willkommen. Bitte einen Feature-Branch erstellen und
 einen kurzen Issue anlegen, bevor größere Änderungen umgesetzt werden.</p>
+"""),
+
+
+
+# ── 21  Objekterkennung ───────────────────────────────────────────────────────
+21: page("""
+<h1>🎯 Objekterkennung (Object Detection)</h1>
+<p>Erkennt und lokalisiert mehrere Objekte gleichzeitig in einem Bild —
+mit Bounding Boxes und Klassennamen. Basiert auf <b>YOLOv8</b> (ultralytics).</p>
+
+<div class="warn"><b>Voraussetzung:</b> <code>pip install ultralytics</code></div>
+
+<h2>Unterschied zur Klassifikation</h2>
+<table>
+<tr><th>Klassifikation</th><th>Objekterkennung</th></tr>
+<tr><td>Ein Label pro Bild</td><td>Mehrere Objekte pro Bild</td></tr>
+<tr><td>Kein Ort</td><td>Bounding Box pro Objekt</td></tr>
+<tr><td>ROI = Zuschnitt</td><td>ROI = Trainingsannotation</td></tr>
+</table>
+
+<h2>Schritt-für-Schritt</h2>
+
+<div class="step">
+<b>Schritt 1 – Bilder annotieren (Labeling-Seite)</b><br>
+ROIs im Labeling-Editor zeichnen und jedem ROI ein Label zuweisen.
+Jeder ROI wird zur Trainings-Annotation (Bounding Box + Klasse).
+Es können mehrere ROIs pro Bild gesetzt werden.
+</div>
+
+<div class="step">
+<b>Schritt 2 – Dataset vorbereiten</b><br>
+„Dataset vorbereiten" konvertiert alle ROI-Annotationen in das YOLO-Format
+(normalisierte Koordinaten, Train-/Val-Split 80/20).
+</div>
+
+<div class="step">
+<b>Schritt 3 – Modell wählen</b><br>
+<ul>
+<li><b>yolov8n</b> — Nano, sehr schnell, für CPU geeignet</li>
+<li><b>yolov8s</b> — Small, gutes Gleichgewicht</li>
+<li><b>yolov8m</b> — Medium, empfohlen für Produktion</li>
+<li><b>yolov8l</b> — Large, maximale Genauigkeit (GPU empfohlen)</li>
+</ul>
+</div>
+
+<div class="step">
+<b>Schritt 4 – Training starten</b><br>
+Epochen (Standard: 50), Bildgröße (Standard: 640) und Gerät einstellen,
+dann „⚡ Training starten". Das beste Modell (<code>best.pt</code>) wird
+automatisch angeboten zum Laden.
+</div>
+
+<div class="step">
+<b>Schritt 5 – Erkennung auf neuen Bildern</b><br>
+Einzelbild: „Bild wählen" → Bounding Boxes werden eingezeichnet.<br>
+Ordner: Ordner wählen → „Erkennung starten" → Tabelle mit Ergebnissen.<br>
+CSV-Export für Weiterverarbeitung.
+</div>
+
+<h2>Tipps</h2>
+<div class="tip">
+<b>Mindestanforderung:</b> ~50–100 annotierte Bilder pro Klasse für zuverlässige Ergebnisse.
+Mehr Daten = bessere Genauigkeit.
+</div>
+<div class="tip">
+<b>Konfidenz-Schwelle:</b> 0.25 = Standard. Höher setzen (0.5+) um Fehlerkennungen
+zu reduzieren. Niedriger für maximalen Recall.
+</div>
 """),
 
 }

@@ -819,6 +819,57 @@ TOUR_STEPS = {
          "Gerätliste wird in QSettings gespeichert.",
          "Alle aktualisieren"),
     ],
+
+    15: [  # Objekterkennung
+        ("Objekterkennung – Überblick",
+         "YOLOv8-basierte Objekterkennung:\n"
+         "Erkennt und lokalisiert mehrere Objekte\n"
+         "gleichzeitig mit Bounding Boxes.\n\n"
+         "Voraussetzung: pip install ultralytics\n\n"
+         "Unterschied zur Klassifikation:\n"
+         "• Mehrere Objekte pro Bild möglich\n"
+         "• Gibt Position + Klasse zurück\n"
+         "• ROIs = Trainingsannotationen",
+         None),
+        ("Schritt 1 – Bilder annotieren",
+         "Im Labeling-Editor ROIs zeichnen\n"
+         "und jedem ROI ein Label zuweisen.\n\n"
+         "Jeder ROI wird zur Bounding-Box-\n"
+         "Annotation für das YOLO-Training.\n"
+         "Mehrere ROIs pro Bild sind möglich.\n\n"
+         "→ Dann hier zurückkommen.",
+         None),
+        ("Schritt 2 – Dataset vorbereiten",
+         "Klicke 'Dataset vorbereiten'.\n\n"
+         "Das System konvertiert automatisch:\n"
+         "• ROI-Koordinaten → YOLO-Format\n"
+         "• 80 % Training / 20 % Validation\n"
+         "• Erstellt data.yaml für YOLOv8\n\n"
+         "Status zeigt: Bilder, Klassen,\n"
+         "Annotationen.",
+         "Dataset vorbereiten"),
+        ("Schritt 3 – Modell & Training",
+         "Modellgröße wählen:\n"
+         "• yolov8n — sehr schnell (CPU ok)\n"
+         "• yolov8s — schnell, gute Qualität\n"
+         "• yolov8m — empfohlen für Produktion\n"
+         "• yolov8l — maximale Genauigkeit\n\n"
+         "Epochen: 50 (Standard)\n"
+         "Bildgröße: 640 px (Standard)\n\n"
+         "Klicke '⚡ Training starten'.",
+         "Training starten"),
+        ("Schritt 4 – Erkennung",
+         "'Bild wählen' → Einzelbild mit\n"
+         "eingezeichneten Bounding Boxes.\n\n"
+         "'Ordner…' + 'Erkennung starten' →\n"
+         "alle Bilder im Ordner werden\n"
+         "analysiert, Tabelle zeigt Ergebnisse.\n\n"
+         "Konfidenz-Schwelle einstellen:\n"
+         "0.25 = Standard\n"
+         "0.5+ = weniger Fehlerkennungen\n\n"
+         "CSV-Export für Weiterverarbeitung.",
+         "Erkennung starten"),
+    ],
 }
 
 
