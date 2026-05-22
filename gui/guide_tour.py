@@ -870,6 +870,62 @@ TOUR_STEPS = {
          "CSV-Export für Weiterverarbeitung.",
          "Erkennung starten"),
     ],
+
+    16: [  # Data Drift
+        ("Data Drift – Überblick",
+         "Erkennt automatisch, wenn sich\n"
+         "Produktionsbilder statistisch von\n"
+         "den Trainingsbildern unterscheiden.\n\n"
+         "Typische Ursachen:\n"
+         "• Kamera ausgetauscht/verstellt\n"
+         "• Beleuchtung geändert\n"
+         "• Bildqualität verschlechtert\n\n"
+         "Kein Data Scientist nötig —\n"
+         "Z-Score-basierte Erkennung.",
+         None),
+        ("Schritt 1 – Baseline erstellen",
+         "Klicke '📊 Baseline aus\n"
+         "Projektbildern erstellen'.\n\n"
+         "Das System analysiert alle\n"
+         "Trainingsbilder und speichert\n"
+         "deren statistische Verteilung:\n"
+         "• Farbmittelwert / -streuung\n"
+         "• Schärfe (Laplacian)\n"
+         "• Kantendichte (Canny)\n"
+         "• Graustufenhistogramm",
+         "Baseline aus Projektbildern erstellen"),
+        ("Schritt 2 – Schwellwert",
+         "Stelle den Max. Z-Score ein.\n\n"
+         "Z-Score = wie viele Standard-\n"
+         "abweichungen ein Bild von der\n"
+         "Trainingsdistribution abweicht.\n\n"
+         "• 3.0 = Standard (statistisch\n"
+         "  unwahrscheinlich)\n"
+         "• Niedriger = empfindlicher\n"
+         "• Höher = nur starke Abweichungen",
+         None),
+        ("Schritt 3 – Analysieren",
+         "Ordner mit Produktionsbildern\n"
+         "wählen → '🔍 Drift analysieren'.\n\n"
+         "Farbcodierung der Ergebnisse:\n"
+         "🟢 Grün = kein Drift\n"
+         "🟠 Orange = leichter Drift\n"
+         "🔴 Rot = starker Drift\n\n"
+         "Zusammenfassung zeigt Anteil\n"
+         "gedrifteter Bilder.",
+         "Drift analysieren"),
+        ("Schritt 4 – Reagieren",
+         "Gedriftete Bilder identifizieren\n"
+         "und dem Training hinzufügen:\n\n"
+         "1. Gedriftete Bilder in den\n"
+         "   Projektordner kopieren\n"
+         "2. Daten-Seite: Ordner neu laden\n"
+         "3. Labeling-Seite: Labels vergeben\n"
+         "4. Neu trainieren\n\n"
+         "Baseline speichern ('💾') für\n"
+         "spätere Vergleiche.",
+         None),
+    ],
 }
 
 

@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         from gui.pages.video_annotation_page   import VideoAnnotationPage
         from gui.pages.fleet_page              import FleetPage
         from gui.pages.object_detection_page  import ObjectDetectionPage
+        from gui.pages.data_drift_page        import DataDriftPage
 
         self.dashboard_page          = DashboardPage()
         self.data_page               = DataPage()
@@ -127,6 +128,7 @@ class MainWindow(QMainWindow):
         self.video_annotation_page   = VideoAnnotationPage()
         self.fleet_page              = FleetPage()
         self.object_detection_page   = ObjectDetectionPage()
+        self.data_drift_page         = DataDriftPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
@@ -139,6 +141,7 @@ class MainWindow(QMainWindow):
             self.video_annotation_page,     # index 13
             self.fleet_page,                # index 14
             self.object_detection_page,     # index 15
+            self.data_drift_page,           # index 16
         ]:
             self.stack.addWidget(page)
 
@@ -462,6 +465,7 @@ class MainWindow(QMainWindow):
         self.video_annotation_page.set_project(project)
         self.fleet_page.set_project(project)
         self.object_detection_page.set_project(project)
+        self.data_drift_page.set_project(project)
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)

@@ -35,6 +35,7 @@ SECTIONS = [
     ("⚡", "Modelle Erweitert"),      # 19
     ("🔗", "Kontakt & Repository"),   # 20
     ("🎯", "Objekterkennung"),        # 21
+    ("📉", "Data Drift"),             # 22
 ]
 
 # Map sidebar page index → section index
@@ -42,7 +43,7 @@ PAGE_TO_SECTION = {
     0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
     10: 14, 11: 15,
     12: 16, 13: 17, 14: 18,
-    15: 21,
+    15: 21, 16: 22,
 }
 
 # ---------------------------------------------------------------------------
@@ -1413,6 +1414,77 @@ Mehr Daten = bessere Genauigkeit.
 <div class="tip">
 <b>Konfidenz-Schwelle:</b> 0.25 = Standard. Höher setzen (0.5+) um Fehlerkennungen
 zu reduzieren. Niedriger für maximalen Recall.
+</div>
+"""),
+
+# ── 22  Data Drift ────────────────────────────────────────────────────────────
+22: page("""
+<h1>📉 Data Drift Detection</h1>
+<p>Erkennt, wenn sich Produktionsbilder statistisch von den Trainingsbildern unterscheiden.
+Das Modell kann schlechter werden, ohne dass es offensichtlich ist — Data Drift macht
+diese Verschiebung sichtbar.</p>
+
+<h2>Wann tritt Data Drift auf?</h2>
+<ul>
+<li>Kamera wurde ausgetauscht oder verstellt</li>
+<li>Beleuchtungsverhältnisse haben sich geändert</li>
+<li>Objekte sehen anders aus (andere Charge, Verschmutzung)</li>
+<li>Bildqualität verschlechtert (Unschärfe, Reflektion)</li>
+</ul>
+
+<h2>Schritt-für-Schritt</h2>
+
+<div class="step">
+<b>Schritt 1 – Baseline erstellen</b><br>
+Klick auf „📊 Baseline aus Projektbildern erstellen" — analysiert alle Trainingsbilder
+und speichert deren statistische Verteilung (Farbmittelwert/-streuung, Schärfe,
+Kantendichte, Graustufenhistogramm). Alternativ: Ordner manuell wählen.
+</div>
+
+<div class="step">
+<b>Schritt 2 – Baseline speichern (optional)</b><br>
+„💾 Speichern" sichert die Baseline als JSON-Datei — kann in künftigen Projekten
+mit „📂 Laden" wiederverwendet werden.
+</div>
+
+<div class="step">
+<b>Schritt 3 – Schwellwert einstellen</b><br>
+Der <b>Max. Z-Score</b> bestimmt, ab wann ein Bild als „gedriftet" gilt.
+Z = 3.0 (Standard) bedeutet: mehr als 3 Standardabweichungen von der Trainingsdistribution.
+Niedrigerer Wert = empfindlicher.
+</div>
+
+<div class="step">
+<b>Schritt 4 – Produktionsbilder analysieren</b><br>
+Ordner mit neuen/aktuellen Produktionsbildern wählen → „🔍 Drift analysieren".
+Jedes Bild erhält einen Z-Score. Farbcodierung in der Tabelle:
+<br>🟢 Grün = kein Drift  •  🟠 Orange = leichter Drift  •  🔴 Rot = starker Drift
+</div>
+
+<div class="step">
+<b>Schritt 5 – Reagieren</b><br>
+Gedriftete Bilder können inspiziert und dem Trainingsdatensatz hinzugefügt werden
+(Labeling-Seite), um das Modell mit den neuen Bedingungen zu trainieren.
+</div>
+
+<h2>Gemessene Merkmale</h2>
+<table>
+<tr><th>Merkmal</th><th>Erkennt</th></tr>
+<tr><td>Farbe (Mittelwert R/G/B)</td><td>Beleuchtungsänderungen, Farbstich</td></tr>
+<tr><td>Farbe (Streuung R/G/B)</td><td>Kontrast- und Dynamikänderungen</td></tr>
+<tr><td>Schärfe (Laplacian)</td><td>Unschärfe, Defokussierung</td></tr>
+<tr><td>Kantendichte (Canny)</td><td>Texturveränderungen, Verschmutzung</td></tr>
+<tr><td>Graustufenhistogramm (16 Bins)</td><td>Gesamthelligkeitsverteilung</td></tr>
+</table>
+
+<div class="tip">
+<b>Keine Installation nötig:</b> Data Drift nutzt nur numpy und Pillow (bereits enthalten).
+Falls OpenCV vorhanden ist, werden Schärfe und Kantendichte präziser berechnet.
+</div>
+<div class="tip">
+<b>KS-Test (mit scipy):</b> Wenn <code>pip install scipy</code> installiert ist,
+kann zusätzlich ein statistischer Kolmogorov-Smirnov-Test durchgeführt werden
+für p-Wert-basierte Auswertung.
 </div>
 """),
 

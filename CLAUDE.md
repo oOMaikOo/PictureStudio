@@ -55,6 +55,8 @@ Stack indices (add new pages here):
 | 12 | `DatasetStatsPage` | image |
 | 13 | `VideoAnnotationPage` | video |
 | 14 | `FleetPage` | video |
+| 15 | `ObjectDetectionPage` | image |
+| 16 | `DataDriftPage` | image |
 
 ### Central data model: `core/project.py`
 

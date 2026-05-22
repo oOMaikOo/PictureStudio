@@ -4,6 +4,18 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.8] – 2026-05-22
+
+### Added
+- **Data Drift Detection** — `core/data_drift.py`: `DriftDetector`-Klasse erkennt automatisch, wenn Produktionsbilder von der Trainingsdistribution abweichen. Merkmalsvektor je Bild: RGB-Mittelwert/-Streuung, Laplacian-Schärfe, Canny-Kantendichte, Graustufenhistogramm (16 Bins). Baseline aus Trainingsdaten → Z-Score-basierter Vergleich mit neuen Bildern. Keine zusätzlichen Abhängigkeiten nötig (nur numpy + Pillow). Baseline speicher-/ladbar als JSON.
+- **Data-Drift-Seite** — `gui/pages/data_drift_page.py` (Stack-Index 16): Zweispaltiges Layout. Links: Baseline erstellen (aus Projektbildern oder beliebigem Ordner), Schwellwert-Einstellung (Max. Z-Score, Standard 3.0), Produktionsordner wählen und analysieren, Zusammenfassung (Anteil gedrifteter Bilder). Rechts: Tabelle mit Z-Scores je Bild, farbcodiert (Grün/Orange/Rot). CSV-Export.
+- **Farbcodierung** — Grün (kein Drift ≤ Schwellwert) · Orange (leichter Drift ≤ 2×) · Rot (starker Drift > 2×).
+- **KS-Test** — Wenn `scipy` installiert ist, steht zusätzlich ein Kolmogorov-Smirnov-Test für p-Wert-basierte Auswertung je Merkmalsgruppe zur Verfügung.
+- **Sidebar + Hilfe + Tour** — Data Drift in `_IMAGE_PAGES` (Sidebar), `help_dialog.py` (Sektion 22 mit Workflow + Merkmalstabelle), `guide_tour.py` (5-Schritt-Tour für Stack-Index 16).
+- **18 Unit-Tests** — `tests/test_data_drift.py`: Feature-Extraktion, Baseline-Aufbau, Scoring (in-dist < OOD), rekursiver Ordner-Scan, Fortschritts-Callback, JSON-Roundtrip, KS-Test-Fallback.
+
+---
+
 ## [2.3.7] – 2026-05-22
 
 ### Added
