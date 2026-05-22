@@ -4,6 +4,20 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.4] – 2026-05-22
+
+### Added
+- **ROI per Maus verschieben** — `gui/widgets/roi_editor.py`: Im Rechteck- und Ellipse-Zeichenmodus erkennt ein Klick auf einen bestehenden ROI automatisch die Drag-Absicht. Der ROI lässt sich mit gedrückter linker Maustaste verschieben, ohne den Zeichenmodus zu verlassen. Cursor wechselt zu ✋ beim Hover über einem ROI und zu ✚ auf leerem Bereich. Nach dem Loslassen wird `roi_moved` emittiert → vollständiger Undo/Redo-Support.
+- **ROI-Größe → alle Bilder** — `gui/pages/labeling_page.py`: Neuer Button (neben "ROIs dieses Bildes → alle Bilder") überträgt **nur Breite und Höhe** des ausgewählten ROI auf alle Projektbilder. Bilder mit bestehendem ROI behalten ihre x/y-Position; Bilder ohne ROI erhalten einen neuen ROI an der Quellposition.
+- **Bilder aus Datensatz entfernen** — `gui/pages/labeling_page.py`: Rechtsklick auf ein Thumbnail (oder Mehrfachauswahl) → "🗑 Bild(er) aus Datensatz entfernen". Entfernt Bild, Label, ROIs und Flags aus dem Projekt nach Bestätigung; Dateien auf der Festplatte bleiben erhalten. Navigiert automatisch zum nächsten verfügbaren Bild.
+- **ROI-Fallback bei Ordner-Klassifikation** — `gui/pages/inference_page.py`: Wenn das Projekt per-Bild-ROIs enthält aber kein explizites ROI-Template aktiv ist, wird der erste Projekt-ROI automatisch als Fallback auf alle zu klassifizierenden Bilder angewendet. Ein Info-Dialog informiert über Position/Größe des verwendeten ROI und erklärt, wie ein eigenes Template konfiguriert werden kann.
+
+### Fixed
+- **ROI-Drag in Zeichenmodi blockiert** — Bisher wurden Mausklicks im Rect-/Ellipse-Modus immer als "neues ROI zeichnen" interpretiert, selbst wenn der Klick auf einem bestehenden ROI landete. Behoben durch Smart-Click-Detection in `mousePressEvent`.
+- **Ordner-Klassifikation ignoriert Trainings-ROIs** — Modelle, die auf ROI-Ausschnitten trainiert wurden, bewerteten neue unbekannte Bilder stillschweigend auf dem vollen Bild. Nun wird automatisch der erste Projekt-ROI als Zuschnitt-Vorlage genutzt.
+
+---
+
 ## [2.3.3] – 2026-05-21
 
 ### Added

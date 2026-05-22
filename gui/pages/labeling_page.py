@@ -552,6 +552,18 @@ class LabelingPage(QWidget):
         apply_all_btn.clicked.connect(self._apply_roi_to_all)
         ab.addWidget(apply_all_btn)
 
+        apply_size_btn = QPushButton("ROI-Größe → alle Bilder")
+        apply_size_btn.setToolTip(
+            "Überträgt nur Breite und Höhe des ausgewählten ROI auf alle Bilder.\n"
+            "Die Position (x/y) bleibt pro Bild erhalten — zum Verschieben einfach\n"
+            "den ROI mit der Maus ziehen (im Rechteck-/Ellipse-Modus)."
+        )
+        apply_size_btn.setStyleSheet(
+            "background:#00695C;color:white;padding:5px;border-radius:4px;"
+        )
+        apply_size_btn.clicked.connect(self._apply_roi_size_to_all)
+        ab.addWidget(apply_size_btn)
+
         clear_all_rois_btn = QPushButton("Alle ROIs löschen")
         clear_all_rois_btn.setStyleSheet(
             "background:#B71C1C;color:white;padding:5px;border-radius:4px;"
@@ -1070,10 +1082,17 @@ class LabelingPage(QWidget):
                 pass
         menu.addSeparator()
         menu.addAction("(kein Label)").setData((image_path, ""))
+        menu.addSeparator()
+        remove_act = menu.addAction("🗑 Bild aus Datensatz entfernen")
+        remove_act.setData(None)
         chosen = menu.exec(global_pos)
-        if chosen:
-            img, lbl = chosen.data()
-            self._assign_label_direct(img, lbl)
+        if chosen is remove_act:
+            self._remove_images([image_path])
+        elif chosen:
+            data = chosen.data()
+            if data is not None:
+                img, lbl = data
+                self._assign_label_direct(img, lbl)
 
     def _assign_label_direct(self, image_path: str, label: str) -> None:
         """Push a SetImageLabelCommand onto the undo stack."""
@@ -1329,8 +1348,13 @@ class LabelingPage(QWidget):
                 pass
         menu.addSeparator()
         menu.addAction("(kein Label)").setData("")
+        menu.addSeparator()
+        remove_act = menu.addAction(f"🗑 {len(paths)} Bilder aus Datensatz entfernen")
+        remove_act.setData(None)
         chosen = menu.exec(global_pos)
-        if chosen:
+        if chosen is remove_act:
+            self._remove_images(paths)
+        elif chosen:
             label = chosen.data()
             if label is None:
                 return
@@ -1573,6 +1597,118 @@ class LabelingPage(QWidget):
             self, "Fertig",
             f"ROIs auf {n - 1} weitere Bilder übertragen."
         )
+
+    def _apply_roi_size_to_all(self) -> None:
+        """Copy only w+h of the selected ROI to every image; per-image x/y is kept."""
+        if not self.project or not self._current_image:
+            QMessageBox.warning(self, "Kein Bild", "Bitte zuerst ein Bild auswählen.")
+            return
+        self._save_current_rois()
+        src_rois = self.project.get_rois(self._current_image)
+        if not src_rois:
+            QMessageBox.warning(self, "Keine ROIs",
+                                "Das aktuelle Bild hat keine ROIs.")
+            return
+
+        # Use the selected ROI if available, otherwise the first one
+        sel_items = [i for i in self.roi_editor._scene.selectedItems()
+                     if hasattr(i, "roi_data")]
+        src_roi = sel_items[0].roi_data if sel_items else src_rois[0]
+        src_w, src_h = src_roi.get("w", 0), src_roi.get("h", 0)
+        src_type     = src_roi.get("type", "rect")
+        src_label    = src_roi.get("label", "")
+        src_color    = src_roi.get("color", "#E74C3C")
+
+        n = len(self.project.images)
+        reply = QMessageBox.question(
+            self, "ROI-Größe übertragen",
+            f"Breite ({src_w:.0f} px) und Höhe ({src_h:.0f} px) des ROI werden auf alle "
+            f"{n} Bilder übertragen.\nBilder mit einem bestehenden ROI behalten ihre Position.\n"
+            "Bilder ohne ROI erhalten einen neuen ROI an der aktuellen Position.\n\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        import uuid as _uuid
+        updated = created = 0
+        for img_path in self.project.images:
+            existing = self.project.get_rois(img_path)
+            if existing:
+                # Update first ROI's size only
+                r = existing[0]
+                r["w"] = src_w
+                r["h"] = src_h
+                self.project.update_roi(img_path, r["id"], r)
+                updated += 1
+            else:
+                # No ROI yet — create one at source position with source size
+                new_roi = {
+                    "id":    str(_uuid.uuid4())[:8],
+                    "type":  src_type,
+                    "x":     src_roi.get("x", 0),
+                    "y":     src_roi.get("y", 0),
+                    "w":     src_w,
+                    "h":     src_h,
+                    "label": src_label,
+                    "color": src_color,
+                }
+                self.project.add_roi(img_path, new_roi)
+                created += 1
+
+        # Refresh editor if the current image was affected
+        self.roi_editor.load_rois(self.project.get_rois(self._current_image))
+        self._refresh_roi_list()
+        self._update_stats()
+        QMessageBox.information(
+            self, "Fertig",
+            f"Größe übertragen: {updated} ROIs aktualisiert, {created} neue ROIs erstellt."
+        )
+
+    def _remove_images(self, paths: list) -> None:
+        """Remove one or more images from the project after user confirmation."""
+        if not self.project or not paths:
+            return
+        n = len(paths)
+        reply = QMessageBox.question(
+            self, "Bilder entfernen",
+            f"{'Dieses Bild' if n == 1 else f'Diese {n} Bilder'} aus dem Datensatz entfernen?\n"
+            "Die Dateien auf der Festplatte bleiben erhalten.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Determine the next image to select if the current one is being removed
+        next_path = None
+        if self._current_image in paths:
+            all_paths = self.thumb_list.get_all_paths()
+            remaining = [p for p in all_paths if p not in paths]
+            # Find the first image after the removed block
+            for p in all_paths:
+                if p not in paths and all_paths.index(p) > all_paths.index(self._current_image):
+                    next_path = p
+                    break
+            if next_path is None and remaining:
+                next_path = remaining[-1]
+
+        # Remove from project and thumbnail list
+        for path in paths:
+            self.project.remove_image(path)
+            self.thumb_list.remove_image(path)
+
+        # Handle editor state
+        if self._current_image in paths:
+            self._current_image = ""
+            if next_path:
+                self.thumb_list.select_path(next_path)
+            else:
+                self.roi_editor.clear_image()
+                self.img_path_label.setText("")
+                self._refresh_roi_list()
+
+        self._update_stats()
+        self.project_changed.emit()
 
     def _clear_all_rois(self) -> None:
         """Delete every ROI in the project after user confirmation."""

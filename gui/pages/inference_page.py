@@ -488,9 +488,36 @@ class InferencePage(QWidget):
         if not os.path.isdir(folder):
             QMessageBox.warning(self, "Kein Ordner", "Bitte einen gültigen Ordner wählen.")
             return
+
         roi_templates = []
         if self.use_roi_template_cb.isChecked() and self.project:
             roi_templates = self.project.get_roi_templates()
+
+        # Fallback: if no template is active but the project has per-image ROIs,
+        # use the first project ROI so new images are cropped the same way as
+        # the training data was.
+        if not roi_templates and self.project:
+            fallback_roi = None
+            for img_path in self.project.images:
+                rois = self.project.get_rois(img_path)
+                if rois:
+                    fallback_roi = next((r for r in rois if r.get("label")), rois[0])
+                    break
+            if fallback_roi:
+                roi_templates = [{"roi": fallback_roi}]
+                w = int(fallback_roi.get("w", 0))
+                h = int(fallback_roi.get("h", 0))
+                x = int(fallback_roi.get("x", 0))
+                y = int(fallback_roi.get("y", 0))
+                QMessageBox.information(
+                    self, "ROI-Fallback aktiv",
+                    f"Das Projekt enthält ROIs. Das Training wurde wahrscheinlich auf "
+                    f"ROI-Ausschnitten durchgeführt.\n\n"
+                    f"Der erste Projekt-ROI wird automatisch auf alle Bilder angewendet:\n"
+                    f"  Position: x={x}, y={y}  |  Größe: {w} × {h} px\n\n"
+                    f"Um einen anderen ROI zu verwenden, aktiviere 'ROI-Vorlagen anwenden'\n"
+                    f"und konfiguriere ein Template in den Projekteinstellungen."
+                )
 
         self.classify_btn.setEnabled(False)
         self.progress_bar.setValue(0)

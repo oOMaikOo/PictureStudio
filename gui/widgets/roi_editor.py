@@ -208,6 +208,9 @@ class ROIEditor(QGraphicsView):
         self._roi_items: Dict[str, _BaseROIItem] = {}
         self._clipboard: Optional[Dict] = None
 
+        # Drag-existing-ROI state (set when user clicks on an existing ROI in draw mode)
+        self._drag_item_before: Optional[Dict] = None
+
         # Current drawing colour / label
         self.current_label: str = ""
         self.current_color: str = "#E74C3C"
@@ -364,6 +367,15 @@ class ROIEditor(QGraphicsView):
         self.roi_added.emit(roi)
         self.viewport().update()
 
+    # ------------------------------------------------------------------ helpers
+
+    def _roi_item_at(self, scene_pos: QPointF) -> Optional[_BaseROIItem]:
+        """Return the topmost permanent ROI item at scene_pos, or None."""
+        for item in self._scene.items(scene_pos):
+            if hasattr(item, "roi_data"):
+                return item
+        return None
+
     # ------------------------------------------------------------------ mouse events
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -371,6 +383,12 @@ class ROIEditor(QGraphicsView):
 
         if event.button() == Qt.LeftButton:
             if self._mode in (DRAW_RECT, DRAW_ELLIPSE):
+                # Click on existing ROI → drag it; click on empty space → draw new
+                roi_under = self._roi_item_at(pos)
+                if roi_under is not None:
+                    self._drag_item_before = dict(roi_under.roi_data)
+                    super().mousePressEvent(event)
+                    return
                 self._drawing   = True
                 self._start_pos = pos
                 return              # consume event; don't pass to scene
@@ -414,6 +432,11 @@ class ROIEditor(QGraphicsView):
                 self._drag_item.setZValue(5)   # above image, below permanent ROIs
             return
 
+        # Cursor feedback: open-hand over existing ROI, cross elsewhere
+        if self._mode in (DRAW_RECT, DRAW_ELLIPSE) and self._drag_item_before is None:
+            roi_under = self._roi_item_at(pos)
+            self.setCursor(Qt.OpenHandCursor if roi_under else Qt.CrossCursor)
+
         if self._mode == DRAW_POLYGON and self._poly_points:
             if self._poly_preview:
                 self._scene.removeItem(self._poly_preview)
@@ -428,6 +451,21 @@ class ROIEditor(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.LeftButton and self._drag_item_before is not None:
+            # Finished dragging an existing ROI — emit roi_moved if position changed
+            sel = [i for i in self._scene.selectedItems() if hasattr(i, "roi_data")]
+            if sel:
+                item = sel[0]
+                old_x = self._drag_item_before.get("x", 0)
+                old_y = self._drag_item_before.get("y", 0)
+                if item.roi_data.get("x", 0) != old_x or item.roi_data.get("y", 0) != old_y:
+                    self.roi_moved.emit(item.roi_data)
+            self._drag_item_before = None
+            if self._mode in (DRAW_RECT, DRAW_ELLIPSE):
+                self.setCursor(Qt.CrossCursor)
+            super().mouseReleaseEvent(event)
+            return
+
         if event.button() == Qt.LeftButton and self._drawing:
             self._drawing = False
             pos  = self.mapToScene(event.pos())
