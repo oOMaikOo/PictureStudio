@@ -1,6 +1,6 @@
-# Picture Studio v2.3.9
+# Picture Studio v2.4.0
 
-Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung und Batch-Inferenz — entwickelt mit **PySide6** und **PyTorch**.
+Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.
 
 ---
 
@@ -14,6 +14,7 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 | **Video-Annotation** | Frame-für-Frame-Annotation aus Videos (cv2 Slider-Navigation), direktes Hinzufügen zum Projekt |
 | **Labeling** | Schnellzuweisung 1–9, Multi-Label-Modus, Label-Hierarchien, Undo/Redo, Audit-Trail, Pixel-Segmentierungsmasken (5 Klassen), Rechtsklick-Menü (Bilder entfernen) |
 | **Pre-Labeling** | Trainiertes Modell schlägt Labels für ungelabelte Bilder vor — konfigurierbarer Konfidenz-Schwellwert, vollständiger Undo/Redo-Support |
+| **Active Learning** | Automatischer Unsicherheits-Scan nach dem Training: findet ungelabelte Bilder mit niedrigster Modell-Confidence, befüllt die AL-Review-Queue — iterativer Label-Kreislauf mit minimalem Aufwand |
 | **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; ROI-Vorlagen; Batch-Übertragung auf alle Bilder; Drag-to-Move |
 | **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0/B3, ConvNeXt-Tiny, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), Focal Loss, SSH-Ferntraining |
 | **Hyperparameter-Suche** | Optuna-basiert (lr, batch_size, architecture, optimizer), beste Parameter direkt in die UI übernommen, Live-Log-Dialog |
@@ -34,6 +35,30 @@ Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Mo
 | **Standalone Monitor** | `monitor.py` — headless, kein GUI, ONNX/PyTorch, RTSP/HTTP/Video-Datei, MQTT, REST-API + Dashboard, Auto-Reconnect |
 | **Export** | COCO JSON, YOLO TXT, CSV-Annotationen; Excel-Inferenzergebnisse (konfigurierbare Spalten) |
 | **UX** | Modernes Dark-Theme (GitHub-Dark Palette), Sidebar-Navigation, geführte Tour, F1-Hilfe, QSettings-Persistenz |
+
+---
+
+## Neue Features in v2.4.x
+
+### Active Learning — Automatischer Unsicherheits-Scan (v2.4.0)
+
+Schließt den Kreislauf zwischen Training und Labeling:
+
+1. **Training abschließen** — beliebiges Klassifikationsmodell
+2. **Tab „🔄 Active Learning" öffnen** (Training-Seite, rechter Bereich)
+3. **Schwellwert einstellen** (Standard: 70 %) und **Max. Kandidaten** (Standard: 50)
+4. **🔍 AL-Scan starten** — das Modell klassifiziert alle ungelabelten Projektbilder im Hintergrund
+5. Die unsichersten Bilder (niedrigste Confidence) werden in die **AL-Queue** eingetragen
+6. **Labeling-Seite**: das orange AL-Panel erscheint automatisch — Bilder reviewen, Vorschläge akzeptieren oder manuell labeln
+7. **Neu trainieren** — das Modell verbessert sich mit den informativsten Bildern
+
+**Warum Active Learning?**  
+Statt zufälliger Stichproben labelst du gezielt die Grenzfälle, bei denen das Modell unsicher ist. Gleiche Modellqualität mit deutlich weniger Labeling-Aufwand — typisch reichen 3–5 Iterationen.
+
+| Parameter | Beschreibung | Standard |
+|---|---|---|
+| Unsicherheits-Schwellwert | Confidence < Schwellwert → in Queue | 0.70 |
+| Max. Kandidaten | Maximale Queue-Größe pro Scan | 50 |
 
 ---
 
@@ -302,7 +327,18 @@ pip install ultralytics optuna imagehash scipy paho-mqtt onnxruntime
 
 ---
 
-#### Schritt 9 — Data Drift überwachen (Produktion)
+#### Schritt 9 — Active Learning (iterative Verbesserung)
+
+1. Nach dem Training: Training-Seite → Tab **„🔄 Active Learning"**
+2. **Schwellwert** (Standard 0,70) und **Max. Kandidaten** (Standard 50) einstellen
+3. **`🔍 AL-Scan starten`** — scannt alle ungelabelten Projektbilder
+4. Labeling-Seite öffnen → das **orange AL-Panel** erscheint automatisch
+5. Bilder reviewen: `⚡ Übernehmen` = Vorschlag akzeptieren · `✓ Gelabelt` = manuell gesetzt · `⚡ Alle ≥ 80% übernehmen` für Bulk-Accept
+6. Neu trainieren → Scan wiederholen (3–5 Iterationen genügen)
+
+---
+
+#### Schritt 10 — Data Drift überwachen (Produktion)
 
 1. Seite **Data Drift** öffnen
 2. **Baseline erstellen:** `📊 Baseline aus Projektbildern erstellen`
@@ -313,7 +349,7 @@ pip install ultralytics optuna imagehash scipy paho-mqtt onnxruntime
 
 ---
 
-#### Schritt 10 — Ergebnisse exportieren
+#### Schritt 11 — Ergebnisse exportieren
 
 **Als Excel:**
 1. Seite **Export** → `Ergebnisse aus letzter Inferenz laden`
@@ -495,6 +531,7 @@ python monitor.py --channels kanäle.json
 | Loss wird NaN | LR um Faktor 10 reduzieren |
 | Training sehr langsam | `cuda` oder `mps`; Bildgröße auf 128 reduzieren |
 | Instabile Produktions-Vorhersagen | Data Drift Detection prüfen; Pre-Labeling für Nachkorrektur |
+| Zu wenig Labeling-Budget | Active Learning: nur die unsichersten Bilder labeln (Training → AL-Scan → Label → neu trainieren) |
 
 ### Anomalie-Erkennung Tipps
 
@@ -572,6 +609,8 @@ python monitor.py --channels kanäle.json
 | 15 | Objekterkennung | Bild |
 | 16 | Data Drift | Bild |
 
+> **Active Learning** ist kein eigener Stack-Index — der AL-Scan-Tab befindet sich auf der Training-Seite (Index 3); das AL-Review-Panel ist in die Labeling-Seite (Index 2) integriert.
+
 ---
 
 ## Projektstruktur
@@ -588,6 +627,7 @@ Picture/
 │   ├── training.py         # TrainingWorker, FocalLoss, WeightedSampler
 │   ├── inference.py        # Inferencer: TTA, Batch, Ordner
 │   ├── pre_labeling.py     # PreLabeler: Modell-Vorschläge für ungelabelte Bilder
+│   ├── active_learning.py  # ActiveLearningSampler + ActiveLearningThread
 │   ├── data_drift.py       # DriftDetector: Z-Score-basierter Drift-Vergleich
 │   ├── object_detection.py # ObjectDetector: YOLOv8-Wrapper + QThread
 │   ├── detection_dataset.py# YOLO-Dataset-Konvertierung aus Projekt-ROIs
@@ -622,7 +662,7 @@ Picture/
 │   │   ├── dashboard_page.py
 │   │   ├── data_page.py
 │   │   ├── labeling_page.py      # ROI-Editor + Segmentierungsmaske + Pre-Labeling
-│   │   ├── training_page.py      # Focal Loss, HPT
+│   │   ├── training_page.py      # Focal Loss, HPT, Active Learning Tab
 │   │   ├── models_page.py
 │   │   ├── inference_page.py     # TTA, Ensemble, ROI-Fallback
 │   │   ├── batch_inference_page.py
@@ -644,7 +684,7 @@ Picture/
 ├── scripts/
 │   └── remote_train.py     # Standalone-Skript für SSH-Ferntraining
 │
-└── tests/                  # 746 Tests (Unit + Integration)
+└── tests/                  # 756 Tests (Unit + Integration)
     ├── conftest.py
     ├── test_project.py
     ├── test_dataset.py
