@@ -197,7 +197,7 @@ def main():
                         help="Live-Scoring Dauer in Sekunden (Standard: 30)")
     args = parser.parse_args()
 
-    print(f"\n{BOLD}Image Labeling Studio – Anomalie-Erkennungstest{RESET}")
+    print(f"\n{BOLD}Picture Studio – Anomalie-Erkennungstest{RESET}")
     print(f"Kamera {args.camera}  |  {args.frames} Normalframes  |  "
           f"{args.epochs} Epochen  |  {args.score_duration}s Scoring\n")
 

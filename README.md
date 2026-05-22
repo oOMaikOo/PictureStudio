@@ -1,6 +1,8 @@
-# Picture Studio v2.4.0
+# Picture Studio v2.4.0-beta
 
-Eine produktionsreife Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.
+> ⚠ **Beta-Version** — Funktionsumfang vollständig, noch nicht für den produktiven Einsatz freigegeben.
+
+Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.
 
 ---
 

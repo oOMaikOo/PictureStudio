@@ -822,7 +822,7 @@ class MainWindow(QMainWindow):
         """Display the About dialog with application version and library versions."""
         from utils.reproducibility import get_software_versions
         vers = get_software_versions()
-        text = f"{APP_NAME} v{APP_VERSION}\n\nBibliotheken:\n"
+        text = f"{APP_NAME} v{APP_VERSION}\n⚠ Beta-Version — nicht für den Produktiveinsatz\n\nBibliotheken:\n"
         for k, v in vers.items():
             text += f"  {k}: {v}\n"
         QMessageBox.about(self, f"Über {APP_NAME}", text)

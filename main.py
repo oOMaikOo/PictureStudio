@@ -1,5 +1,5 @@
 """
-Image Labeling Studio – application entry point.
+Picture Studio – application entry point.
 
 Configures logging, installs a global exception hook for user-friendly
 crash dialogs, sets the Qt dark theme and system font, then shows the

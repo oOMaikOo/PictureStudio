@@ -76,7 +76,7 @@ pre {{ background:#0f3460; padding:14px; border-radius:6px; overflow-x:auto; fon
 </div>
 
 <footer style="margin-top:40px;color:#555;font-size:0.8em;">
-Erstellt mit Image Labeling Studio – {generated_at}
+Erstellt mit Picture Studio – {generated_at}
 </footer>
 </body>
 </html>

@@ -1,5 +1,5 @@
 """
-Lightweight REST API server for Image Labeling Studio.
+Lightweight REST API server for Picture Studio.
 Runs in a background daemon thread; no extra dependencies required.
 
 Endpoints
