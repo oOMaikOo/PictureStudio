@@ -124,7 +124,14 @@ class DriftDetector:
         mat = np.stack(features)  # (N, FEAT_DIM)
         self._baseline_features = mat
         self._baseline_mean = mat.mean(axis=0)
-        self._baseline_std  = mat.std(axis=0) + 1e-6   # avoid /0
+        # Minimum std floor per feature group.
+        # Color/edge: floor ≈ 5 RGB units in [0,1] = 0.020
+        # Sharpness:  floor 0.10 (minor focus variation)
+        # Histogram:  floor 0.05 per bin — single-bin z-scores are not used for
+        #             the overall drift score (mean is used instead), but the floor
+        #             still prevents ÷0 and bounds per-bin z-scores to ≤ 20.
+        _floor = np.array([0.020]*6 + [0.10, 0.020] + [0.05]*16, dtype=np.float32)
+        self._baseline_std = np.maximum(mat.std(axis=0), _floor)
         self.n_baseline = len(features)
         self.baseline_paths = image_paths
         log.info("Drift-Baseline: %d Bilder, %d Fehler", len(features), errors)
@@ -140,15 +147,25 @@ class DriftDetector:
         if not self.is_ready():
             raise RuntimeError("Keine Baseline geladen.")
         feat = _extract_features(path)
-        z = np.abs((feat - self._baseline_mean) / self._baseline_std)
-        drift_score = float(z.max())
+        z    = np.abs((feat - self._baseline_mean) / self._baseline_std)
+
+        # Color/texture features: take the MAX (one bad feature = drift)
+        z_color_max = float(z[:8].max())
+        # Histogram bins: take the MEAN across all 16 bins.
+        # Single-bin outliers would occur even for trivially different images
+        # (a +5 brightness shift moves mass between adjacent bins); the mean
+        # over all 16 bins avoids false positives while still detecting
+        # distribution-wide changes.
+        z_hist_mean = float(z[8:].mean())
+
+        drift_score = max(z_color_max, z_hist_mean)
         details = {
-            "z_max":         drift_score,
-            "z_color_mean":  float(z[:3].mean()),
-            "z_color_std":   float(z[3:6].mean()),
-            "z_sharpness":   float(z[6]),
-            "z_edges":       float(z[7]),
-            "z_histogram":   float(z[8:].mean()),
+            "z_max":         round(drift_score, 3),
+            "z_color_mean":  round(float(z[:3].mean()), 3),
+            "z_color_std":   round(float(z[3:6].mean()), 3),
+            "z_sharpness":   round(float(z[6]), 3),
+            "z_edges":       round(float(z[7]), 3),
+            "z_histogram":   round(z_hist_mean, 3),
         }
         return drift_score, details
 
@@ -258,8 +275,12 @@ class DriftDetector:
         s = data.get("baseline_std")
         bf = data.get("baseline_features")
         self._baseline_mean     = np.array(m,  dtype=np.float32) if m  else None
-        self._baseline_std      = np.array(s,  dtype=np.float32) if s  else None
         self._baseline_features = np.array(bf, dtype=np.float32) if bf else None
+        if s is not None:
+            _floor = np.array([0.020]*6 + [0.10, 0.020] + [0.05]*16, dtype=np.float32)
+            self._baseline_std = np.maximum(np.array(s, dtype=np.float32), _floor)
+        else:
+            self._baseline_std = None
         log.info("Drift-Baseline geladen: %s (%d Bilder)", path, self.n_baseline)
         return self
 
