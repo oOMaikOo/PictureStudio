@@ -16,6 +16,7 @@ from PySide6.QtGui import QFont
 from models.classifier import get_available_models
 from utils.config import DEFAULT_TRAIN_CONFIG
 from core.metrics import format_metrics_text
+from utils.i18n import tr
 
 
 class TrainingThread(QThread):
@@ -138,7 +139,7 @@ class TrainingPage(QWidget):
         splitter.setSizes([370, 630])
 
     def _build_config_panel(self) -> QGroupBox:
-        box = QGroupBox("Trainingsparameter")
+        box = QGroupBox(tr("training.config_group"))
         form = QFormLayout(box)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
@@ -155,9 +156,9 @@ class TrainingPage(QWidget):
             "  Empfehlung: EfficientNet-B3 oder ConvNeXt-Tiny für beste Ergebnisse\n"
             "• SimpleCNN — kein Transfer Learning, ideal für Tests"
         )
-        form.addRow("Architektur:", self.model_combo)
+        form.addRow(tr("training.arch_label"), self.model_combo)
 
-        self.pretrained_cb = QCheckBox("Vortrainierte Gewichte (ImageNet)")
+        self.pretrained_cb = QCheckBox(tr("training.pretrained_cb"))
         self.pretrained_cb.setChecked(True)
         self.pretrained_cb.setToolTip(
             "Transfer Learning: Gewichte aus ImageNet-Vortraining laden.\n"
@@ -179,7 +180,7 @@ class TrainingPage(QWidget):
             "• 320–512 px — für kleine Details oder feine Strukturen\n"
             "Tipp: immer Vielfaches von 32 wählen."
         )
-        form.addRow("Bildgröße (px):", self.img_size_spin)
+        form.addRow(tr("training.image_size_label"), self.img_size_spin)
 
         self.batch_spin = QSpinBox()
         self.batch_spin.setRange(1, 512)
@@ -190,7 +191,7 @@ class TrainingPage(QWidget):
             "• Kleinere Batches → weniger Speicher, etwas rauschigeres Training\n"
             "Empfehlung: 32 (GPU) | 8–16 (CPU) | 4–8 (wenig Daten)"
         )
-        form.addRow("Batch-Größe:", self.batch_spin)
+        form.addRow(tr("training.batch_size_label"), self.batch_spin)
 
         self.epochs_spin = QSpinBox()
         self.epochs_spin.setRange(1, 1000)
@@ -202,7 +203,7 @@ class TrainingPage(QWidget):
             "Empfehlung: 20–50 mit Early Stopping; \n"
             "beobachte Val-Loss in den Live-Kurven."
         )
-        form.addRow("Epochen:", self.epochs_spin)
+        form.addRow(tr("training.epochs_label"), self.epochs_spin)
 
         self.lr_spin = QDoubleSpinBox()
         self.lr_spin.setRange(1e-7, 1.0)
@@ -216,7 +217,7 @@ class TrainingPage(QWidget):
             "• 0.01 — aggressiv, funktioniert manchmal mit SGD\n"
             "Tipp: bei 'NaN Loss' Lernrate um Faktor 10 reduzieren."
         )
-        form.addRow("Learning Rate:", self.lr_spin)
+        form.addRow(tr("training.lr_label"), self.lr_spin)
 
         self.opt_combo = QComboBox()
         self.opt_combo.addItems(["adam", "adamw", "sgd"])
@@ -226,7 +227,7 @@ class TrainingPage(QWidget):
             "• adamw — wie Adam + L2-Gewichtsregularisierung (gegen Overfitting)\n"
             "• sgd — klassisch, oft mit Momentum; braucht sorgfältige LR-Wahl"
         )
-        form.addRow("Optimizer:", self.opt_combo)
+        form.addRow(tr("training.optimizer_label"), self.opt_combo)
 
         self.sched_combo = QComboBox()
         self.sched_combo.addItems(["reduce_on_plateau", "cosine", "step"])
@@ -236,7 +237,7 @@ class TrainingPage(QWidget):
             "• cosine — sanfte Cosinuskurve von LR bis fast 0 über alle Epochen\n"
             "• step — reduziert LR alle N Epochen um festen Faktor"
         )
-        form.addRow("LR-Scheduler:", self.sched_combo)
+        form.addRow(tr("training.scheduler_label"), self.sched_combo)
 
         self.early_stop_spin = QSpinBox()
         self.early_stop_spin.setRange(0, 100)
@@ -247,7 +248,7 @@ class TrainingPage(QWidget):
             "Empfehlung: 5–10 — schützt vor Overfitting und spart Zeit.\n"
             "Das beste Modell (niedrigster Val-Loss) wird gespeichert."
         )
-        form.addRow("Early Stopping (Geduld):", self.early_stop_spin)
+        form.addRow(tr("training.early_stop_label"), self.early_stop_spin)
 
         self.seed_spin = QSpinBox()
         self.seed_spin.setRange(0, 99999)
@@ -257,7 +258,7 @@ class TrainingPage(QWidget):
             "Gleicher Seed → gleicher Train/Val-Split und gleiche Augmentation.\n"
             "Wert ändern um zu prüfen ob Ergebnisse stabil sind."
         )
-        form.addRow("Seed:", self.seed_spin)
+        form.addRow(tr("training.seed_label"), self.seed_spin)
 
         self.device_combo = QComboBox()
         self.device_combo.addItems(["auto", "cpu", "cuda", "mps"])
@@ -268,9 +269,9 @@ class TrainingPage(QWidget):
             "• mps — Apple Silicon GPU (Mac M1/M2/M3, ~5–15× schneller)\n"
             "• cpu — immer verfügbar, aber langsam"
         )
-        form.addRow("Gerät:", self.device_combo)
+        form.addRow(tr("training.device_label"), self.device_combo)
 
-        self.amp_cb = QCheckBox("Mixed Precision (AMP, nur CUDA)")
+        self.amp_cb = QCheckBox(tr("training.amp_cb"))
         self.amp_cb.setToolTip(
             "Automatic Mixed Precision: berechnet in float16 wo möglich.\n"
             "Nur auf NVIDIA-GPUs mit Tensor Cores (RTX/Ampere+) sinnvoll.\n"
@@ -280,7 +281,7 @@ class TrainingPage(QWidget):
         form.addRow("", self.amp_cb)
 
         # Split
-        split_box = QGroupBox("Daten-Split")
+        split_box = QGroupBox(tr("training.split_group"))
         sf = QFormLayout(split_box)
         self.train_split = QDoubleSpinBox()
         self.train_split.setRange(0.1, 0.9)
@@ -291,7 +292,7 @@ class TrainingPage(QWidget):
             "Rest wird auf Validation + Test aufgeteilt.\n"
             "Bei wenig Daten (<200 Bilder): 0.8 empfohlen."
         )
-        sf.addRow("Train:", self.train_split)
+        sf.addRow(tr("training.train_split_label"), self.train_split)
         self.val_split = QDoubleSpinBox()
         self.val_split.setRange(0.05, 0.5)
         self.val_split.setValue(0.2)
@@ -301,40 +302,40 @@ class TrainingPage(QWidget):
             "Wird nach jeder Epoche ausgewertet — steuert Early Stopping\n"
             "und LR-Scheduler. Nicht für das Training verwendet."
         )
-        sf.addRow("Validation:", self.val_split)
+        sf.addRow(tr("training.val_split_label"), self.val_split)
         form.addRow(split_box)
 
         # Augmentation
-        aug_box = QGroupBox("Augmentation")
+        aug_box = QGroupBox(tr("training.aug_group"))
         ab = QVBoxLayout(aug_box)
-        self.aug_flip = QCheckBox("Flip (horizontal + vertikal)")
+        self.aug_flip = QCheckBox(tr("training.aug_flip_cb"))
         self.aug_flip.setChecked(True)
         self.aug_flip.setToolTip(
             "Spiegelt Bilder zufällig horizontal und/oder vertikal.\n"
             "Günstig wenn Ausrichtung keine Rolle spielt (z. B. Qualitätskontrolle).\n"
             "Deaktivieren wenn Orientierung wichtig ist (z. B. Schriften, Pfeile)."
         )
-        self.aug_rotation = QCheckBox("Rotation (±15°)")
+        self.aug_rotation = QCheckBox(tr("training.aug_rotation_cb"))
         self.aug_rotation.setChecked(True)
         self.aug_rotation.setToolTip(
             "Dreht Bilder zufällig um bis zu ±15° (per Editor anpassbar).\n"
             "Hilft gegen Rotation der Kamera / des Objekts.\n"
             "Intensität im Augmentierungs-Editor einstellen."
         )
-        self.aug_brightness = QCheckBox("Helligkeit / Kontrast")
+        self.aug_brightness = QCheckBox(tr("training.aug_brightness_cb"))
         self.aug_brightness.setChecked(True)
         self.aug_brightness.setToolTip(
             "Variiert Helligkeit und Kontrast zufällig.\n"
             "Macht das Modell robuster gegen unterschiedliche Beleuchtung.\n"
             "Intensität im Augmentierungs-Editor einstellen."
         )
-        self.aug_scale = QCheckBox("Skalierung (Random Crop)")
+        self.aug_scale = QCheckBox(tr("training.aug_scale_cb"))
         self.aug_scale.setToolTip(
             "Schneidet einen zufälligen Bildausschnitt aus und skaliert ihn.\n"
             "Hilft gegen leichte Positionsänderungen des Objekts im Bild.\n"
             "Intensität (min. Crop-Anteil) im Augmentierungs-Editor einstellen."
         )
-        self.aug_blur = QCheckBox("Blur (Gaussian)")
+        self.aug_blur = QCheckBox(tr("training.aug_blur_cb"))
         self.aug_blur.setToolTip(
             "Unscharfe Bilder durch Gaussian-Blur simulieren.\n"
             "Gut gegen Unschärfe durch Kamerabewegung oder Defokus.\n"
@@ -343,7 +344,7 @@ class TrainingPage(QWidget):
         for cb in [self.aug_flip, self.aug_rotation, self.aug_brightness,
                    self.aug_scale, self.aug_blur]:
             ab.addWidget(cb)
-        aug_preview_btn = QPushButton("🔍 Editor / Vorschau…")
+        aug_preview_btn = QPushButton(tr("training.aug_preview_btn"))
         aug_preview_btn.setToolTip(
             "Augmentierungs-Editor öffnen: Intensitäten einstellen und Live-Vorschau sehen."
         )
@@ -354,7 +355,7 @@ class TrainingPage(QWidget):
         ab.addWidget(aug_preview_btn)
         form.addRow(aug_box)
 
-        self.use_rois_cb = QCheckBox("ROI-Bereiche verwenden")
+        self.use_rois_cb = QCheckBox(tr("training.use_rois_cb"))
         self.use_rois_cb.setChecked(True)
         self.use_rois_cb.setToolTip(
             "Wenn Bilder ROIs (Regions of Interest) haben, wird nur der\n"
@@ -363,14 +364,14 @@ class TrainingPage(QWidget):
         )
         form.addRow("", self.use_rois_cb)
 
-        self.class_balance_cb = QCheckBox("Klassenausgleich (WeightedSampler)")
+        self.class_balance_cb = QCheckBox(tr("training.class_balance_cb"))
         self.class_balance_cb.setToolTip(
             "Gleicht ungleichmäßige Klassenverteilungen aus, indem unterrepräsentierte "
             "Klassen häufiger gesampelt werden."
         )
         form.addRow("", self.class_balance_cb)
 
-        self.focal_loss_cb = QCheckBox("Focal Loss")
+        self.focal_loss_cb = QCheckBox(tr("training.focal_loss_cb"))
         self.focal_loss_cb.setToolTip(
             "Focal Loss fokussiert das Training auf schwierige Beispiele.\n"
             "Empfohlen bei stark ungleichen Klassen (z.B. 10:1 Normal/Defekt).\n"
@@ -381,7 +382,7 @@ class TrainingPage(QWidget):
 
         from PySide6.QtWidgets import QDoubleSpinBox as _DSB, QHBoxLayout as _HBox
         focal_row = _HBox()
-        self._focal_gamma_label = QLabel("γ (Gamma):")
+        self._focal_gamma_label = QLabel(tr("training.focal_gamma_label"))
         self._focal_gamma_label.setEnabled(False)
         focal_row.addWidget(self._focal_gamma_label)
         self.focal_gamma_spin = QDoubleSpinBox()
@@ -405,14 +406,14 @@ class TrainingPage(QWidget):
         form.addRow("Speicherort:", self.save_dir_label)
 
         # Resume
-        self.resume_cb = QCheckBox("Training fortsetzen (Resume)")
+        self.resume_cb = QCheckBox(tr("training.resume_cb"))
         self.resume_cb.setToolTip(
             "Setzt ein unterbrochenes Training ab einem gespeicherten\n"
             "Checkpoint fort. Checkpoint unten auswählen.\n"
             "Architektur und Bildgröße müssen mit dem Checkpoint übereinstimmen."
         )
         form.addRow("", self.resume_cb)
-        resume_btn = QPushButton("Checkpoint wählen…")
+        resume_btn = QPushButton(tr("training.checkpoint_btn"))
         resume_btn.setToolTip("PyTorch-Checkpoint (.pth) für Resume-Training laden")
         resume_btn.clicked.connect(self._pick_checkpoint)
         form.addRow(resume_btn)
@@ -421,28 +422,28 @@ class TrainingPage(QWidget):
         form.addRow(self.resume_path_label)
 
         # SSH remote training
-        ssh_box = QGroupBox("Ferntraining per SSH")
+        ssh_box = QGroupBox(tr("training.ssh_group"))
         ssh_f = QFormLayout(ssh_box)
 
-        self.ssh_enabled_cb = QCheckBox("SSH-Ferntraining aktivieren")
+        self.ssh_enabled_cb = QCheckBox(tr("training.ssh_enabled_cb"))
         self.ssh_enabled_cb.stateChanged.connect(self._on_ssh_toggled)
         ssh_f.addRow("", self.ssh_enabled_cb)
 
         self.ssh_profile_combo = QComboBox()
         self.ssh_profile_combo.setEnabled(False)
-        ssh_f.addRow("Profil:", self.ssh_profile_combo)
+        ssh_f.addRow(tr("training.ssh_profile_label"), self.ssh_profile_combo)
 
         self.ssh_python_edit = QLineEdit("python3")
         self.ssh_python_edit.setEnabled(False)
         self.ssh_python_edit.setToolTip("Python-Interpreter auf dem Server (z.B. python3 oder /opt/venv/bin/python)")
-        ssh_f.addRow("Python:", self.ssh_python_edit)
+        ssh_f.addRow(tr("training.ssh_python_label"), self.ssh_python_edit)
 
         self.ssh_remote_path_edit = QLineEdit("/tmp/ils_project")
         self.ssh_remote_path_edit.setEnabled(False)
         self.ssh_remote_path_edit.setToolTip("Basis-Arbeitsverzeichnis auf dem Remote-Server")
-        ssh_f.addRow("Remote-Pfad:", self.ssh_remote_path_edit)
+        ssh_f.addRow(tr("training.ssh_remote_path_label"), self.ssh_remote_path_edit)
 
-        self.ssh_test_btn = QPushButton("Verbindung testen")
+        self.ssh_test_btn = QPushButton(tr("training.ssh_test_btn"))
         self.ssh_test_btn.setEnabled(False)
         self.ssh_test_btn.clicked.connect(self._test_ssh)
         ssh_f.addRow(self.ssh_test_btn)
@@ -454,7 +455,7 @@ class TrainingPage(QWidget):
         form.addRow(ssh_box)
 
         # Buttons — Reihenfolge: HPT → Start → Stop
-        self.hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
+        self.hpt_btn = QPushButton(tr("training.hpt_btn"))
         self.hpt_btn.setStyleSheet(
             "background:#6C3483;color:white;padding:6px;border-radius:3px;"
         )
@@ -467,12 +468,12 @@ class TrainingPage(QWidget):
         self.hpt_btn.clicked.connect(self._start_hpt)
         form.addRow(self.hpt_btn)
 
-        self.start_btn = QPushButton("Training starten")
+        self.start_btn = QPushButton(tr("training.start_btn"))
         self.start_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
         self.start_btn.clicked.connect(self._start)
         form.addRow(self.start_btn)
 
-        self.stop_btn = QPushButton("Training stoppen")
+        self.stop_btn = QPushButton(tr("training.stop_btn"))
         self.stop_btn.setStyleSheet("background:#E74C3C;color:white;padding:8px;")
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self._stop_training)
@@ -486,7 +487,7 @@ class TrainingPage(QWidget):
 
         # Progress row
         pr = QHBoxLayout()
-        self.epoch_label = QLabel("Epoche: – / –")
+        self.epoch_label = QLabel(tr("training.epoch_init"))
         pr.addWidget(self.epoch_label)
         self.progress_bar = QProgressBar()
         pr.addWidget(self.progress_bar)
@@ -512,33 +513,33 @@ class TrainingPage(QWidget):
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Courier New", 9))
-        self.tabs.addTab(self.log_text, "Log")
+        self.tabs.addTab(self.log_text, tr("training.tab.log"))
 
         self.metrics_text = QTextEdit()
         self.metrics_text.setReadOnly(True)
-        self.tabs.addTab(self.metrics_text, "Val-Metriken")
+        self.tabs.addTab(self.metrics_text, tr("training.tab.metrics"))
 
         from gui.widgets.charts import ConfusionMatrixWidget, TrainingCurvesWidget
         self.cm_widget = ConfusionMatrixWidget()
         self.cm_widget.cell_clicked.connect(self._on_cm_cell_clicked)
-        self.tabs.addTab(self.cm_widget, "Val-Konfusionsmatrix")
+        self.tabs.addTab(self.cm_widget, tr("training.tab.confusion"))
 
         self.curves_widget = TrainingCurvesWidget()
-        self.tabs.addTab(self.curves_widget, "Trainingskurven")
+        self.tabs.addTab(self.curves_widget, tr("training.tab.curves"))
 
         # ── Test-Ergebnisse tab ──────────────────────────────────────────────
-        self.tabs.addTab(self._build_test_tab(), "🔬 Test-Ergebnisse")
+        self.tabs.addTab(self._build_test_tab(), tr("training.tab.test"))
 
         # ── Active Learning tab ──────────────────────────────────────────────
-        self.tabs.addTab(self._build_al_tab(), "🔄 Active Learning")
+        self.tabs.addTab(self._build_al_tab(), tr("training.tab.al"))
 
         v.addWidget(self.tabs)
 
         # Export button
-        export_btn = QPushButton("HTML-Bericht erstellen…")
+        export_btn = QPushButton(tr("training.export_html_btn"))
         export_btn.clicked.connect(self._export_report)
         v.addWidget(export_btn)
-        excel_btn = QPushButton("Excel-Bericht erstellen…")
+        excel_btn = QPushButton(tr("training.export_excel_btn"))
         excel_btn.clicked.connect(self._export_excel)
         v.addWidget(excel_btn)
         return w
@@ -609,17 +610,17 @@ class TrainingPage(QWidget):
         self._al_thr_spin.setToolTip(
             "Bilder mit Confidence unterhalb dieses Schwellwerts gelten als unsicher."
         )
-        form.addRow("Unsicherheits-Schwellwert:", self._al_thr_spin)
+        form.addRow(tr("training.al_threshold_label"), self._al_thr_spin)
 
         self._al_n_spin = QSpinBox()
         self._al_n_spin.setRange(5, 500)
         self._al_n_spin.setValue(50)
         self._al_n_spin.setToolTip("Maximale Anzahl Bilder, die in die AL-Queue eingetragen werden.")
-        form.addRow("Max. Kandidaten:", self._al_n_spin)
+        form.addRow(tr("training.al_max_label"), self._al_n_spin)
 
         v.addLayout(form)
 
-        self._al_scan_btn = QPushButton("🔍 AL-Scan starten")
+        self._al_scan_btn = QPushButton(tr("training.al_scan_btn"))
         self._al_scan_btn.setEnabled(False)
         self._al_scan_btn.setStyleSheet(
             "background:#1565C0; color:white; font-weight:bold; "
@@ -648,7 +649,7 @@ class TrainingPage(QWidget):
 
         unlabeled = self.project.get_unlabeled_images()
         if not unlabeled:
-            self._al_status.setText("Keine ungelabelten Bilder im Projekt.")
+            self._al_status.setText(tr("training.al_no_unlabeled"))
             return
 
         from core.active_learning import ActiveLearningThread
@@ -656,7 +657,7 @@ class TrainingPage(QWidget):
         self._al_scan_btn.setEnabled(False)
         self._al_progress.setValue(0)
         self._al_progress.show()
-        self._al_status.setText(f"Scanne {len(unlabeled)} ungelabelte Bilder…")
+        self._al_status.setText(tr("training.al_scanning", n=len(unlabeled)))
 
         roi_template = None
         if self.project.rois:
@@ -686,8 +687,8 @@ class TrainingPage(QWidget):
 
         if not candidates:
             self._al_status.setText(
-                "Keine unsicheren Vorhersagen gefunden "
-                f"(Schwellwert {self._al_thr_spin.value():.0%})."
+                tr("training.al_no_uncertain") +
+                f" (Schwellwert {self._al_thr_spin.value():.0%})."
             )
             return
 
@@ -701,10 +702,10 @@ class TrainingPage(QWidget):
             else:
                 skipped += 1
 
-        parts = [f"✅ {added} Bilder in AL-Queue eingetragen"]
+        parts = [tr("training.al_finished", added=added)]
         if skipped:
             parts.append(f"({skipped} bereits vorhanden)")
-        parts.append("→ Labeling-Seite öffnen, um zu reviewen.")
+        parts.append(tr("training.al_open_labeling"))
         self._al_status.setText("  ".join(parts))
 
         if added > 0:
@@ -808,10 +809,10 @@ class TrainingPage(QWidget):
     def _start(self) -> None:
         """Validate prerequisites, build the config, and start the training thread."""
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         if len(self.project.labels) < 2:
-            QMessageBox.warning(self, "Zu wenig Labels", "Mindestens 2 Labels erforderlich.")
+            QMessageBox.warning(self, tr("training.no_labels_title"), tr("training.no_labels_msg"))
             return
         cfg = self._get_config()
         save_dir = os.path.join(self.project.get_project_dir() or ".", "models")
@@ -826,7 +827,7 @@ class TrainingPage(QWidget):
         if self.ssh_enabled_cb.isChecked():
             ssh_cfg = self._current_ssh_cfg()
             if ssh_cfg is None:
-                QMessageBox.warning(self, "SSH-Fehler", "Kein SSH-Profil ausgewählt.")
+                QMessageBox.warning(self, tr("training.ssh_error"), tr("training.ssh_no_profile"))
                 return
             from core.remote_training import RemoteTrainingThread
             self._thread = RemoteTrainingThread(self.project, cfg, save_dir, ssh_cfg)
@@ -850,13 +851,13 @@ class TrainingPage(QWidget):
     def _start_hpt(self) -> None:
         """Launch Optuna hyperparameter search dialog, then run HPTThread."""
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         try:
             from core.hyperparameter_tuning import HPTThread
         except ImportError:
-            QMessageBox.warning(self, "Optuna fehlt",
-                                "Hyperparameter-Suche benötigt Optuna:\npip install optuna")
+            QMessageBox.warning(self, tr("training.hpt_optuna_missing"),
+                                tr("training.hpt_optuna_install"))
             return
 
         from PySide6.QtWidgets import (
@@ -866,21 +867,21 @@ class TrainingPage(QWidget):
         from gui.widgets.hpt_progress_dialog import HptProgressDialog
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Hyperparameter-Suche konfigurieren")
+        dlg.setWindowTitle(tr("training.hpt_dialog_title"))
         v = QVBoxLayout(dlg)
         form = QFormLayout()
         n_spin = QSpinBox()
         n_spin.setRange(5, 200)
         n_spin.setValue(20)
-        form.addRow("Anzahl Versuche:", n_spin)
+        form.addRow(tr("training.hpt_trials_label"), n_spin)
         t_spin = QSpinBox()
         t_spin.setRange(60, 7200)
         t_spin.setValue(300)
         t_spin.setSuffix(" s")
-        form.addRow("Zeitlimit:", t_spin)
+        form.addRow(tr("training.hpt_timeout_label"), t_spin)
         dev_combo = QComboBox()
         dev_combo.addItems(["cpu", "cuda", "mps"])
-        form.addRow("Gerät:", dev_combo)
+        form.addRow(tr("training.hpt_device_label"), dev_combo)
         v.addLayout(form)
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.accepted.connect(dlg.accept)
@@ -919,11 +920,11 @@ class TrainingPage(QWidget):
             prog.set_done()
             params = result.get("best_params", {})
             best = result.get("best_value", 0.0)
-            lines = [f"Beste Val-Accuracy: {best*100:.2f}%\n", "Beste Parameter:"]
+            lines = [f"Beste Val-Accuracy: {best*100:.2f}%\n", tr("training.hpt_best_params")]
             for k, val in params.items():
                 lines.append(f"  {k}: {val}")
-            lines.append("\nParameter in Konfiguration übernehmen?")
-            reply = QMessageBox.question(self, "HPT abgeschlossen", "\n".join(lines),
+            lines.append("\n" + tr("training.hpt_apply_question"))
+            reply = QMessageBox.question(self, tr("training.hpt_completed"), "\n".join(lines),
                                          QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self._apply_hpt_params(params)
@@ -931,7 +932,7 @@ class TrainingPage(QWidget):
         def _on_hpt_error(msg: str) -> None:
             _hpt_cleanup()
             prog.close()
-            QMessageBox.critical(self, "HPT-Fehler", msg)
+            QMessageBox.critical(self, tr("common.error"), msg)
 
         hpt.finished.connect(_on_hpt_done)
         hpt.error.connect(_on_hpt_error)
@@ -958,7 +959,7 @@ class TrainingPage(QWidget):
     def _on_progress(self, epoch, total, tl, vl, ta, va) -> None:
         """Update progress bar, metric badges, and live training curves each epoch."""
         self.progress_bar.setValue(int(epoch / total * 100))
-        self.epoch_label.setText(f"Epoche: {epoch} / {total}")
+        self.epoch_label.setText(tr("training.epoch_progress", epoch=epoch, total=total))
         self.train_loss_lbl.setText(f"Train-Loss: {tl:.4f}")
         self.val_loss_lbl.setText(f"Val-Loss: {vl:.4f}")
         self.train_acc_lbl.setText(f"Train-Acc: {ta*100:.1f}%")
@@ -1027,8 +1028,8 @@ class TrainingPage(QWidget):
 
         test_lines = [
             "╔══════════════════════════════════════════════╗",
-            f"║  Test-Accuracy:  {test_metrics.get('accuracy',0)*100:6.2f}%                     ║",
-            f"║  F1 (Macro):     {test_metrics.get('macro_f1',0)*100:6.2f}%                     ║",
+            f"║  {tr('training.test_accuracy')}  {test_metrics.get('accuracy',0)*100:6.2f}%                     ║",
+            f"║  {tr('training.test_f1')}  {test_metrics.get('macro_f1',0)*100:6.2f}%                     ║",
             f"║  F1 (Weighted):  {test_metrics.get('weighted_f1',0)*100:6.2f}%                     ║",
             f"║  Precision:      {test_metrics.get('macro_precision',0)*100:6.2f}%                     ║",
             f"║  Recall:         {test_metrics.get('macro_recall',0)*100:6.2f}%                     ║",
@@ -1076,10 +1077,10 @@ class TrainingPage(QWidget):
         self.tabs.setCurrentIndex(4)
         self.training_finished.emit(result)
         QMessageBox.information(
-            self, "Training abgeschlossen",
-            f"Test-Accuracy:  {test_metrics.get('accuracy',0)*100:.2f}%\n"
-            f"Test-F1 (macro):{test_metrics.get('macro_f1',0)*100:.2f}%\n\n"
-            f"Bestes Modell: {result.get('best_model_path', '')}"
+            self, tr("training.completed_title"),
+            f"{tr('training.test_accuracy')}  {test_metrics.get('accuracy',0)*100:.2f}%\n"
+            f"{tr('training.test_f1')} {test_metrics.get('macro_f1',0)*100:.2f}%\n\n"
+            f"{tr('training.best_model')} {result.get('best_model_path', '')}"
         )
 
     @Slot(str)
@@ -1088,7 +1089,7 @@ class TrainingPage(QWidget):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.log_text.append(f"FEHLER: {msg}")
-        QMessageBox.critical(self, "Trainingsfehler", msg)
+        QMessageBox.critical(self, tr("training.error_title"), msg)
 
     # ------------------------------------------------------------------ SSH helpers
 
@@ -1132,9 +1133,9 @@ class TrainingPage(QWidget):
         """Test the selected SSH connection in a background thread and update the status label."""
         cfg = self._current_ssh_cfg()
         if cfg is None:
-            QMessageBox.warning(self, "SSH", "Kein Profil ausgewählt.")
+            QMessageBox.warning(self, tr("training.ssh_error"), tr("training.ssh_no_profile"))
             return
-        self.ssh_status_lbl.setText("Verbinde …")
+        self.ssh_status_lbl.setText(tr("training.ssh_connecting"))
         self.ssh_test_btn.setEnabled(False)
 
         class _TestThread(QThread):
@@ -1167,8 +1168,8 @@ class TrainingPage(QWidget):
         """Open misclassified-images dialog for the clicked confusion matrix cell."""
         if not self._test_predictions or not self._last_class_names:
             QMessageBox.information(
-                self, "Keine Daten",
-                "Bitte erst ein Training mit Test-Set abschließen."
+                self, tr("training.no_test_data_title"),
+                tr("training.no_test_data_msg")
             )
             return
 
@@ -1197,7 +1198,7 @@ class TrainingPage(QWidget):
             QMessageBox.information(self, "Kein Ergebnis", "Erst Training durchführen.")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "HTML-Bericht speichern", "training_report.html", "HTML (*.html)"
+            self, tr("training.html_report_dlg"), "training_report.html", "HTML (*.html)"
         )
         if not path:
             return
@@ -1207,9 +1208,9 @@ class TrainingPage(QWidget):
                 self._last_result, path,
                 project_name=self.project.config.name if self.project else ""
             )
-            QMessageBox.information(self, "Exportiert", f"Bericht gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.done"), tr("training.export_success_msg", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _export_excel(self) -> None:
         """Save the last training result as an Excel (.xlsx) workbook."""
@@ -1217,13 +1218,13 @@ class TrainingPage(QWidget):
             QMessageBox.information(self, "Kein Ergebnis", "Erst Training durchführen.")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Excel-Bericht speichern", "training_report.xlsx", "Excel (*.xlsx)"
+            self, tr("training.excel_report_dlg"), "training_report.xlsx", "Excel (*.xlsx)"
         )
         if not path:
             return
         try:
             from core.export import export_training_report
             export_training_report(self._last_result, path)
-            QMessageBox.information(self, "Exportiert", f"Bericht gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.done"), tr("training.export_success_msg", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))

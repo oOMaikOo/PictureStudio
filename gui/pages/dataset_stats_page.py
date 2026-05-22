@@ -37,16 +37,17 @@ class DatasetStatsPage(QWidget):
         self._dup_status_lbl.setText("Duplikate noch nicht gesucht.")
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
 
-        title = QLabel("📊 Datensatz-Analyse")
+        title = QLabel(tr("dataset_stats.title"))
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
         root.addWidget(title)
 
         btn_row = QHBoxLayout()
-        refresh_btn = QPushButton("Aktualisieren")
+        refresh_btn = QPushButton(tr("common.refresh"))
         refresh_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 4px; padding: 5px 12px;")
         refresh_btn.clicked.connect(self.refresh)
         btn_row.addWidget(refresh_btn)
@@ -62,15 +63,15 @@ class DatasetStatsPage(QWidget):
         scroll.setWidget(container)
         root.addWidget(scroll)
 
-        lbl_grp = QGroupBox("Klassenverteilung")
+        lbl_grp = QGroupBox(tr("dataset_stats.label_dist"))
         lbl_grp.setStyleSheet("QGroupBox { font-weight: bold; color: #8B949E; border: 1px solid #30363D; border-radius: 6px; margin-top: 8px; padding-top: 8px; } QGroupBox::title { subcontrol-origin: margin; left: 8px; }")
         self._lbl_layout = QVBoxLayout(lbl_grp)
-        self._lbl_no_labels = QLabel("Keine Labels vergeben.")
+        self._lbl_no_labels = QLabel(tr("dataset_stats.no_labels"))
         self._lbl_no_labels.setStyleSheet("color: #8B949E;")
         self._lbl_layout.addWidget(self._lbl_no_labels)
         layout.addWidget(lbl_grp)
 
-        stats_grp = QGroupBox("Allgemeine Statistik")
+        stats_grp = QGroupBox(tr("dataset_stats.general_group"))
         stats_grp.setStyleSheet(lbl_grp.styleSheet())
         sf = QFormLayout(stats_grp)
         self._total_lbl = QLabel("–")
@@ -79,21 +80,21 @@ class DatasetStatsPage(QWidget):
         self._format_lbl = QLabel("–")
         self._size_lbl = QLabel("–")
         for caption, widget in [
-            ("Bilder gesamt:", self._total_lbl),
-            ("Gelabelt:", self._labeled_lbl),
-            ("Label-Quote:", self._label_rate_lbl),
-            ("Formate:", self._format_lbl),
-            ("Auflösung (Ø):", self._size_lbl),
+            (tr("dataset_stats.total_images"), self._total_lbl),
+            (tr("dataset_stats.labeled"), self._labeled_lbl),
+            (tr("dataset_stats.label_rate"), self._label_rate_lbl),
+            (tr("dataset_stats.formats"), self._format_lbl),
+            (tr("dataset_stats.avg_res"), self._size_lbl),
         ]:
             sf.addRow(QLabel(caption), widget)
             widget.setStyleSheet("color: #E6EDF3;")
         layout.addWidget(stats_grp)
 
-        dup_grp = QGroupBox("Duplikat-Erkennung (Perceptual Hash)")
+        dup_grp = QGroupBox(tr("dataset_stats.dup_group"))
         dup_grp.setStyleSheet(lbl_grp.styleSheet())
         dv = QVBoxLayout(dup_grp)
         dup_btn_row = QHBoxLayout()
-        self._dup_btn = QPushButton("Duplikate suchen")
+        self._dup_btn = QPushButton(tr("dataset_stats.find_dups_btn"))
         self._dup_btn.setStyleSheet("background: #238636; color: white; border-radius: 4px; padding: 5px 12px;")
         self._dup_btn.clicked.connect(self._find_duplicates)
         dup_btn_row.addWidget(self._dup_btn)
@@ -129,7 +130,8 @@ class DatasetStatsPage(QWidget):
                 counts[lbl] = counts.get(lbl, 0) + 1
 
         if not counts:
-            lbl = QLabel("Keine Labels vergeben.")
+            from utils.i18n import tr
+            lbl = QLabel(tr("dataset_stats.no_labels"))
             lbl.setStyleSheet("color: #8B949E;")
             self._lbl_layout.addWidget(lbl)
             return
@@ -194,7 +196,8 @@ class DatasetStatsPage(QWidget):
                 f"(Sample: {len(widths)} Bilder)"
             )
         else:
-            self._size_lbl.setText("Nicht lesbar")
+            from utils.i18n import tr
+            self._size_lbl.setText(tr("dataset_stats.not_readable"))
 
     def _update_label_rate(self) -> None:
         total = len(self.project.images)
@@ -206,14 +209,15 @@ class DatasetStatsPage(QWidget):
 
     @Slot()
     def _find_duplicates(self) -> None:
+        from utils.i18n import tr
         if not self.project or not self.project.images:
-            QMessageBox.information(self, "Keine Bilder", "Kein Projekt mit Bildern geladen.")
+            QMessageBox.information(self, tr("common.info"), tr("common.no_project"))
             return
         try:
             import imagehash
             from PIL import Image as _PIL
         except ImportError:
-            self._dup_btn.setText("imagehash nicht installiert (pip install imagehash)")
+            self._dup_btn.setText(tr("dataset_stats.imagehash_missing"))
             self._dup_btn.setEnabled(False)
             return
 
@@ -232,9 +236,9 @@ class DatasetStatsPage(QWidget):
         groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
         self._dup_list.clear()
         if not groups:
-            self._dup_status_lbl.setText("Keine Duplikate gefunden.")
+            self._dup_status_lbl.setText(tr("dataset_stats.no_dups"))
             return
         total_dups = sum(len(v) for v in groups.values())
-        self._dup_status_lbl.setText(f"{len(groups)} Duplikat-Gruppe(n), {total_dups} Bilder betroffen.")
+        self._dup_status_lbl.setText(tr("dataset_stats.dups_found", groups=len(groups), images=total_dups))
         for i, (h, paths) in enumerate(groups.items(), 1):
             self._dup_list.addItem(f"Gruppe {i}: " + ", ".join(os.path.basename(p) for p in paths))

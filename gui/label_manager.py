@@ -20,30 +20,32 @@ class LabelManagerDialog(QDialog):
     labels_changed = Signal()
 
     def __init__(self, project, parent=None):
+        from utils.i18n import tr
         super().__init__(parent)
         self.project = project
-        self.setWindowTitle("Labels verwalten")
+        self.setWindowTitle(tr("label_mgr.title"))
         self.setMinimumSize(420, 380)
         self._build_ui()
         self._refresh_list()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         layout = QVBoxLayout(self)
 
         # List
         self.list_widget = QListWidget()
         self.list_widget.setAlternatingRowColors(True)
         self.list_widget.currentRowChanged.connect(self._on_selection_changed)
-        layout.addWidget(QLabel("Vorhandene Labels:"))
+        layout.addWidget(QLabel(tr("label_mgr.existing_label")))
         layout.addWidget(self.list_widget)
 
         # Edit row
         edit_row = QHBoxLayout()
         self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("Label-Name (z.B. gut, schlecht, Fehler_A)")
+        self.name_edit.setPlaceholderText(tr("label_mgr.name_placeholder"))
         edit_row.addWidget(self.name_edit)
 
-        self.color_btn = QPushButton("Farbe")
+        self.color_btn = QPushButton(tr("label_mgr.color_btn"))
         self.color_btn.setFixedWidth(80)
         self.color_btn.clicked.connect(self._pick_color)
         self._selected_color = DEFAULT_COLORS[0]
@@ -53,21 +55,21 @@ class LabelManagerDialog(QDialog):
 
         # Buttons
         btn_row = QHBoxLayout()
-        add_btn = QPushButton("Hinzufügen")
+        add_btn = QPushButton(tr("label_mgr.add_btn"))
         add_btn.clicked.connect(self._add_label)
         btn_row.addWidget(add_btn)
 
-        edit_btn = QPushButton("Umbenennen")
+        edit_btn = QPushButton(tr("label_mgr.rename_btn"))
         edit_btn.clicked.connect(self._rename_label)
         btn_row.addWidget(edit_btn)
 
-        del_btn = QPushButton("Löschen")
+        del_btn = QPushButton(tr("label_mgr.delete_btn"))
         del_btn.clicked.connect(self._delete_label)
         btn_row.addWidget(del_btn)
 
         layout.addLayout(btn_row)
 
-        close_btn = QPushButton("Schließen")
+        close_btn = QPushButton(tr("label_mgr.close_btn"))
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -91,24 +93,27 @@ class LabelManagerDialog(QDialog):
             self._update_color_btn()
 
     def _pick_color(self) -> None:
-        color = QColorDialog.getColor(QColor(self._selected_color), self, "Farbe wählen")
+        from utils.i18n import tr
+        color = QColorDialog.getColor(QColor(self._selected_color), self, tr("label_mgr.color_picker_title"))
         if color.isValid():
             self._selected_color = color.name()
             self._update_color_btn()
 
     def _update_color_btn(self) -> None:
+        from utils.i18n import tr
         pix = QPixmap(16, 16)
         pix.fill(QColor(self._selected_color))
         self.color_btn.setIcon(QIcon(pix))
-        self.color_btn.setText("Farbe")
+        self.color_btn.setText(tr("label_mgr.color_btn"))
 
     def _add_label(self) -> None:
+        from utils.i18n import tr
         name = self.name_edit.text().strip()
         if not name:
-            QMessageBox.warning(self, "Fehler", "Bitte einen Namen eingeben.")
+            QMessageBox.warning(self, tr("common.error"), tr("label_mgr.no_name_msg"))
             return
         if name in self.project.labels:
-            QMessageBox.warning(self, "Fehler", f"Label '{name}' existiert bereits.")
+            QMessageBox.warning(self, tr("common.error"), tr("label_mgr.duplicate_msg", name=name))
             return
         # Auto-assign color if default is taken
         used_colors = {info["color"] for info in self.project.labels.values()}
@@ -124,6 +129,7 @@ class LabelManagerDialog(QDialog):
         self.labels_changed.emit()
 
     def _rename_label(self) -> None:
+        from utils.i18n import tr
         item = self.list_widget.currentItem()
         if not item:
             return
@@ -132,20 +138,20 @@ class LabelManagerDialog(QDialog):
         if not new_name or new_name == old_name:
             return
         if new_name in self.project.labels:
-            QMessageBox.warning(self, "Fehler", f"Label '{new_name}' existiert bereits.")
+            QMessageBox.warning(self, tr("common.error"), tr("label_mgr.duplicate_msg", name=new_name))
             return
         self.project.rename_label(old_name, new_name)
         self._refresh_list()
         self.labels_changed.emit()
 
     def _delete_label(self) -> None:
+        from utils.i18n import tr
         item = self.list_widget.currentItem()
         if not item:
             return
         name = item.text()
         reply = QMessageBox.question(
-            self, "Löschen", f"Label '{name}' wirklich löschen?\n"
-                             "Alle zugehörigen Zuweisungen werden entfernt.",
+            self, tr("label_mgr.delete_title"), tr("label_mgr.delete_msg", name=name),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:

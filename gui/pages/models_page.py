@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QBrush
 
+from utils.i18n import tr
+
 
 class _AccuracyChart(QWidget):
     """
@@ -167,11 +169,11 @@ class ModelsPage(QWidget):
 
         # ── Tab 1: Model Library ──────────────────────────────────────────────
         lib_widget = self._build_library_tab()
-        self._tabs.addTab(lib_widget, "📦 Modellbibliothek")
+        self._tabs.addTab(lib_widget, tr("models.tab.library"))
 
         # ── Tab 2: Run History / Comparison ──────────────────────────────────
         hist_widget = self._build_history_tab()
-        self._tabs.addTab(hist_widget, "📊 Run-History")
+        self._tabs.addTab(hist_widget, tr("models.tab.history"))
 
     def _build_library_tab(self) -> QWidget:
         from PySide6.QtWidgets import QWidget
@@ -181,13 +183,14 @@ class ModelsPage(QWidget):
         hl.addWidget(splitter)
 
         # Left: table
-        left = QGroupBox("Modellbibliothek")
+        left = QGroupBox(tr("models.library_group"))
         lv = QVBoxLayout(left)
 
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels([
-            "Name", "Architektur", "Accuracy", "F1", "Klassen",
-            "Erstellt", "Best"
+            tr("models.col.name"), tr("models.col.arch"), tr("models.col.accuracy"),
+            tr("models.col.f1"), tr("models.col.classes"),
+            tr("models.col.created"), tr("models.col.best")
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -199,14 +202,14 @@ class ModelsPage(QWidget):
 
         btn_row = QHBoxLayout()
         _btn_tips = {
-            "Aktualisieren": "Modellliste aus dem Projekt neu laden",
-            "Als Best markieren": "Dieses Modell als Standard für das Projekt setzen.\nWird beim nächsten Öffnen automatisch geladen.",
-            "In Inferenz laden": "Modell auf die Klassifikations-Seite laden\num neue Bilder damit zu bewerten.",
+            tr("models.refresh_btn"): "Modellliste aus dem Projekt neu laden",
+            tr("models.mark_best_btn"): "Dieses Modell als Standard für das Projekt setzen.\nWird beim nächsten Öffnen automatisch geladen.",
+            tr("models.load_btn"): "Modell auf die Klassifikations-Seite laden\num neue Bilder damit zu bewerten.",
         }
         for label, slot in [
-            ("Aktualisieren", self.refresh),
-            ("Als Best markieren", self._mark_best),
-            ("In Inferenz laden", self._load_selected),
+            (tr("models.refresh_btn"), self.refresh),
+            (tr("models.mark_best_btn"), self._mark_best),
+            (tr("models.load_btn"), self._load_selected),
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
@@ -217,7 +220,7 @@ class ModelsPage(QWidget):
         splitter.addWidget(left)
 
         # Right: details + actions
-        right = QGroupBox("Modelldetails & Aktionen")
+        right = QGroupBox(tr("models.detail_group"))
         rv = QVBoxLayout(right)
 
         self.detail_text = QTextEdit()
@@ -226,26 +229,26 @@ class ModelsPage(QWidget):
         rv.addWidget(self.detail_text)
 
         _action_tips = {
-            "Als ONNX exportieren": (
+            tr("models.export_onnx_btn"): (
                 "Exportiert das Modell als ONNX (Opset 17).\n"
                 "Einsetzbar in: ONNX Runtime, OpenCV DNN, TensorRT,\n"
                 "C++, C#, JavaScript (ONNX.js) und vielen anderen Frameworks."
             ),
-            "Als TorchScript exportieren": (
+            tr("models.export_ts_btn"): (
                 "Exportiert als TorchScript (.pt).\n"
                 "Für PyTorch C++ API oder mobile Apps (Android/iOS).\n"
                 "Kein Python-Import nötig zur Laufzeit."
             ),
-            "Umbenennen": "Modell-Alias im Projekt umbenennen (Dateiname bleibt gleich).",
-            "Archivieren": "Modell in Unterordner 'archive' verschieben — bleibt erhalten aber\nerscheint nicht mehr in der Hauptliste.",
-            "Löschen": "Modell dauerhaft löschen (kann nicht rückgängig gemacht werden).",
+            tr("models.rename_btn"): "Modell-Alias im Projekt umbenennen (Dateiname bleibt gleich).",
+            tr("models.archive_btn"): "Modell in Unterordner 'archive' verschieben — bleibt erhalten aber\nerscheint nicht mehr in der Hauptliste.",
+            tr("models.delete_btn"): "Modell dauerhaft löschen (kann nicht rückgängig gemacht werden).",
         }
         for label, slot in [
-            ("Als ONNX exportieren", self._export_onnx),
-            ("Als TorchScript exportieren", self._export_torchscript),
-            ("Umbenennen", self._rename_model),
-            ("Archivieren", self._archive_model),
-            ("Löschen", self._delete_model),
+            (tr("models.export_onnx_btn"), self._export_onnx),
+            (tr("models.export_ts_btn"), self._export_torchscript),
+            (tr("models.rename_btn"), self._rename_model),
+            (tr("models.archive_btn"), self._archive_model),
+            (tr("models.delete_btn"), self._delete_model),
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
@@ -254,7 +257,7 @@ class ModelsPage(QWidget):
             rv.addWidget(btn)
 
         rv.addWidget(QLabel("Modell vergleichen:"))
-        self.compare_btn = QPushButton("Ausgewählte vergleichen")
+        self.compare_btn = QPushButton(tr("models.compare_btn"))
         self.compare_btn.setToolTip(
             "Mehrere Modelle auswählen (Strg+Klick in der Tabelle)\n"
             "und Accuracy, F1 sowie Architektur nebeneinander vergleichen."
@@ -264,18 +267,18 @@ class ModelsPage(QWidget):
 
         rv.addWidget(QLabel("Kalibrierung & Edge-Deployment:"))
         for label, slot, tip in [
-            ("Kalibrieren (Temperature Scaling)…", self._calibrate_model,
+            (tr("models.calibrate_btn"), self._calibrate_model,
              "Post-hoc Konfidenz-Kalibrierung via Temperature Scaling.\n"
              "Verbessert die Zuverlässigkeit von Konfidenz-Werten.\n"
              "Benötigt: scipy (pip install scipy)"),
-            ("ONNX INT8 exportieren…", self._export_edge_onnx,
+            (tr("models.edge_onnx_btn"), self._export_edge_onnx,
              "Exportiert das Modell als INT8-quantisiertes ONNX für Edge-Deployment.\n"
              "Typisch 2–4× kleiner und schneller als FP32 ONNX.\n"
              "Benötigt: onnxruntime.quantization"),
-            ("CoreML exportieren…", self._export_coreml,
+            (tr("models.coreml_btn"), self._export_coreml,
              "Exportiert als Apple CoreML (.mlpackage) für macOS/iOS.\n"
              "Benötigt: coremltools (nur macOS, pip install coremltools)"),
-            ("Docker-Deployment generieren…", self._generate_docker,
+            (tr("models.docker_btn"), self._generate_docker,
              "Erstellt Dockerfile, docker-compose.yml und Startskript\n"
              "für den containerisierten Betrieb von monitor.py."),
         ]:
@@ -296,7 +299,7 @@ class ModelsPage(QWidget):
         hdr = QHBoxLayout()
         hdr.addWidget(QLabel("Alle Trainingsläufe im Vergleich:"))
         hdr.addStretch()
-        refresh_btn = QPushButton("Aktualisieren")
+        refresh_btn = QPushButton(tr("common.refresh"))
         refresh_btn.clicked.connect(self._refresh_history)
         hdr.addWidget(refresh_btn)
         vl.addLayout(hdr)
@@ -464,8 +467,8 @@ class ModelsPage(QWidget):
         m = self._manager.get_by_id(mid)
         if m and os.path.exists(m.model_path):
             self.model_loaded.emit(m.model_path)
-            QMessageBox.information(self, "Geladen",
-                                    f"Modell in Inferenz-Panel geladen:\n{m.name}")
+            QMessageBox.information(self, tr("models.loaded_title"),
+                                    tr("models.loaded_msg", name=m.name))
 
     def _export_onnx(self) -> None:
         mid = self._selected_model_id()
@@ -473,10 +476,10 @@ class ModelsPage(QWidget):
             return
         try:
             path = self._manager.export_onnx(mid)
-            QMessageBox.information(self, "ONNX exportiert", f"Gespeichert:\n{path}")
+            QMessageBox.information(self, tr("models.onnx_success"), tr("models.onnx_saved", path=path))
             self.refresh()
         except Exception as exc:
-            QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _export_torchscript(self) -> None:
         mid = self._selected_model_id()
@@ -486,7 +489,7 @@ class ModelsPage(QWidget):
             path = self._manager.export_torchscript(mid)
             QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
         except Exception as exc:
-            QMessageBox.critical(self, "TorchScript-Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _rename_model(self) -> None:
         mid = self._selected_model_id()
@@ -495,7 +498,7 @@ class ModelsPage(QWidget):
         m = self._manager.get_by_id(mid)
         if not m:
             return
-        new_name, ok = QInputDialog.getText(self, "Umbenennen", "Neuer Name:", text=m.name)
+        new_name, ok = QInputDialog.getText(self, tr("models.rename_dlg"), tr("models.rename_prompt"), text=m.name)
         if ok and new_name.strip():
             self._manager.update_metadata(mid, name=new_name.strip())
             self.refresh()
@@ -504,8 +507,8 @@ class ModelsPage(QWidget):
         mid = self._selected_model_id()
         if not mid or not self._manager:
             return
-        reply = QMessageBox.question(self, "Archivieren",
-                                     "Modell archivieren? (Es bleibt erhalten, wird aber nicht mehr angezeigt.)",
+        reply = QMessageBox.question(self, tr("models.archive_title"),
+                                     tr("models.archive_msg"),
                                      QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
             self._manager.archive(mid)
@@ -519,9 +522,8 @@ class ModelsPage(QWidget):
         if not m:
             return
         reply = QMessageBox.question(
-            self, "Löschen",
-            f"Modell '{m.name}' aus der Bibliothek entfernen?\n"
-            f"(Modelldatei auf Disk bleibt erhalten)",
+            self, tr("models.delete_title"),
+            tr("models.delete_msg", name=m.name),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -538,8 +540,8 @@ class ModelsPage(QWidget):
                 selected.append(item.data(Qt.UserRole))
 
         if len(selected) < 2:
-            QMessageBox.information(self, "Vergleich",
-                                    "Bitte mindestens 2 Modelle auswählen (Strg+Klick).")
+            QMessageBox.information(self, tr("models.compare_btn"),
+                                    tr("models.compare_prompt"))
             return
         runs = self._manager.compare(selected)
         from gui.dialogs.model_comparison_dialog import ModelComparisonDialog
@@ -553,16 +555,16 @@ class ModelsPage(QWidget):
             return
         m = self._manager.get_by_id(mid)
         if not m or not os.path.exists(m.model_path):
-            QMessageBox.warning(self, "Kalibrierung", "Modelldatei nicht gefunden.")
+            QMessageBox.warning(self, tr("models.calibrate_btn"), "Modelldatei nicht gefunden.")
             return
         if not self.project:
-            QMessageBox.warning(self, "Kalibrierung", "Kein Projekt geladen.")
+            QMessageBox.warning(self, tr("models.calibrate_btn"), "Kein Projekt geladen.")
             return
         try:
             from core.calibration import TemperatureScaler
         except ImportError:
-            QMessageBox.warning(self, "scipy fehlt",
-                                "Kalibrierung benötigt scipy:\npip install scipy")
+            QMessageBox.warning(self, tr("models.scipy_missing"),
+                                tr("models.scipy_install"))
             return
         import json, os as _os
         cal_path = _os.path.splitext(m.model_path)[0] + "_calibration.json"
@@ -570,7 +572,7 @@ class ModelsPage(QWidget):
         if _os.path.exists(cal_path):
             scaler.load(cal_path)
             QMessageBox.information(
-                self, "Kalibrierung",
+                self, tr("models.calibrate_btn"),
                 f"Bestehende Kalibrierung geladen:\nTemperatur = {scaler.temperature:.4f}\n\n"
                 f"Datei: {cal_path}\n\n"
                 "Um neu zu kalibrieren, löschen Sie die Kalibrierungsdatei und\n"
@@ -578,7 +580,7 @@ class ModelsPage(QWidget):
             )
         else:
             QMessageBox.information(
-                self, "Kalibrierung",
+                self, tr("models.calibrate_btn"),
                 "Temperature Scaling kalibriert das Modell auf Validierungsdaten.\n\n"
                 "Voraussetzung: Führen Sie zuerst eine Batch-Inferenz durch,\n"
                 "damit Logits und Labels verfügbar sind.\n\n"
@@ -592,10 +594,10 @@ class ModelsPage(QWidget):
             return
         m = self._manager.get_by_id(mid)
         if not m or not os.path.exists(m.model_path):
-            QMessageBox.warning(self, "Export", "Modelldatei nicht gefunden.")
+            QMessageBox.warning(self, tr("common.warning"), "Modelldatei nicht gefunden.")
             return
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "ONNX INT8 speichern", m.name + "_int8.onnx", "ONNX (*.onnx)"
+            self, tr("models.edge_onnx_btn"), m.name + "_int8.onnx", "ONNX (*.onnx)"
         )
         if not out_path:
             return
@@ -604,9 +606,9 @@ class ModelsPage(QWidget):
             exporter = EdgeExporter()
             result = exporter.export_quantized_onnx(m.model_path, out_path,
                                                     image_size=m.image_size or 224)
-            QMessageBox.information(self, "ONNX INT8 exportiert", f"Gespeichert:\n{result}")
+            QMessageBox.information(self, tr("models.onnx_success"), tr("models.onnx_saved", path=result))
         except Exception as exc:
-            QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _export_coreml(self) -> None:
         """Export selected model as CoreML (macOS only)."""
@@ -615,10 +617,10 @@ class ModelsPage(QWidget):
             return
         m = self._manager.get_by_id(mid)
         if not m or not os.path.exists(m.model_path):
-            QMessageBox.warning(self, "Export", "Modelldatei nicht gefunden.")
+            QMessageBox.warning(self, tr("common.warning"), "Modelldatei nicht gefunden.")
             return
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "CoreML speichern", m.name + ".mlpackage", "CoreML (*.mlpackage)"
+            self, tr("models.coreml_btn"), m.name + ".mlpackage", "CoreML (*.mlpackage)"
         )
         if not out_path:
             return
@@ -629,9 +631,9 @@ class ModelsPage(QWidget):
                                             image_size=m.image_size or 224)
             QMessageBox.information(self, "CoreML exportiert", f"Gespeichert:\n{result}")
         except ImportError as exc:
-            QMessageBox.warning(self, "coremltools fehlt", str(exc))
+            QMessageBox.warning(self, tr("models.coreml_missing"), str(exc))
         except Exception as exc:
-            QMessageBox.critical(self, "CoreML-Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _generate_docker(self) -> None:
         """Generate Docker deployment files for monitor.py."""
@@ -645,7 +647,7 @@ class ModelsPage(QWidget):
                 model_path = m.model_path
 
         out_dir = QFileDialog.getExistingDirectory(
-            self, "Docker-Dateien speichern in…"
+            self, tr("models.docker_btn")
         )
         if not out_dir:
             return
@@ -653,10 +655,10 @@ class ModelsPage(QWidget):
             from core.docker_generator import DockerGenerator
             files = DockerGenerator().generate(out_dir, model_path=model_path)
             QMessageBox.information(
-                self, "Docker-Deployment erstellt",
+                self, tr("models.docker_success"),
                 f"Folgende Dateien wurden erstellt:\n" + "\n".join(
                     f"  • {os.path.basename(f)}" for f in files
                 ) + f"\n\nOrdner: {out_dir}"
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Docker-Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from core.export import DEFAULT_COLUMNS
+from utils.i18n import tr
 
 
 class ExportPage(QWidget):
@@ -38,7 +39,7 @@ class ExportPage(QWidget):
         self.project = project
         if project and project.inference_results:
             self._results = project.inference_results
-            self.count_label.setText(f"{len(self._results)} Ergebnisse aus letzter Inferenz")
+            self.count_label.setText(f"{len(self._results)} Ergebnisse aus letzter Inferenz")  # log
 
     # ------------------------------------------------------------------ UI
 
@@ -46,11 +47,11 @@ class ExportPage(QWidget):
         layout = QVBoxLayout(self)
 
         # Source
-        src_group = QGroupBox("Datenquelle")
+        src_group = QGroupBox(tr("export.source_group"))
         sv = QVBoxLayout(src_group)
-        self.count_label = QLabel("Keine Ergebnisse vorhanden.")
+        self.count_label = QLabel(tr("export.no_results"))
         sv.addWidget(self.count_label)
-        load_btn = QPushButton("Ergebnisse aus letzter Inferenz laden")
+        load_btn = QPushButton(tr("export.load_btn"))
         load_btn.setToolTip(
             "Übernimmt die Klassifikationsergebnisse der letzten\n"
             "Batch-Klassifikation von der Inferenz-Seite."
@@ -60,27 +61,27 @@ class ExportPage(QWidget):
         layout.addWidget(src_group)
 
         # Target
-        tgt_group = QGroupBox("Zieldatei")
+        tgt_group = QGroupBox(tr("export.target_group"))
         tv = QHBoxLayout(tgt_group)
-        self.file_label = QLabel("Keine Datei gewählt")
+        self.file_label = QLabel(tr("export.no_file"))
         self.file_label.setWordWrap(True)
         tv.addWidget(self.file_label)
-        choose_btn = QPushButton("Datei wählen…")
+        choose_btn = QPushButton(tr("export.choose_file_btn"))
         choose_btn.clicked.connect(self._choose_file)
         tv.addWidget(choose_btn)
-        new_btn = QPushButton("Neue Datei erstellen")
+        new_btn = QPushButton(tr("export.new_file_btn"))
         new_btn.clicked.connect(self._new_file)
         tv.addWidget(new_btn)
         layout.addWidget(tgt_group)
 
         # Sheet + mode
-        opt_group = QGroupBox("Optionen")
+        opt_group = QGroupBox(tr("export.options_group"))
         ov = QHBoxLayout(opt_group)
-        ov.addWidget(QLabel("Tabellenblatt:"))
+        ov.addWidget(QLabel(tr("export.sheet_label")))
         self.sheet_edit = QLineEdit("Ergebnisse")
         self.sheet_edit.setFixedWidth(160)
         ov.addWidget(self.sheet_edit)
-        self.append_cb = QCheckBox("Anhängen (nicht überschreiben)")
+        self.append_cb = QCheckBox(tr("export.append_cb"))
         self.append_cb.setToolTip(
             "Aktiviert: neue Zeilen werden unterhalb vorhandener Daten eingefügt.\n"
             "Deaktiviert: Datei wird neu erstellt / Tabellenblatt überschrieben."
@@ -90,7 +91,7 @@ class ExportPage(QWidget):
         layout.addWidget(opt_group)
 
         # Column mapping
-        col_group = QGroupBox("Spaltenzuordnung")
+        col_group = QGroupBox(tr("export.columns_group"))
         cv = QVBoxLayout(col_group)
         self.col_table = QTableWidget(len(self._col_defs), 3)
         self.col_table.setHorizontalHeaderLabels(["Aktiv", "Datenwert", "Spaltenname"])
@@ -101,7 +102,7 @@ class ExportPage(QWidget):
 
         # Format selector + export button
         fmt_row = QHBoxLayout()
-        fmt_row.addWidget(QLabel("Format:"))
+        fmt_row.addWidget(QLabel(tr("export.format_label")))
         self.fmt_combo = QComboBox()
         self.fmt_combo.addItems(["Excel (.xlsx)", "CSV (.csv)", "JSON (.json)"])
         self.fmt_combo.setFixedWidth(160)
@@ -109,7 +110,7 @@ class ExportPage(QWidget):
         fmt_row.addStretch()
         layout.addLayout(fmt_row)
 
-        exp_btn = QPushButton("Exportieren")
+        exp_btn = QPushButton(tr("export.export_btn"))
         exp_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
         exp_btn.setToolTip(
             "Exportiert die Klassifikationsergebnisse im gewählten Format.\n"
@@ -119,7 +120,7 @@ class ExportPage(QWidget):
         layout.addWidget(exp_btn)
 
         # Protocol
-        proto_group = QGroupBox("Export-Protokoll")
+        proto_group = QGroupBox(tr("export.protocol_group"))
         pv = QVBoxLayout(proto_group)
         self.proto_text = QTextEdit()
         self.proto_text.setReadOnly(True)
@@ -171,11 +172,11 @@ class ExportPage(QWidget):
     def _load_from_project(self) -> None:
         """Copy the project's stored inference results into the page for export."""
         if not self.project or not self.project.inference_results:
-            QMessageBox.information(self, "Keine Daten",
-                                    "Zuerst im Inferenz-Panel Bilder klassifizieren.")
+            QMessageBox.information(self, tr("common.info"),
+                                    tr("export.no_data_msg"))
             return
         self._results = self.project.inference_results
-        self.count_label.setText(f"{len(self._results)} Ergebnisse geladen")
+        self.count_label.setText(f"{len(self._results)} Ergebnisse geladen")  # log
 
     def _choose_file(self) -> None:
         """Select an existing file to append data to (format matches combo selection)."""
@@ -206,11 +207,11 @@ class ExportPage(QWidget):
     def _export(self) -> None:
         """Validate inputs, call the appropriate export function, and log the outcome."""
         path = self.file_label.text()
-        if not path or path == "Keine Datei gewählt":
-            QMessageBox.warning(self, "Keine Datei", "Bitte zuerst eine Zieldatei wählen.")
+        if not path or path == tr("export.no_file"):
+            QMessageBox.warning(self, tr("common.warning"), tr("export.no_file_msg"))
             return
         if not self._results:
-            QMessageBox.warning(self, "Keine Daten", "Keine Ergebnisse zum Exportieren.")
+            QMessageBox.warning(self, tr("common.warning"), tr("export.no_data_msg"))
             return
 
         col_defs = self._get_col_defs()
@@ -243,8 +244,8 @@ class ExportPage(QWidget):
                     f"  Modus: {'Anhängen' if append else 'Überschreiben'}"
                 )
             self.proto_text.append(msg)
-            QMessageBox.information(self, "Exportiert", msg)
+            QMessageBox.information(self, tr("common.exported"), msg)
         except Exception as exc:
             err = f"Exportfehler: {exc}"
             self.proto_text.append(err)
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))

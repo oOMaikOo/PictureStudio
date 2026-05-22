@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, Slot
 from PySide6.QtGui import QImage, QPixmap
 
+from utils.i18n import tr
+
 
 _SMOOTH_DEFAULT = 5
 _DEDUP_DEFAULT  = 30   # seconds
@@ -132,11 +134,11 @@ class CameraPage(QWidget):
 
         # ── Title row ─────────────────────────────────────────────────────────
         title_row = QHBoxLayout()
-        title = QLabel("📷  Live-Monitoring")
+        title = QLabel(tr("camera.title"))
         title.setStyleSheet("font-size:18px; font-weight:bold; color:#5DADE2;")
         title_row.addWidget(title)
         title_row.addStretch()
-        open_dlg_btn = QPushButton("⚙  Training & Aufnahme…")
+        open_dlg_btn = QPushButton(tr("camera.open_dialog_btn"))
         open_dlg_btn.setToolTip(
             "Vollständigen Kamera-Dialog öffnen:\n"
             "Frames sammeln · Autoencoder trainieren · Batch-Analyse · Aufnehmen"
@@ -153,7 +155,7 @@ class CameraPage(QWidget):
         # ── Model row ─────────────────────────────────────────────────────────
         model_row = QHBoxLayout()
         model_row.setSpacing(6)
-        model_load_btn = QPushButton("Modell laden…")
+        model_load_btn = QPushButton(tr("camera.model_load_btn"))
         model_load_btn.setStyleSheet(
             "background:#1565C0;color:white;padding:5px 10px;"
             "border-radius:4px;font-weight:bold;"
@@ -162,7 +164,7 @@ class CameraPage(QWidget):
         model_load_btn.clicked.connect(self._load_model)
         model_row.addWidget(model_load_btn)
 
-        self._model_lbl = QLabel("Kein Modell geladen  –  Bitte zuerst ein .pth Modell laden")
+        self._model_lbl = QLabel(tr("camera.no_model"))
         self._model_lbl.setStyleSheet("color:#7F8C8D;")
         model_row.addWidget(self._model_lbl, stretch=1)
 
@@ -173,7 +175,7 @@ class CameraPage(QWidget):
         self._model_info_btn.clicked.connect(self._show_model_info)
         model_row.addWidget(self._model_info_btn)
 
-        self._onnx_export_btn = QPushButton("Als ONNX exportieren")
+        self._onnx_export_btn = QPushButton(tr("camera.onnx_export_btn"))
         self._onnx_export_btn.setEnabled(False)
         self._onnx_export_btn.setToolTip(
             "Trainiertes Modell als ONNX exportieren (.onnx + .meta.json)"
@@ -192,20 +194,20 @@ class CameraPage(QWidget):
         # ── Camera row ────────────────────────────────────────────────────────
         cam_row = QHBoxLayout()
         cam_row.setSpacing(8)
-        cam_row.addWidget(QLabel("Kamera:"))
+        cam_row.addWidget(QLabel(tr("camera.cam_label")))
         self._cam_combo = QComboBox()
         self._cam_combo.setMinimumWidth(200)
         self._cam_combo.addItem("Suche läuft…")
         cam_row.addWidget(self._cam_combo)
 
-        self._refresh_btn = QPushButton("↺")
+        self._refresh_btn = QPushButton(tr("camera.refresh_btn"))
         self._refresh_btn.setFixedWidth(30)
-        self._refresh_btn.setToolTip("Kameras neu suchen")
+        self._refresh_btn.setToolTip(tr("camera.refresh_tooltip"))
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.clicked.connect(self._scan_cameras)
         cam_row.addWidget(self._refresh_btn)
 
-        self._connect_btn = QPushButton("Verbinden")
+        self._connect_btn = QPushButton(tr("camera.connect_btn"))
         self._connect_btn.setCheckable(True)
         self._connect_btn.setStyleSheet(
             "QPushButton{background:#27AE60;color:white;padding:5px 14px;"
@@ -217,7 +219,7 @@ class CameraPage(QWidget):
         self._connect_btn.toggled.connect(self._on_connect_toggled)
         cam_row.addWidget(self._connect_btn)
 
-        self._ts_cb = QCheckBox("Zeitstempel")
+        self._ts_cb = QCheckBox(tr("camera.timestamp_cb"))
         self._ts_cb.setToolTip("Datum/Uhrzeit ins Vorschaubild einblenden")
         cam_row.addWidget(self._ts_cb)
 
@@ -228,7 +230,7 @@ class CameraPage(QWidget):
         root.addLayout(cam_row)
 
         # ── Alarm banner ──────────────────────────────────────────────────────
-        self._alarm_banner = QLabel("  ⚠  ANOMALIE ERKANNT")
+        self._alarm_banner = QLabel(tr("camera.alarm_banner"))
         self._alarm_banner.setAlignment(Qt.AlignCenter)
         self._alarm_banner.setStyleSheet(
             "background:#C0392B;color:white;font-weight:bold;"
@@ -253,7 +255,7 @@ class CameraPage(QWidget):
         lv.setSpacing(8)
 
         # Score display
-        score_grp = QGroupBox("Anomalie-Score")
+        score_grp = QGroupBox(tr("camera.score_group"))
         sg = QVBoxLayout(score_grp)
 
         self._score_bar = QProgressBar()
@@ -277,10 +279,10 @@ class CameraPage(QWidget):
         lv.addWidget(score_grp)
 
         # Detection controls
-        det_grp = QGroupBox("Erkennung")
+        det_grp = QGroupBox(tr("camera.detection_group"))
         df = QVBoxLayout(det_grp)
 
-        self._scoring_btn = QPushButton("Scoring aktivieren")
+        self._scoring_btn = QPushButton(tr("camera.scoring_btn"))
         self._scoring_btn.setCheckable(True)
         self._scoring_btn.setEnabled(False)
         self._scoring_btn.setToolTip(
@@ -297,14 +299,14 @@ class CameraPage(QWidget):
         self._scoring_btn.toggled.connect(self._on_scoring_toggled)
         df.addWidget(self._scoring_btn)
 
-        self._heatmap_cb = QCheckBox("Heatmap-Overlay anzeigen")
+        self._heatmap_cb = QCheckBox(tr("camera.heatmap_cb"))
         self._heatmap_cb.setToolTip(
             "Überlagert das Live-Bild mit einer Fehlerwärmekarte.\n"
             "Rot = hoher Rekonstruktionsfehler = potenzielle Anomalie."
         )
         df.addWidget(self._heatmap_cb)
 
-        self._gradcam_cb = QCheckBox("Grad-CAM anzeigen")
+        self._gradcam_cb = QCheckBox(tr("camera.gradcam_cb"))
         self._gradcam_cb.setToolTip(
             "Grad-CAM: zeigt welche Bildregionen den Anomalie-Score verursachen.\n"
             "Langsamer als Heatmap — deaktiviert Heatmap automatisch wenn aktiv."
@@ -312,7 +314,7 @@ class CameraPage(QWidget):
         df.addWidget(self._gradcam_cb)
 
         thr_row = QHBoxLayout()
-        thr_row.addWidget(QLabel("Schwellwert:"))
+        thr_row.addWidget(QLabel(tr("camera.threshold_label")))
         self._thr_spin = QDoubleSpinBox()
         self._thr_spin.setRange(0.00001, 1.0)
         self._thr_spin.setDecimals(5)
@@ -328,7 +330,7 @@ class CameraPage(QWidget):
         df.addLayout(thr_row)
 
         smooth_row = QHBoxLayout()
-        smooth_row.addWidget(QLabel("Glättung:"))
+        smooth_row.addWidget(QLabel(tr("camera.smooth_label")))
         self._smooth_spin = QSpinBox()
         self._smooth_spin.setRange(1, 20)
         self._smooth_spin.setValue(_SMOOTH_DEFAULT)
@@ -341,7 +343,7 @@ class CameraPage(QWidget):
         df.addLayout(smooth_row)
 
         dedup_row = QHBoxLayout()
-        dedup_row.addWidget(QLabel("Alarm-Pause:"))
+        dedup_row.addWidget(QLabel(tr("camera.dedup_label")))
         self._dedup_spin = QSpinBox()
         self._dedup_spin.setRange(0, 3600)
         self._dedup_spin.setValue(_DEDUP_DEFAULT)
@@ -356,12 +358,12 @@ class CameraPage(QWidget):
         lv.addWidget(det_grp)
 
         # Event log
-        ev_grp = QGroupBox("Ereignisse")
+        ev_grp = QGroupBox(tr("camera.events_group"))
         ev = QVBoxLayout(ev_grp)
-        self._event_lbl = QLabel("0 Alarme in dieser Sitzung")
+        self._event_lbl = QLabel(tr("camera.events_label"))
         self._event_lbl.setStyleSheet("color:#7F8C8D; font-size:11px;")
         ev.addWidget(self._event_lbl)
-        self._log_btn = QPushButton("Log öffnen")
+        self._log_btn = QPushButton(tr("camera.log_btn"))
         self._log_btn.setEnabled(False)
         self._log_btn.setToolTip("CSV-Ereignislog öffnen")
         self._log_btn.clicked.connect(self._open_log)
@@ -379,7 +381,7 @@ class CameraPage(QWidget):
             pass
 
         # ── Camera settings ───────────────────────────────────────────────────
-        cam_settings_grp = QGroupBox("Kamera-Einstellungen")
+        cam_settings_grp = QGroupBox(tr("camera.settings_group"))
         cam_settings_grp.setCheckable(True)
         cam_settings_grp.setChecked(False)  # collapsed by default
         cs = QFormLayout(cam_settings_grp)
@@ -403,17 +405,17 @@ class CameraPage(QWidget):
             return row, sl
 
         br_row, self._brightness_sl = _make_prop_slider(-64, 64, 0, "brightness")
-        cs.addRow("Helligkeit:", br_row)
+        cs.addRow(tr("camera.brightness_label"), br_row)
         ct_row, self._contrast_sl = _make_prop_slider(0, 95, 0, "contrast")
-        cs.addRow("Kontrast:", ct_row)
+        cs.addRow(tr("camera.contrast_label"), ct_row)
         sat_row, self._saturation_sl = _make_prop_slider(0, 100, 0, "saturation")
-        cs.addRow("Sättigung:", sat_row)
+        cs.addRow(tr("camera.saturation_label"), sat_row)
         sh_row, self._sharpness_sl = _make_prop_slider(0, 7, 0, "sharpness")
-        cs.addRow("Schärfe:", sh_row)
+        cs.addRow(tr("camera.sharpness_label"), sh_row)
         exp_row, self._exposure_sl = _make_prop_slider(-13, -1, -6, "exposure")
-        cs.addRow("Belichtung:", exp_row)
+        cs.addRow(tr("camera.exposure_label"), exp_row)
 
-        reset_cam_btn = QPushButton("Zurücksetzen")
+        reset_cam_btn = QPushButton(tr("camera.reset_btn"))
         reset_cam_btn.setFixedHeight(24)
         reset_cam_btn.clicked.connect(self._reset_cam_settings)
         cs.addRow("", reset_cam_btn)
@@ -422,19 +424,19 @@ class CameraPage(QWidget):
         self._cam_settings_grp = cam_settings_grp
 
         # ── Preprocessing filter ──────────────────────────────────────────────
-        filter_grp = QGroupBox("Vorverarbeitung")
+        filter_grp = QGroupBox(tr("camera.filter_group"))
         ff = QFormLayout(filter_grp)
         ff.setSpacing(4)
 
         self._filter_combo = QComboBox()
-        self._filter_combo.addItem("Kein Filter", "none")
-        self._filter_combo.addItem("Graustufen", "grayscale")
-        self._filter_combo.addItem("Canny-Kanten", "canny")
-        self._filter_combo.addItem("Sobel-Gradient", "sobel")
-        self._filter_combo.addItem("Laplacian", "laplacian")
-        ff.addRow("Filter:", self._filter_combo)
+        self._filter_combo.addItem(tr("camera.filter_none"), "none")
+        self._filter_combo.addItem(tr("camera.filter_grayscale"), "grayscale")
+        self._filter_combo.addItem(tr("camera.filter_canny"), "canny")
+        self._filter_combo.addItem(tr("camera.filter_sobel"), "sobel")
+        self._filter_combo.addItem(tr("camera.filter_laplacian"), "laplacian")
+        ff.addRow(tr("camera.filter_label"), self._filter_combo)
 
-        self._filter_scoring_cb = QCheckBox("Auch für Scoring anwenden")
+        self._filter_scoring_cb = QCheckBox(tr("camera.filter_scoring_cb"))
         self._filter_scoring_cb.setToolTip(
             "Wenn aktiv, sieht der Autoencoder den gefilterten Frame.\n"
             "Nur sinnvoll wenn das Modell auch auf gefilterten Frames trainiert wurde."
@@ -468,7 +470,7 @@ class CameraPage(QWidget):
         root.addWidget(splitter, stretch=1)
 
         # Status bar
-        self._status_bar = QLabel("Bereit  –  Modell laden und Kamera verbinden um zu starten.")
+        self._status_bar = QLabel(tr("camera.status_ready"))
         self._status_bar.setStyleSheet("color:#888; font-size:11px;")
         root.addWidget(self._status_bar)
 
@@ -493,9 +495,9 @@ class CameraPage(QWidget):
             for idx, name in cams:
                 self._cam_combo.addItem(name, userData=idx)
         else:
-            self._cam_combo.addItem("Keine USB-Kamera gefunden")
-        self._cam_combo.addItem("IP-Kamera (URL eingeben…)", userData="ip")
-        self._cam_combo.addItem("Videodatei (MP4, AVI, …)", userData="video")
+            self._cam_combo.addItem(tr("camera.no_camera"))
+        self._cam_combo.addItem(tr("camera.ip_option"), userData="ip")
+        self._cam_combo.addItem(tr("camera.video_file_option"), userData="video")
         self._refresh_btn.setEnabled(True)
         # Restore previous selection so a refresh doesn't silently reset the user's choice
         if prev is not None:
@@ -521,8 +523,8 @@ class CameraPage(QWidget):
 
         if source == "ip":
             url, ok = QInputDialog.getText(
-                self, "IP-Kamera URL",
-                "Kamera-URL (RTSP / HTTP):",
+                self, tr("camera.ip_dialog_title"),
+                tr("camera.ip_dialog_prompt"),
                 text="rtsp://user:pass@192.168.1.100:554/stream",
             )
             if not ok or not url.strip():
@@ -532,7 +534,7 @@ class CameraPage(QWidget):
             _valid_schemes = ("rtsp://", "rtsps://", "http://", "https://")
             if not any(source.lower().startswith(s) for s in _valid_schemes):
                 QMessageBox.warning(
-                    self, "Ungültige URL",
+                    self, tr("camera.invalid_url_title"),
                     "Die URL hat kein unterstütztes Schema.\n\n"
                     "Erlaubte Formate:\n"
                     "  rtsp://user:pass@192.168.1.100:554/stream\n"
@@ -544,7 +546,7 @@ class CameraPage(QWidget):
                 return
         elif source == "video":
             path, _ = QFileDialog.getOpenFileName(
-                self, "Videodatei öffnen", "",
+                self, tr("camera.video_file_dlg"), "",
                 "Video-Dateien (*.mp4 *.avi *.mov *.mkv *.m4v *.wmv *.flv);;"
                 "Alle Dateien (*)"
             )
@@ -576,7 +578,7 @@ class CameraPage(QWidget):
         self._camera_thread.error.connect(self._on_camera_error)
         self._camera_thread.start()
 
-        self._connect_btn.setText("Trennen")
+        self._connect_btn.setText(tr("camera.disconnect_btn"))
         if is_video:
             fname = os.path.basename(source)
             self._conn_status_lbl.setText(f"Wiedergabe: {fname}")
@@ -604,7 +606,7 @@ class CameraPage(QWidget):
         if self._camera_thread:
             self._camera_thread.stop()
             self._camera_thread = None
-        self._connect_btn.setText("Verbinden")
+        self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setChecked(False)
         self._conn_status_lbl.setText("Nicht verbunden")
         self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
@@ -635,7 +637,7 @@ class CameraPage(QWidget):
         self._connect_btn.blockSignals(False)
 
         if self._reconnect_source is not None and not self._is_video_file:
-            self._conn_status_lbl.setText("Verbindung unterbrochen — Reconnect in 5 s…")
+            self._conn_status_lbl.setText(tr("camera.reconnecting"))
             self._conn_status_lbl.setStyleSheet("color:#D29922;")
             self._status_bar.setText(f"Kamera-Fehler: {msg} — Reconnect läuft…")
             self._reconnect_timer.start(5000)
@@ -668,7 +670,7 @@ class CameraPage(QWidget):
 
         self._connect_btn.blockSignals(True)
         self._connect_btn.setChecked(True)
-        self._connect_btn.setText("Trennen")
+        self._connect_btn.setText(tr("camera.disconnect_btn"))
         self._connect_btn.blockSignals(False)
 
     # ── Scoring toggle ────────────────────────────────────────────────────────
@@ -906,7 +908,7 @@ class CameraPage(QWidget):
             det = AnomalyDetector()
             det.load(path)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, tr("common.error"), str(e))
             return
 
         self._detector = det
@@ -1027,7 +1029,7 @@ class CameraPage(QWidget):
             det = AnomalyDetector()
             det.load(path)
         except Exception as e:
-            QMessageBox.critical(self, "Fehler beim Laden", str(e))
+            QMessageBox.critical(self, tr("common.error"), str(e))
             return
         self._detector = det
         self._model_path = path
@@ -1067,7 +1069,7 @@ class CameraPage(QWidget):
                 f"Modell exportiert:\n{path}\n\nMetadaten:\n{path}.meta.json",
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ── Camera properties ─────────────────────────────────────────────────────
 

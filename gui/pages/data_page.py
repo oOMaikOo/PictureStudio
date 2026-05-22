@@ -75,15 +75,16 @@ class DataPage(QWidget):
         self._clear()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         layout = QHBoxLayout(self)
         splitter = QSplitter(Qt.Horizontal)
         layout.addWidget(splitter)
 
         # Left: controls
-        ctrl = QGroupBox("Aktionen")
+        ctrl = QGroupBox(tr("data.actions_group"))
         cv = QVBoxLayout(ctrl)
 
-        load_btn = QPushButton("Bilder laden…")
+        load_btn = QPushButton(tr("data.load_images_btn"))
         load_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
         load_btn.setToolTip(
             "Ordner mit Bildern auswählen.\n"
@@ -94,7 +95,7 @@ class DataPage(QWidget):
         load_btn.clicked.connect(self._load_images)
         cv.addWidget(load_btn)
 
-        cam_btn = QPushButton("Kamera aufnehmen…")
+        cam_btn = QPushButton(tr("data.camera_btn"))
         cam_btn.setStyleSheet("background:#9B59B6;color:white;padding:8px;font-weight:bold;")
         cam_btn.setToolTip(
             "Live-Kamera öffnen und Bilder direkt ins Projekt aufnehmen.\n"
@@ -104,13 +105,13 @@ class DataPage(QWidget):
         cam_btn.clicked.connect(self._open_camera_dialog)
         cv.addWidget(cam_btn)
 
-        video_btn = QPushButton("Video importieren…")
+        video_btn = QPushButton(tr("data.video_import_btn"))
         video_btn.setStyleSheet("background:#D35400;color:white;padding:8px;font-weight:bold;")
         video_btn.setToolTip("Frames aus MP4/AVI/MOV extrahieren und zum Projekt hinzufügen")
         video_btn.clicked.connect(self._import_video)
         cv.addWidget(video_btn)
 
-        analyze_btn = QPushButton("Dataset analysieren")
+        analyze_btn = QPushButton(tr("data.analyze_btn"))
         analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
         analyze_btn.setToolTip(
             "Analysiert den Datensatz und zeigt:\n"
@@ -128,27 +129,27 @@ class DataPage(QWidget):
         self.progress.setVisible(False)
         cv.addWidget(self.progress)
 
-        export_group = QGroupBox("Dataset exportieren")
+        export_group = QGroupBox(tr("data.export_group"))
         eg = QVBoxLayout(export_group)
         _export_tips = {
-            "Als COCO JSON": (
+            tr("data.export_coco_btn"): (
                 "Exportiert Annotationen im COCO-Format (JSON).\n"
                 "Kompatibel mit: Detectron2, MMDetection, Ultralytics YOLO v8+,\n"
                 "CVAT, LabelStudio und vielen anderen Frameworks."
             ),
-            "Als YOLO TXT": (
+            tr("data.export_yolo_btn"): (
                 "Exportiert Annotationen im YOLO-Format (eine .txt-Datei pro Bild).\n"
                 "Kompatibel mit: Ultralytics YOLOv5/v8, Darknet."
             ),
-            "Als CSV": (
+            tr("data.export_csv_btn"): (
                 "Exportiert Labels und ROIs als CSV-Tabelle.\n"
                 "Gut für eigene Tools, Excel oder pandas-Analysen."
             ),
         }
         for label, slot in [
-            ("Als COCO JSON", self._export_coco),
-            ("Als YOLO TXT",  self._export_yolo),
-            ("Als CSV",       self._export_csv),
+            (tr("data.export_coco_btn"), self._export_coco),
+            (tr("data.export_yolo_btn"), self._export_yolo),
+            (tr("data.export_csv_btn"),  self._export_csv),
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
@@ -157,16 +158,16 @@ class DataPage(QWidget):
             eg.addWidget(btn)
         cv.addWidget(export_group)
 
-        valid_group = QGroupBox("Bilddateien prüfen")
+        valid_group = QGroupBox(tr("data.validation_group"))
         vg = QVBoxLayout(valid_group)
-        check_btn = QPushButton("Fehlende Dateien prüfen")
+        check_btn = QPushButton(tr("data.check_files_btn"))
         check_btn.setToolTip(
             "Prüft ob alle Bilddateien noch an ihrem gespeicherten Pfad vorhanden sind.\n"
             "Fehlende Dateien werden rot markiert."
         )
         check_btn.clicked.connect(self._check_files)
         vg.addWidget(check_btn)
-        fix_btn = QPushButton("Bildpfade korrigieren…")
+        fix_btn = QPushButton(tr("data.fix_paths_btn"))
         fix_btn.setToolTip(
             "Bilder die verschoben oder umbenannt wurden neu verknüpfen.\n"
             "Nützlich wenn das Projekt auf einen anderen Rechner kopiert wurde."
@@ -183,17 +184,17 @@ class DataPage(QWidget):
         self._summary_text = QTextEdit()
         self._summary_text.setReadOnly(True)
         self._summary_text.setFont(QFont("Courier New", 9))
-        self._tabs.addTab(self._summary_text, "Zusammenfassung")
+        self._tabs.addTab(self._summary_text, tr("data.tab.summary"))
 
         self._missing_list = QListWidget()
-        self._tabs.addTab(self._missing_list, "Fehlende Dateien")
+        self._tabs.addTab(self._missing_list, tr("data.tab.missing"))
 
         self._dup_list = QListWidget()
-        self._tabs.addTab(self._dup_list, "Duplikate")
+        self._tabs.addTab(self._dup_list, tr("data.tab.duplicates"))
 
         self._warn_text = QTextEdit()
         self._warn_text.setReadOnly(True)
-        self._tabs.addTab(self._warn_text, "Warnungen")
+        self._tabs.addTab(self._warn_text, tr("data.tab.warnings"))
 
         splitter.addWidget(self._tabs)
         splitter.setSizes([280, 720])
@@ -208,6 +209,7 @@ class DataPage(QWidget):
     # ------------------------------------------------------------------ image loading
 
     def _import_video(self) -> None:
+        from utils.i18n import tr
         if not self._check_project():
             return
         out_dir = os.path.join(
@@ -225,14 +227,15 @@ class DataPage(QWidget):
             if added and dlg.extracted_paths:
                 self.project.config.image_dir = os.path.dirname(dlg.extracted_paths[0])
             QMessageBox.information(
-                self, "Video importiert",
-                f"{added} Frames zum Projekt hinzugefügt."
+                self, tr("data.video_imported_title"),
+                tr("data.msg.video_imported", added=added)
                 + (f"\n{len(dlg.extracted_paths) - added} bereits vorhanden."
                    if added < len(dlg.extracted_paths) else "")
             )
             self.images_loaded.emit(added)
 
     def _open_camera_dialog(self) -> None:
+        from utils.i18n import tr
         if not self._check_project():
             return
         save_dir = os.path.join(
@@ -250,8 +253,8 @@ class DataPage(QWidget):
             if added:
                 self.project.config.image_dir = os.path.dirname(dlg.captured_paths[0])
             QMessageBox.information(
-                self, "Aufnahmen hinzugefügt",
-                f"{added} Kamerabild(er) zum Projekt hinzugefügt."
+                self, tr("data.camera_captured_title"),
+                tr("data.msg.camera_captured", added=added)
                 + (f"\n{len(dlg.captured_paths) - added} bereits vorhanden." if added < len(dlg.captured_paths) else "")
             )
             self.images_loaded.emit(added)
@@ -285,17 +288,19 @@ class DataPage(QWidget):
         if added and first_dir:
             self.project.config.image_dir = first_dir
         already = total - added
-        msg = f"{added} neue Bilder hinzugefügt."
+        from utils.i18n import tr
+        msg = tr("data.msg.images_loaded", added=added, folder=first_dir or "")
         if already:
             msg += f"\n{already} bereits im Projekt."
-        QMessageBox.information(self, "Bilder per Drag & Drop geladen", msg)
+        QMessageBox.information(self, tr("data.images_loaded_title"), msg)
         self.images_loaded.emit(added)
 
     def _load_images(self) -> None:
         """Open a folder chooser and add all supported image files recursively."""
+        from utils.i18n import tr
         if not self._check_project():
             return
-        folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
+        folder = QFileDialog.getExistingDirectory(self, tr("data.dlg.folder_select"))
         if not folder:
             return
         from utils.config import IMAGE_FORMATS
@@ -311,18 +316,19 @@ class DataPage(QWidget):
         if added:
             self.project.config.image_dir = folder
         already = total - added
-        msg = f"{added} neue Bilder hinzugefügt aus:\n{folder}"
+        msg = tr("data.msg.images_loaded", added=added, folder=folder)
         if already:
             msg += f"\n{already} bereits im Projekt."
-        QMessageBox.information(self, "Bilder geladen", msg)
+        QMessageBox.information(self, tr("data.images_loaded_title"), msg)
         self.images_loaded.emit(added)
 
     # ------------------------------------------------------------------ analysis
 
     def _run_analysis(self) -> None:
         """Start the background ``AnalysisThread`` and show the progress bar."""
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         self.progress.setVisible(True)
         self._thread = AnalysisThread(self.project)
@@ -333,6 +339,7 @@ class DataPage(QWidget):
     @Slot(dict)
     def _on_analysis_done(self, result: dict) -> None:
         """Populate all result tabs with the finished analysis data."""
+        from utils.i18n import tr
         self.progress.setVisible(False)
         self._analysis = result
 
@@ -342,26 +349,26 @@ class DataPage(QWidget):
         sizes = result.get("sizes", [])
         size_stats = result.get("size_stats", {})
         lines = [
-            f"Bilder gesamt:       {result['total']}",
-            f"Gelabelt:            {result['labeled']}",
-            f"Ungelabelt:          {result['unlabeled']}",
-            f"Fehlende Dateien:    {len(result.get('missing_files', []))}",
-            f"Defekte Bilder:      {len(result.get('corrupt_files', []))}",
-            f"Duplikate:           {len(result.get('duplicates', []))}",
+            f"{tr('data.stats.total'):<20} {result['total']}",
+            f"{tr('data.stats.labeled'):<20} {result['labeled']}",
+            f"{tr('data.stats.unlabeled'):<20} {result['unlabeled']}",
+            f"{tr('data.stats.missing'):<20} {len(result.get('missing_files', []))}",
+            f"{tr('data.stats.corrupt'):<20} {len(result.get('corrupt_files', []))}",
+            f"{tr('data.stats.duplicates'):<20} {len(result.get('duplicates', []))}",
             "",
-            "Dateiformate:",
+            tr("data.stats.formats"),
         ]
         for ext, cnt in fmts.items():
             lines.append(f"  {ext}: {cnt}")
         if size_stats:
             lines += [
                 "",
-                "Bildgrößen:",
+                tr("data.stats.sizes"),
                 f"  Breite:  {size_stats['min_w']} – {size_stats['max_w']} px",
                 f"  Höhe:    {size_stats['min_h']} – {size_stats['max_h']} px",
                 f"  Versch. Größen: {size_stats['unique_sizes']}",
             ]
-        lines += ["", "Bilder pro Klasse:"]
+        lines += ["", tr("data.stats.per_class")]
         for lbl, cnt in result.get("label_counts", {}).items():
             lines.append(f"  {lbl}: {cnt}")
         self._summary_text.setPlainText("\n".join(lines))
@@ -391,49 +398,53 @@ class DataPage(QWidget):
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         """Show a critical dialog when the analysis thread reports an error."""
+        from utils.i18n import tr
         self.progress.setVisible(False)
-        QMessageBox.critical(self, "Analysefehler", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     # ------------------------------------------------------------------ export
 
     def _export_coco(self) -> None:
+        from utils.i18n import tr
         if not self._check_project():
             return
-        path, _ = QFileDialog.getSaveFileName(self, "COCO JSON", "annotations.json", "JSON (*.json)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("data.dlg.coco_title"), "annotations.json", "JSON (*.json)")
         if not path:
             return
         try:
             from core.dataset import export_coco
             export_coco(self.project, path)
-            QMessageBox.information(self, "Exportiert", f"COCO JSON gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.saved"), tr("data.msg.coco_saved", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _export_yolo(self) -> None:
+        from utils.i18n import tr
         if not self._check_project():
             return
-        folder = QFileDialog.getExistingDirectory(self, "YOLO-Ausgabeordner wählen")
+        folder = QFileDialog.getExistingDirectory(self, tr("data.dlg.yolo_title"))
         if not folder:
             return
         try:
             from core.dataset import export_yolo
             export_yolo(self.project, folder)
-            QMessageBox.information(self, "Exportiert", f"YOLO TXT gespeichert in:\n{folder}")
+            QMessageBox.information(self, tr("common.saved"), tr("data.msg.yolo_saved", folder=folder))
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _export_csv(self) -> None:
+        from utils.i18n import tr
         if not self._check_project():
             return
-        path, _ = QFileDialog.getSaveFileName(self, "CSV speichern", "dataset.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("data.dlg.csv_title"), "dataset.csv", "CSV (*.csv)")
         if not path:
             return
         try:
             from core.dataset import export_csv
             export_csv(self.project, path)
-            QMessageBox.information(self, "Exportiert", f"CSV gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.saved"), tr("data.msg.csv_saved", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _check_files(self) -> None:
         """Validate all image file paths and display a summary message box."""
@@ -454,21 +465,23 @@ class DataPage(QWidget):
 
     def _fix_paths(self) -> None:
         """Prompt for an old/new path prefix pair and relocate all matching image paths."""
+        from utils.i18n import tr
         if not self._check_project():
             return
         from PySide6.QtWidgets import QInputDialog
-        old, ok1 = QInputDialog.getText(self, "Pfadkorrektur", "Altes Präfix (zu ersetzen):")
+        old, ok1 = QInputDialog.getText(self, tr("data.paths_updated_title"), tr("data.dlg.relocation_old"))
         if not ok1:
             return
-        new, ok2 = QInputDialog.getText(self, "Pfadkorrektur", "Neues Präfix:")
+        new, ok2 = QInputDialog.getText(self, tr("data.paths_updated_title"), tr("data.dlg.relocation_new"))
         if not ok2:
             return
         count = self.project.relocate_images(old.strip(), new.strip())
-        QMessageBox.information(self, "Erledigt", f"{count} Bildpfade aktualisiert.")
+        QMessageBox.information(self, tr("data.paths_updated_title"), tr("data.msg.paths_updated", count=count))
 
     def _check_project(self) -> bool:
         """Return True if a project is loaded; otherwise show a warning and return False."""
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return False
         return True

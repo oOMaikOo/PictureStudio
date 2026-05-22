@@ -82,6 +82,7 @@ class DashboardPage(QWidget):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -93,7 +94,7 @@ class DashboardPage(QWidget):
         outer.addWidget(scroll)
 
         # Title
-        title = QLabel("Projekt-Dashboard")
+        title = QLabel(tr("dashboard.title"))
         title.setStyleSheet("font-size: 22px; font-weight: bold; color: #388BFD;")
         layout.addWidget(title)
 
@@ -109,10 +110,10 @@ class DashboardPage(QWidget):
             " padding:10px 24px; font-size:13px; font-weight:bold; }}"
             "QPushButton:hover {{ background:{hov}; }}"
         )
-        new_btn = QPushButton("+ Neues Projekt")
+        new_btn = QPushButton(tr("dashboard.new_project_btn"))
         new_btn.setStyleSheet(_btn_ss.format(bg="#1F6FEB", hov="#388BFD"))
         new_btn.clicked.connect(self.new_project_requested)
-        open_btn = QPushButton("Projekt öffnen…")
+        open_btn = QPushButton(tr("dashboard.open_project_btn"))
         open_btn.setStyleSheet(_btn_ss.format(bg="#21262D", hov="#30363D"))
         open_btn.clicked.connect(self.open_project_requested)
         btn_row.addWidget(new_btn)
@@ -121,7 +122,7 @@ class DashboardPage(QWidget):
         np_layout.addLayout(btn_row)
 
         # Recent projects section (shown when there are recents)
-        self._recent_group = QGroupBox("Zuletzt geöffnet")
+        self._recent_group = QGroupBox(tr("dashboard.recent_group"))
         self._recent_layout = QVBoxLayout(self._recent_group)
         self._recent_layout.setSpacing(4)
         np_layout.addWidget(self._recent_group)
@@ -130,17 +131,17 @@ class DashboardPage(QWidget):
         layout.addWidget(self._no_project_widget)
 
         # Stats cards grid
-        cards_group = QGroupBox("Datensatz-Übersicht")
+        cards_group = QGroupBox(tr("dashboard.dataset_group"))
         cards_grid = QGridLayout(cards_group)
         cards_grid.setSpacing(12)
 
         self._cards = {
-            "total_images":    StatCard("Bilder gesamt",  "–", "#388BFD"),
-            "labeled_images":  StatCard("Gelabelt",        "–", "#3FB950"),
-            "unlabeled_images":StatCard("Ungelabelt",      "–", "#F85149"),
-            "total_rois":      StatCard("ROIs",            "–", "#BC8CFF"),
-            "total_labels":    StatCard("Klassen",         "–", "#D29922"),
-            "training_runs":   StatCard("Trainingsläufe",  "–", "#39C5CF"),
+            "total_images":    StatCard(tr("dashboard.stats.images"),  "–", "#388BFD"),
+            "labeled_images":  StatCard(tr("dashboard.stats.labeled"),  "–", "#3FB950"),
+            "unlabeled_images":StatCard(tr("dashboard.stats.unlabeled"), "–", "#F85149"),
+            "total_rois":      StatCard(tr("dashboard.stats.rois"),    "–", "#BC8CFF"),
+            "total_labels":    StatCard(tr("dashboard.stats.classes"),  "–", "#D29922"),
+            "training_runs":   StatCard(tr("dashboard.stats.runs"),    "–", "#39C5CF"),
         }
         positions = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]
         for (r, c), card in zip(positions, self._cards.values()):
@@ -148,15 +149,15 @@ class DashboardPage(QWidget):
         layout.addWidget(cards_group)
 
         # Last training
-        last_group = QGroupBox("Letztes Training")
+        last_group = QGroupBox(tr("dashboard.last_training_group"))
         last_layout = QGridLayout(last_group)
 
         self._last_labels = {}
         for row, (key, label) in enumerate([
-            ("last_run_ts",       "Zeitstempel"),
-            ("last_run_accuracy", "Accuracy"),
-            ("last_run_f1",       "F1-Score (Macro)"),
-            ("current_model",     "Aktuelles Modell"),
+            ("last_run_ts",       tr("dashboard.last_training.ts")),
+            ("last_run_accuracy", tr("dashboard.last_training.acc")),
+            ("last_run_f1",       tr("dashboard.last_training.f1")),
+            ("current_model",     tr("dashboard.last_training.model")),
         ]):
             last_layout.addWidget(QLabel(label + ":"), row, 0)
             val_lbl = QLabel("–")
@@ -166,14 +167,14 @@ class DashboardPage(QWidget):
         layout.addWidget(last_group)
 
         # Class distribution
-        self._class_group = QGroupBox("Klassenverteilung")
+        self._class_group = QGroupBox(tr("dashboard.class_dist"))
         self._class_layout = QVBoxLayout(self._class_group)
         layout.addWidget(self._class_group)
 
         # Warnings
-        self._warn_group = QGroupBox("Warnungen / Hinweise")
+        self._warn_group = QGroupBox(tr("dashboard.warnings_group"))
         self._warn_layout = QVBoxLayout(self._warn_group)
-        self._warn_label = QLabel("Keine Warnungen.")
+        self._warn_label = QLabel(tr("dashboard.no_warnings"))
         self._warn_label.setWordWrap(True)
         self._warn_layout.addWidget(self._warn_label)
         layout.addWidget(self._warn_group)
@@ -216,6 +217,7 @@ class DashboardPage(QWidget):
 
     def refresh(self) -> None:
         """Re-read all statistics from the project and repopulate every UI section."""
+        from utils.i18n import tr
         if not self.project:
             self._no_project_widget.setVisible(True)
             self._refresh_recent_section()
@@ -277,7 +279,7 @@ class DashboardPage(QWidget):
             container_w = QWidget()
             container_w.setLayout(row)
             container_w.setCursor(Qt.PointingHandCursor)
-            container_w.setToolTip(f"Klick: Beschriftungsseite auf '{lbl}' filtern")
+            container_w.setToolTip(tr("dashboard.navigate_label_hint", lbl=lbl))
             container_w.mousePressEvent = (
                 lambda _e, lb=lbl: self.navigate_to_label_requested.emit(lb)
             )
@@ -303,5 +305,5 @@ class DashboardPage(QWidget):
                     f"(Mindestens {MIN_IMAGES_PER_CLASS} empfohlen)."
                 )
 
-        self._warn_label.setText("\n".join(warns) if warns else "✓ Keine Warnungen.")
+        self._warn_label.setText("\n".join(warns) if warns else "✓ " + tr("dashboard.no_warnings"))
         self._warn_label.setStyleSheet("color: #D29922;" if warns else "color: #3FB950;")

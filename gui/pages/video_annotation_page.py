@@ -106,25 +106,26 @@ class VideoAnnotationPage(QWidget):
         self._temp_dir = None
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        title = QLabel("🎬 Video-Annotation")
+        title = QLabel(tr("videoannotation.title"))
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
         root.addWidget(title)
 
         top_bar = QHBoxLayout()
-        self._load_btn = QPushButton("Video laden…")
+        self._load_btn = QPushButton(tr("videoannotation.load_btn"))
         self._load_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 4px; padding: 5px 12px; font-weight: bold;")
         self._load_btn.clicked.connect(self._load_video)
         top_bar.addWidget(self._load_btn)
 
-        self._video_lbl = QLabel("Kein Video geladen")
+        self._video_lbl = QLabel(tr("videoannotation.no_video"))
         self._video_lbl.setStyleSheet("color: #8B949E;")
         top_bar.addWidget(self._video_lbl, stretch=1)
 
-        top_bar.addWidget(QLabel("Frame-Intervall:"))
+        top_bar.addWidget(QLabel(tr("videoannotation.frame_interval")))
         self._interval_spin = QSpinBox()
         self._interval_spin.setRange(1, 100)
         self._interval_spin.setValue(5)
@@ -163,9 +164,9 @@ class VideoAnnotationPage(QWidget):
         left_layout.addWidget(self._slider)
 
         nav_row = QHBoxLayout()
-        prev_btn = QPushButton("◀ Zurück")
+        prev_btn = QPushButton(tr("videoannotation.prev_btn"))
         prev_btn.clicked.connect(lambda: self._slider.setValue(max(0, self._slider.value() - 1)))
-        next_btn = QPushButton("Weiter ▶")
+        next_btn = QPushButton(tr("videoannotation.next_btn"))
         next_btn.clicked.connect(lambda: self._slider.setValue(min(self._slider.maximum(), self._slider.value() + 1)))
         nav_row.addWidget(prev_btn)
         nav_row.addStretch()
@@ -178,7 +179,7 @@ class VideoAnnotationPage(QWidget):
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(8, 0, 0, 0)
 
-        lbl_grp = QGroupBox("Label für diesen Frame")
+        lbl_grp = QGroupBox(tr("videoannotation.label_group"))
         lbl_grp.setStyleSheet("QGroupBox { font-weight: bold; color: #8B949E; border: 1px solid #30363D; border-radius: 6px; margin-top: 8px; padding-top: 8px; } QGroupBox::title { subcontrol-origin: margin; left: 8px; }")
         lbl_v = QVBoxLayout(lbl_grp)
 
@@ -186,12 +187,12 @@ class VideoAnnotationPage(QWidget):
         self._label_list.setStyleSheet("QListWidget { background: #0D1117; border: 1px solid #30363D; color: #E6EDF3; border-radius: 4px; } QListWidget::item:selected { background: #1F6FEB; }")
         lbl_v.addWidget(self._label_list)
 
-        assign_btn = QPushButton("Label vergeben")
+        assign_btn = QPushButton(tr("videoannotation.assign_btn"))
         assign_btn.setStyleSheet("background: #238636; color: white; border-radius: 4px; padding: 5px 12px; font-weight: bold;")
         assign_btn.clicked.connect(self._assign_label)
         lbl_v.addWidget(assign_btn)
 
-        self._current_label_lbl = QLabel("Kein Label")
+        self._current_label_lbl = QLabel(tr("videoannotation.no_label"))
         self._current_label_lbl.setStyleSheet("color: #8B949E; font-size: 11px;")
         lbl_v.addWidget(self._current_label_lbl)
 
@@ -206,7 +207,7 @@ class VideoAnnotationPage(QWidget):
         splitter.setSizes([480, 220])
         root.addWidget(splitter, stretch=1)
 
-        save_btn = QPushButton("Gelabelte Frames in Projekt speichern")
+        save_btn = QPushButton(tr("videoannotation.save_btn"))
         save_btn.setStyleSheet("background: #6A1B9A; color: white; border-radius: 4px; padding: 7px 16px; font-weight: bold;")
         save_btn.clicked.connect(self._save_to_project)
         root.addWidget(save_btn)
@@ -219,8 +220,9 @@ class VideoAnnotationPage(QWidget):
 
     @Slot()
     def _load_video(self) -> None:
+        from utils.i18n import tr
         path, _ = QFileDialog.getOpenFileName(
-            self, "Video laden",
+            self, tr("videoannotation.video_dlg"),
             "",
             "Video-Dateien (*.mp4 *.avi *.mov *.mkv *.m4v *.wmv);;Alle Dateien (*)"
         )
@@ -230,7 +232,7 @@ class VideoAnnotationPage(QWidget):
         self._frame_paths.clear()
         self._frame_labels.clear()
         self._slider.setRange(0, 0)
-        self._frame_view.setText("Extrahiere Frames…")
+        self._frame_view.setText(tr("videoannotation.extracting"))
 
         self._temp_dir = tempfile.mkdtemp(prefix="va_frames_")
         interval = self._interval_spin.value()
@@ -260,21 +262,24 @@ class VideoAnnotationPage(QWidget):
 
     @Slot(int)
     def _on_extract_finished(self, total: int) -> None:
+        from utils.i18n import tr
         self._extract_progress.setVisible(False)
         self._load_btn.setEnabled(True)
-        self._status_lbl.setText(f"{total} Frames extrahiert. Label vergeben und speichern.")
+        self._status_lbl.setText(tr("videoannotation.extracted", n=total))
 
     @Slot(str)
     def _on_extract_error(self, msg: str) -> None:
+        from utils.i18n import tr
         self._extract_progress.setVisible(False)
         self._load_btn.setEnabled(True)
-        QMessageBox.critical(self, "Fehler", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     @Slot(int)
     def _on_slider_changed(self, idx: int) -> None:
         self._show_frame(idx)
 
     def _show_frame(self, idx: int) -> None:
+        from utils.i18n import tr
         if not self._frame_paths or idx >= len(self._frame_paths):
             return
         self._current_frame_idx = idx
@@ -287,7 +292,7 @@ class VideoAnnotationPage(QWidget):
         n = len(self._frame_paths)
         self._frame_info.setText(f"Frame {idx + 1} / {n}")
         lbl = self._frame_labels.get(idx, "")
-        self._current_label_lbl.setText(f"Label: {lbl}" if lbl else "Kein Label")
+        self._current_label_lbl.setText(f"Label: {lbl}" if lbl else tr("videoannotation.no_label"))
 
     @Slot()
     def _assign_label(self) -> None:
@@ -303,11 +308,12 @@ class VideoAnnotationPage(QWidget):
 
     @Slot()
     def _save_to_project(self) -> None:
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("common.no_project"))
             return
         if not self._frame_labels:
-            QMessageBox.information(self, "Keine Labels", "Bitte zuerst Frames beschriften.")
+            QMessageBox.information(self, tr("common.info"), tr("videoannotation.no_labels_msg"))
             return
         save_dir = os.path.join(os.path.dirname(self.project.project_path or "."), "video_frames")
         os.makedirs(save_dir, exist_ok=True)
@@ -332,7 +338,7 @@ class VideoAnnotationPage(QWidget):
         except Exception:
             pass
         QMessageBox.information(
-            self, "Gespeichert",
-            f"{added} Frame(s) mit Labels in Projekt gespeichert:\n{save_dir}"
+            self, tr("videoannotation.saved_title"),
+            tr("videoannotation.saved", n=added) + f":\n{save_dir}"
         )
         self._status_lbl.setText(f"{added} Frames ins Projekt übertragen.")

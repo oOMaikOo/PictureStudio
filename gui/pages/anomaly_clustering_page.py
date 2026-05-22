@@ -62,6 +62,7 @@ class _ClusterCard(QWidget):
         self.setFixedHeight(160)
 
     def _build_ui(self, cluster_id: int, paths: List[str], representative: str) -> None:
+        from utils.i18n import tr
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(4)
@@ -83,13 +84,13 @@ class _ClusterCard(QWidget):
         layout.addWidget(self._thumb_lbl, alignment=Qt.AlignCenter)
 
         # Cluster number
-        id_lbl = QLabel(f"Cluster {cluster_id}")
+        id_lbl = QLabel(tr("clustering.cluster_title", n=cluster_id))
         id_lbl.setAlignment(Qt.AlignCenter)
         id_lbl.setStyleSheet("color: #E6EDF3; font-weight: bold; font-size: 11px; border: none;")
         layout.addWidget(id_lbl)
 
         # Count
-        cnt_lbl = QLabel(f"{len(paths)} Bilder")
+        cnt_lbl = QLabel(tr("clustering.images_count", n=len(paths)))
         cnt_lbl.setAlignment(Qt.AlignCenter)
         cnt_lbl.setStyleSheet("color: #8B949E; font-size: 10px; border: none;")
         layout.addWidget(cnt_lbl)
@@ -151,6 +152,7 @@ class AnomalyClusteringPage(QWidget):
     # ------------------------------------------------------------------ UI construction
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -171,17 +173,17 @@ class AnomalyClusteringPage(QWidget):
         splitter.addWidget(left_scroll)
 
         # Title
-        title_lbl = QLabel("🔬 Anomalie-Clustering")
+        title_lbl = QLabel(tr("clustering.title"))
         title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
         left_layout.addWidget(title_lbl)
 
         # Image count info
-        self._img_count_lbl = QLabel("Keine Alarm-Bilder im Projekt.")
+        self._img_count_lbl = QLabel(tr("clustering.no_images_msg"))
         self._img_count_lbl.setStyleSheet("color: #8B949E; font-size: 11px;")
         left_layout.addWidget(self._img_count_lbl)
 
         # Controls group
-        ctrl_group = QGroupBox("Einstellungen")
+        ctrl_group = QGroupBox(tr("clustering.settings_group"))
         ctrl_group.setStyleSheet(
             "QGroupBox { font-weight: bold; color: #8B949E; border: 1px solid #30363D;"
             " border-radius: 6px; margin-top: 8px; padding-top: 8px; }"
@@ -192,7 +194,7 @@ class AnomalyClusteringPage(QWidget):
 
         # Cluster count row
         cluster_row = QHBoxLayout()
-        cluster_row.addWidget(QLabel("Cluster-Anzahl:"))
+        cluster_row.addWidget(QLabel(tr("clustering.count_label")))
         self.spin_clusters = QSpinBox()
         self.spin_clusters.setRange(2, 20)
         self.spin_clusters.setValue(5)
@@ -202,7 +204,7 @@ class AnomalyClusteringPage(QWidget):
         ctrl_layout.addLayout(cluster_row)
 
         # Start button
-        self.btn_start = QPushButton("Clustering starten")
+        self.btn_start = QPushButton(tr("clustering.start_btn"))
         self.btn_start.setFixedHeight(36)
         self.btn_start.setStyleSheet(
             "QPushButton { background: #1F6FEB; color: white; border-radius: 6px;"
@@ -223,7 +225,7 @@ class AnomalyClusteringPage(QWidget):
         left_layout.addWidget(ctrl_group)
 
         # Status label
-        self._status_lbl = QLabel("Kein Projekt geladen.")
+        self._status_lbl = QLabel(tr("clustering.no_project"))
         self._status_lbl.setWordWrap(True)
         self._status_lbl.setStyleSheet("color: #8B949E; font-size: 11px;")
         left_layout.addWidget(self._status_lbl)
@@ -245,7 +247,7 @@ class AnomalyClusteringPage(QWidget):
         left_layout.addWidget(self._cards_scroll)
 
         # Export button
-        self.btn_export = QPushButton("CSV exportieren")
+        self.btn_export = QPushButton(tr("common.export_csv"))
         self.btn_export.setFixedHeight(34)
         self.btn_export.setEnabled(False)
         self.btn_export.setStyleSheet(
@@ -265,7 +267,7 @@ class AnomalyClusteringPage(QWidget):
         right_layout.setSpacing(8)
         splitter.addWidget(right_widget)
 
-        self._detail_title = QLabel("Bilder im Cluster")
+        self._detail_title = QLabel(tr("clustering.detail_title"))
         self._detail_title.setStyleSheet(
             "font-size: 14px; font-weight: bold; color: #E6EDF3;"
         )
@@ -305,15 +307,16 @@ class AnomalyClusteringPage(QWidget):
     @Slot()
     def _start_clustering(self) -> None:
         """Start the ClusteringThread on alarm-labeled images."""
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("clustering.no_project"))
             return
 
         paths = self._get_alarm_paths()
         if not paths:
             QMessageBox.information(
-                self, "Keine Bilder",
-                "Es sind keine Bilder im Projekt vorhanden."
+                self, tr("common.info"),
+                tr("clustering.no_images_msg")
             )
             return
 
@@ -325,7 +328,7 @@ class AnomalyClusteringPage(QWidget):
         self.btn_export.setEnabled(False)
         self._progress.setVisible(True)
         self._progress.setValue(0)
-        self._status_lbl.setText(f"Clustering läuft… ({len(paths)} Bilder)")
+        self._status_lbl.setText(tr("clustering.in_progress", n=len(paths)))
         self._clear_cards()
         self._clear_image_list()
 
@@ -343,27 +346,29 @@ class AnomalyClusteringPage(QWidget):
 
     @Slot(dict)
     def _on_finished(self, clusters: dict) -> None:
+        from utils.i18n import tr
         if self._thread and hasattr(self._thread, "clustering"):
             self._clustering = self._thread.clustering
         self._progress.setValue(100)
         self._progress.setVisible(False)
         self.btn_start.setEnabled(True)
         if not clusters:
-            self._status_lbl.setText("Keine Bilder gefunden oder Clustering fehlgeschlagen.")
+            self._status_lbl.setText(tr("clustering.failed"))
             return
         total_images = sum(len(v) for v in clusters.values())
         self._status_lbl.setText(
-            f"Clustering abgeschlossen: {len(clusters)} Cluster, {total_images} Bilder."
+            tr("clustering.done", clusters=len(clusters), images=total_images)
         )
         self.btn_export.setEnabled(True)
         self._build_cards(clusters)
 
     @Slot(str)
     def _on_error(self, msg: str) -> None:
+        from utils.i18n import tr
         self._progress.setVisible(False)
         self.btn_start.setEnabled(True)
         self._status_lbl.setText(f"Fehler: {msg}")
-        QMessageBox.critical(self, "Clustering-Fehler", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     # ------------------------------------------------------------------ cards
 
@@ -416,18 +421,20 @@ class AnomalyClusteringPage(QWidget):
             self._img_list.addItem(item)
 
     def _clear_image_list(self) -> None:
+        from utils.i18n import tr
         self._img_list.clear()
-        self._detail_title.setText("Bilder im Cluster")
+        self._detail_title.setText(tr("clustering.detail_title"))
 
     # ------------------------------------------------------------------ export
 
     @Slot()
     def _export_csv(self) -> None:
+        from utils.i18n import tr
         if not self._clustering:
-            QMessageBox.information(self, "Kein Clustering", "Bitte zuerst Clustering starten.")
+            QMessageBox.information(self, tr("common.info"), tr("clustering.start_btn"))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "CSV exportieren", "cluster_export.csv",
+            self, tr("common.export_csv"), "cluster_export.csv",
             "CSV-Datei (*.csv);;Alle Dateien (*)"
         )
         if not path:
@@ -435,12 +442,12 @@ class AnomalyClusteringPage(QWidget):
         try:
             self._clustering.export_csv(path)
             QMessageBox.information(
-                self, "Export erfolgreich",
-                f"CSV erfolgreich gespeichert:\n{path}"
+                self, tr("common.info"),
+                tr("clustering.export_success", path=path)
             )
             self._status_lbl.setText(f"CSV gespeichert: {os.path.basename(path)}")
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ------------------------------------------------------------------ helpers
 

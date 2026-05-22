@@ -75,6 +75,7 @@ class _ChannelWidget(QGroupBox):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         self.setStyleSheet(
             "QGroupBox {"
             "  background: #1C2A3A;"
@@ -103,7 +104,7 @@ class _ChannelWidget(QGroupBox):
         self._video_lbl.setStyleSheet(
             "background: #0D1117; border-radius: 4px; color: #4A5568; font-size: 12px;"
         )
-        self._video_lbl.setText("Kein Signal")
+        self._video_lbl.setText(tr("multicam.no_signal"))
         self._video_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         root.addWidget(self._video_lbl)
 
@@ -120,7 +121,7 @@ class _ChannelWidget(QGroupBox):
         root.addWidget(self._score_bar)
 
         # Status label
-        self._status_lbl = QLabel("Nicht konfiguriert")
+        self._status_lbl = QLabel(tr("multicam.not_configured"))
         self._status_lbl.setAlignment(Qt.AlignCenter)
         self._status_lbl.setStyleSheet("color: #7F8C8D; font-size: 11px; padding: 2px;")
         root.addWidget(self._status_lbl)
@@ -138,7 +139,7 @@ class _ChannelWidget(QGroupBox):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(4)
 
-        self._cfg_btn = QPushButton("Konfigurieren")
+        self._cfg_btn = QPushButton(tr("multicam.configure_btn"))
         self._cfg_btn.setStyleSheet(
             "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
             "  padding: 4px 8px; font-size: 11px; }"
@@ -208,31 +209,34 @@ class _ChannelWidget(QGroupBox):
         )
 
         # Status label
+        from utils.i18n import tr
         if is_anomaly:
-            self.set_status("ANOMALIE", "#E74C3C")
+            self.set_status(tr("multicam.anomaly"), "#E74C3C")
         else:
-            self.set_status("Normal", "#27AE60")
+            self.set_status(tr("multicam.normal"), "#27AE60")
 
     def set_configured(self, camera_name: str, model_name: str) -> None:
         """Update info label and enable the start button."""
+        from utils.i18n import tr
         self._info_lbl.setText(f"{camera_name}  |  {model_name}")
         self._start_btn.setEnabled(True)
-        self._status_lbl.setText("Gestoppt")
+        self._status_lbl.setText(tr("multicam.stopped"))
         self._status_lbl.setStyleSheet("color: #F39C12; font-size: 11px; padding: 2px;")
 
     def set_running(self, running: bool) -> None:
         """Toggle start / stop buttons."""
+        from utils.i18n import tr
         self._start_btn.setEnabled(not running)
         self._stop_btn.setEnabled(running)
         if not running:
-            self._video_lbl.setText("Kein Signal")
+            self._video_lbl.setText(tr("multicam.no_signal"))
             self._video_lbl.setPixmap(QPixmap())
             self._score_bar.setValue(0)
             self._score_bar.setStyleSheet(
                 "QProgressBar { background: #1A252F; border-radius: 4px; }"
                 "QProgressBar::chunk { background: #27AE60; border-radius: 4px; }"
             )
-            self._status_lbl.setText("Gestoppt")
+            self._status_lbl.setText(tr("multicam.stopped"))
             self._status_lbl.setStyleSheet("color: #F39C12; font-size: 11px; padding: 2px;")
 
     def set_status(self, text: str, color: str) -> None:
@@ -258,8 +262,9 @@ class _ConfigDialog(QDialog):
         cameras: list,          # list of (idx, name) tuples
         parent=None,
     ) -> None:
+        from utils.i18n import tr
         super().__init__(parent)
-        self.setWindowTitle(f"Kanal {channel_idx + 1} konfigurieren")
+        self.setWindowTitle(tr("multicam.config_dlg", n=channel_idx + 1))
         self.setMinimumWidth(460)
         self.setStyleSheet(
             "QDialog { background: #1C2A3A; color: #BDC3C7; }"
@@ -282,7 +287,7 @@ class _ConfigDialog(QDialog):
 
         # Camera selector
         cam_row = QHBoxLayout()
-        cam_row.addWidget(QLabel("Kamera:"))
+        cam_row.addWidget(QLabel(tr("multicam.cam_label")))
         self._cam_combo = QComboBox()
         for idx, name in cameras:
             self._cam_combo.addItem(name, userData=idx)
@@ -297,11 +302,11 @@ class _ConfigDialog(QDialog):
 
         # Model path
         model_row = QHBoxLayout()
-        model_row.addWidget(QLabel("Modell:"))
+        model_row.addWidget(QLabel(tr("multicam.model_label")))
         self._model_edit = QLineEdit(current_model_path)
         self._model_edit.setPlaceholderText("Modell-Datei (.pt / .onnx) wählen…")
         model_row.addWidget(self._model_edit, stretch=1)
-        browse_btn = QPushButton("...")
+        browse_btn = QPushButton(tr("multicam.browse_btn"))
         browse_btn.setFixedWidth(32)
         browse_btn.clicked.connect(self._browse_model)
         model_row.addWidget(browse_btn)
@@ -314,9 +319,10 @@ class _ConfigDialog(QDialog):
         layout.addWidget(buttons)
 
     def _browse_model(self) -> None:
+        from utils.i18n import tr
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Anomalie-Modell wählen",
+            tr("multicam.select_model_dlg"),
             "",
             "Modell-Dateien (*.pth *.onnx);;Alle Dateien (*)",
         )
@@ -454,10 +460,11 @@ class MultiCameraPage(QWidget):
             self._widgets[idx].setParent(self._grid_widget)
 
         # Update page nav
+        from utils.i18n import tr
         count = self._num_channels
         total_pages = max(1, (count + _MAX_PER_PAGE - 1) // _MAX_PER_PAGE)
         self._page_nav.setVisible(count > _MAX_PER_PAGE)
-        self._page_label.setText(f"Seite {self._current_page + 1} / {total_pages}")
+        self._page_label.setText(tr("multicam.page_label", cur=self._current_page + 1, total=total_pages))
         self._prev_btn.setEnabled(self._current_page > 0)
         self._next_btn.setEnabled(self._current_page < total_pages - 1)
 
@@ -475,6 +482,7 @@ class MultiCameraPage(QWidget):
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         self.setStyleSheet(
             "MultiCameraPage { background: #0D1117; }"
             "QWidget { background: #0D1117; color: #BDC3C7; }"
@@ -487,7 +495,7 @@ class MultiCameraPage(QWidget):
         # ── Top bar ───────────────────────────────────────────────────────────
         top_bar = QHBoxLayout()
 
-        title_lbl = QLabel("Multi-Kamera-Monitoring")
+        title_lbl = QLabel(tr("multicam.title"))
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
@@ -496,7 +504,7 @@ class MultiCameraPage(QWidget):
         top_bar.addWidget(title_lbl)
 
         top_bar.addSpacing(20)
-        count_lbl = QLabel("Kanäle:")
+        count_lbl = QLabel(tr("multicam.channels_label"))
         count_lbl.setStyleSheet("color: #BDC3C7; font-size: 13px;")
         top_bar.addWidget(count_lbl)
 
@@ -517,7 +525,7 @@ class MultiCameraPage(QWidget):
 
         top_bar.addStretch()
 
-        self._start_all_btn = QPushButton("Alle starten")
+        self._start_all_btn = QPushButton(tr("multicam.start_all_btn"))
         self._start_all_btn.setStyleSheet(
             "QPushButton { background: #1E8449; color: white; border-radius: 5px;"
             "  padding: 6px 16px; font-weight: bold; }"
@@ -526,7 +534,7 @@ class MultiCameraPage(QWidget):
         self._start_all_btn.clicked.connect(self._on_start_all)
         top_bar.addWidget(self._start_all_btn)
 
-        self._stop_all_btn = QPushButton("Alle stoppen")
+        self._stop_all_btn = QPushButton(tr("multicam.stop_all_btn"))
         self._stop_all_btn.setStyleSheet(
             "QPushButton { background: #922B21; color: white; border-radius: 5px;"
             "  padding: 6px 16px; font-weight: bold; }"
@@ -549,7 +557,7 @@ class MultiCameraPage(QWidget):
         nav_row.setContentsMargins(0, 0, 0, 0)
         nav_row.setSpacing(8)
 
-        self._prev_btn = QPushButton("◀ Vorherige")
+        self._prev_btn = QPushButton(tr("multicam.prev_page_btn"))
         self._prev_btn.setFixedWidth(120)
         self._prev_btn.setStyleSheet(
             "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
@@ -560,12 +568,12 @@ class MultiCameraPage(QWidget):
         self._prev_btn.clicked.connect(self._on_page_prev)
         nav_row.addWidget(self._prev_btn)
 
-        self._page_label = QLabel("Seite 1 / 1")
+        self._page_label = QLabel(tr("multicam.page_label", cur=1, total=1))
         self._page_label.setAlignment(Qt.AlignCenter)
         self._page_label.setStyleSheet("color: #BDC3C7; font-size: 12px;")
         nav_row.addWidget(self._page_label, stretch=1)
 
-        self._next_btn = QPushButton("Nächste ▶")
+        self._next_btn = QPushButton(tr("multicam.next_page_btn"))
         self._next_btn.setFixedWidth(120)
         self._next_btn.setStyleSheet(
             "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
@@ -580,7 +588,7 @@ class MultiCameraPage(QWidget):
         root.addWidget(self._page_nav)
 
         # ── Alarm log ─────────────────────────────────────────────────────────
-        alarm_grp = QGroupBox("Alarm-Ereignisse")
+        alarm_grp = QGroupBox(tr("multicam.alarm_events"))
         alarm_grp.setStyleSheet(
             "QGroupBox { background: #1C2A3A; border: 1px solid #2C3E50;"
             "  border-radius: 6px; margin-top: 8px; color: #BDC3C7; }"

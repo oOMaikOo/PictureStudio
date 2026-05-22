@@ -16,14 +16,16 @@ class ReportDialog(QDialog):
     """Generates and opens a self-contained HTML project report."""
 
     def __init__(self, project, parent=None):
+        from utils.i18n import tr
         super().__init__(parent)
         self.project = project
-        self.setWindowTitle("Projektbericht erstellen")
+        self.setWindowTitle(tr("report.title"))
         self.setMinimumWidth(460)
         self._build_ui()
         self._set_default_path()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         root = QVBoxLayout(self)
         root.setSpacing(12)
 
@@ -36,7 +38,7 @@ class ReportDialog(QDialog):
         root.addWidget(info)
 
         # Output path
-        path_grp = QGroupBox("Ausgabedatei")
+        path_grp = QGroupBox(tr("report.output_group"))
         pv = QVBoxLayout(path_grp)
         path_row = QHBoxLayout()
         self._path_edit = QLineEdit()
@@ -50,9 +52,9 @@ class ReportDialog(QDialog):
         root.addWidget(path_grp)
 
         # Options
-        opt_grp = QGroupBox("Optionen")
+        opt_grp = QGroupBox(tr("report.options_group"))
         ov = QVBoxLayout(opt_grp)
-        self._open_cb = QCheckBox("Bericht nach dem Erstellen im Browser öffnen")
+        self._open_cb = QCheckBox(tr("report.open_cb"))
         self._open_cb.setChecked(True)
         ov.addWidget(self._open_cb)
         root.addWidget(opt_grp)
@@ -60,10 +62,10 @@ class ReportDialog(QDialog):
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
-        self._gen_btn = QPushButton("Bericht erstellen")
+        self._gen_btn = QPushButton(tr("report.generate_btn"))
         self._gen_btn.setStyleSheet(
             "background:#1F6FEB;color:white;font-weight:bold;padding:6px 16px;"
         )
@@ -81,23 +83,25 @@ class ReportDialog(QDialog):
         )
 
     def _browse(self) -> None:
+        from utils.i18n import tr
         path, _ = QFileDialog.getSaveFileName(
-            self, "Bericht speichern unter", self._path_edit.text(),
+            self, tr("report.save_dlg"), self._path_edit.text(),
             "HTML (*.html);;Alle Dateien (*)"
         )
         if path:
             self._path_edit.setText(path)
 
     def _generate(self) -> None:
+        from utils.i18n import tr
         path = self._path_edit.text().strip()
         if not path:
-            QMessageBox.warning(self, "Kein Pfad", "Bitte Ausgabepfad wählen.")
+            QMessageBox.warning(self, tr("report.no_path_title"), tr("report.no_path_msg"))
             return
         try:
             from core.report_generator import generate_html_report
             generate_html_report(self.project, path)
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
             return
 
         if self._open_cb.isChecked():
@@ -109,6 +113,6 @@ class ReportDialog(QDialog):
                 subprocess.Popen(["xdg-open", path])
 
         QMessageBox.information(
-            self, "Erstellt", f"Bericht gespeichert:\n{path}"
+            self, tr("report.success_title"), tr("report.success_msg", path=path)
         )
         self.accept()

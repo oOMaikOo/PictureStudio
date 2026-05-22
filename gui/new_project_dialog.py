@@ -12,8 +12,9 @@ class NewProjectDialog(QDialog):
     """Replaces the simple QInputDialog for new project creation."""
 
     def __init__(self, parent=None):
+        from utils.i18n import tr
         super().__init__(parent)
-        self.setWindowTitle("Neues Projekt erstellen")
+        self.setWindowTitle(tr("new_project.title"))
         self.setMinimumWidth(460)
         self.setModal(True)
 
@@ -24,40 +25,41 @@ class NewProjectDialog(QDialog):
         self._build_ui()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
         layout.setContentsMargins(24, 20, 24, 20)
 
         # Name
-        layout.addWidget(QLabel("Projektname: *"))
+        layout.addWidget(QLabel(tr("new_project.name_label")))
         self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("z. B. Qualitätskontrolle Linie 3")
+        self._name_edit.setPlaceholderText(tr("new_project.name_placeholder"))
         self._name_edit.setMinimumHeight(32)
         layout.addWidget(self._name_edit)
 
         # Description
-        layout.addWidget(QLabel("Beschreibung (optional):"))
+        layout.addWidget(QLabel(tr("new_project.desc_label")))
         self._desc_edit = QLineEdit()
-        self._desc_edit.setPlaceholderText("Kurze Beschreibung des Projekts")
+        self._desc_edit.setPlaceholderText(tr("new_project.desc_placeholder"))
         self._desc_edit.setMinimumHeight(32)
         layout.addWidget(self._desc_edit)
 
         # Project type
-        type_group = QGroupBox("Projekttyp wählen")
+        type_group = QGroupBox(tr("new_project.type_group"))
         tl = QVBoxLayout(type_group)
         tl.setSpacing(6)
 
         self._img_btn = self._make_type_btn(
-            "📸   Bildklassifikation",
-            "Bilder importieren, labeln, Klassifikationsmodelle trainieren und auswerten.",
+            tr("new_project.image_type"),
+            tr("new_project.image_desc"),
             checked=True,
         )
         self._img_btn.clicked.connect(lambda: self._select_type("image"))
         tl.addWidget(self._img_btn)
 
         self._vid_btn = self._make_type_btn(
-            "🎬   Videoanalyse & Anomalie",
-            "Videos importieren, Frames extrahieren, Live-Kamera und Anomalieerkennung.",
+            tr("new_project.video_type"),
+            tr("new_project.video_desc"),
             checked=False,
         )
         self._vid_btn.clicked.connect(lambda: self._select_type("video"))
@@ -68,12 +70,12 @@ class NewProjectDialog(QDialog):
         # Buttons row
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.setFixedHeight(34)
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
 
-        ok_btn = QPushButton("Projekt erstellen")
+        ok_btn = QPushButton(tr("new_project.create_btn"))
         ok_btn.setDefault(True)
         ok_btn.setFixedHeight(34)
         ok_btn.setStyleSheet(
@@ -117,9 +119,10 @@ class NewProjectDialog(QDialog):
         self._vid_btn.setChecked(t == "video")
 
     def _accept(self) -> None:
+        from utils.i18n import tr
         name = self._name_edit.text().strip()
         if not name:
-            QMessageBox.warning(self, "Fehler", "Bitte einen Projektnamen eingeben.")
+            QMessageBox.warning(self, tr("common.error"), tr("new_project.no_name_msg"))
             self._name_edit.setFocus()
             return
         self.project_name = name

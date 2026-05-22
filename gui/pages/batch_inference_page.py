@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QColor, QFont
 
+from utils.i18n import tr
+
 
 # ── background thread ──────────────────────────────────────────────────────────
 
@@ -108,19 +110,19 @@ class BatchInferencePage(QWidget):
         v.setSpacing(8)
 
         # ── Model ──────────────────────────────────────────────────────────────
-        mg = QGroupBox("Modell")
+        mg = QGroupBox(tr("batch.model_group"))
         mv = QVBoxLayout(mg)
         self._model_combo = QComboBox()
         self._model_combo.setToolTip("Trainiertes Modell aus dem Projekt wählen")
         mv.addWidget(self._model_combo)
-        load_ext_btn = QPushButton("Externe .pth laden…")
+        load_ext_btn = QPushButton(tr("batch.external_model_btn"))
         load_ext_btn.clicked.connect(self._load_external_model)
         mv.addWidget(load_ext_btn)
-        self._model_info_lbl = QLabel("Kein Modell geladen")
+        self._model_info_lbl = QLabel(tr("common.no_model"))
         self._model_info_lbl.setWordWrap(True)
         self._model_info_lbl.setStyleSheet("color:#7F8C8D;font-size:10px;")
         mv.addWidget(self._model_info_lbl)
-        load_sel_btn = QPushButton("Ausgewähltes Modell laden")
+        load_sel_btn = QPushButton(tr("batch.load_btn"))
         load_sel_btn.setStyleSheet(
             "background:#1F6FEB;color:white;font-weight:bold;padding:5px;"
         )
@@ -129,16 +131,16 @@ class BatchInferencePage(QWidget):
         v.addWidget(mg)
 
         # ── Input folder ───────────────────────────────────────────────────────
-        ig = QGroupBox("Eingabe-Ordner")
+        ig = QGroupBox(tr("batch.input_group"))
         iv = QVBoxLayout(ig)
-        self._folder_lbl = QLabel("Kein Ordner gewählt")
+        self._folder_lbl = QLabel(tr("batch.no_folder"))
         self._folder_lbl.setWordWrap(True)
         self._folder_lbl.setStyleSheet("color:#7F8C8D;font-size:10px;")
         iv.addWidget(self._folder_lbl)
-        folder_btn = QPushButton("Ordner wählen…")
+        folder_btn = QPushButton(tr("batch.folder_btn"))
         folder_btn.clicked.connect(self._choose_folder)
         iv.addWidget(folder_btn)
-        use_proj_btn = QPushButton("Projektbilder verwenden")
+        use_proj_btn = QPushButton(tr("batch.use_project_btn"))
         use_proj_btn.setToolTip("Alle Bilder aus dem geöffneten Projekt verarbeiten")
         use_proj_btn.clicked.connect(self._use_project_images)
         iv.addWidget(use_proj_btn)
@@ -148,10 +150,10 @@ class BatchInferencePage(QWidget):
         v.addWidget(ig)
 
         # ── Options ────────────────────────────────────────────────────────────
-        og = QGroupBox("Filter & Schwellwert")
+        og = QGroupBox(tr("batch.filter_group"))
         ov = QVBoxLayout(og)
         conf_row = QHBoxLayout()
-        conf_row.addWidget(QLabel("Min. Confidence:"))
+        conf_row.addWidget(QLabel(tr("batch.min_conf_label")))
         self._min_conf_spin = QDoubleSpinBox()
         self._min_conf_spin.setRange(0.0, 1.0)
         self._min_conf_spin.setSingleStep(0.05)
@@ -164,7 +166,7 @@ class BatchInferencePage(QWidget):
         ov.addLayout(conf_row)
 
         thresh_row = QHBoxLayout()
-        thresh_row.addWidget(QLabel("Warnschwelle:"))
+        thresh_row.addWidget(QLabel(tr("batch.warn_thresh_label")))
         self._warn_thresh_spin = QDoubleSpinBox()
         self._warn_thresh_spin.setRange(0.0, 1.0)
         self._warn_thresh_spin.setSingleStep(0.05)
@@ -177,16 +179,16 @@ class BatchInferencePage(QWidget):
         ov.addLayout(thresh_row)
 
         cls_row = QHBoxLayout()
-        cls_row.addWidget(QLabel("Klassen-Filter:"))
+        cls_row.addWidget(QLabel(tr("batch.class_filter_label")))
         self._cls_filter_combo = QComboBox()
         self._cls_filter_combo.addItem("Alle")
         cls_row.addWidget(self._cls_filter_combo)
         ov.addLayout(cls_row)
-        apply_btn = QPushButton("Filter anwenden")
+        apply_btn = QPushButton(tr("batch.apply_filter_btn"))
         apply_btn.clicked.connect(self._apply_filter)
         ov.addWidget(apply_btn)
 
-        export_low_btn = QPushButton("Unsichere exportieren…")
+        export_low_btn = QPushButton(tr("batch.export_low_btn"))
         export_low_btn.setToolTip(
             "Alle Ergebnisse unterhalb der Warnschwelle als CSV exportieren.\n"
             "Nützlich für gezielte manuelle Nachprüfung."
@@ -196,7 +198,7 @@ class BatchInferencePage(QWidget):
         v.addWidget(og)
 
         # ── Run ────────────────────────────────────────────────────────────────
-        self._run_btn = QPushButton("▶  Batch starten")
+        self._run_btn = QPushButton(tr("batch.run_btn"))
         self._run_btn.setFixedHeight(40)
         self._run_btn.setStyleSheet(
             "background:#3FB950;color:white;font-weight:bold;font-size:13px;padding:6px;"
@@ -204,7 +206,7 @@ class BatchInferencePage(QWidget):
         self._run_btn.clicked.connect(self._start_batch)
         v.addWidget(self._run_btn)
 
-        self._cancel_btn = QPushButton("Abbrechen")
+        self._cancel_btn = QPushButton(tr("batch.cancel_btn"))
         self._cancel_btn.setVisible(False)
         self._cancel_btn.clicked.connect(self._cancel_batch)
         v.addWidget(self._cancel_btn)
@@ -221,7 +223,7 @@ class BatchInferencePage(QWidget):
         v.addStretch()
 
         # ── Export ─────────────────────────────────────────────────────────────
-        export_btn = QPushButton("CSV exportieren…")
+        export_btn = QPushButton(tr("batch.export_csv_btn"))
         export_btn.clicked.connect(self._export_csv)
         v.addWidget(export_btn)
 
@@ -239,9 +241,10 @@ class BatchInferencePage(QWidget):
 
         # Results table
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(
-            ["Dateiname", "Klasse", "Confidence", "Fehler"]
-        )
+        self._table.setHorizontalHeaderLabels([
+            tr("batch.col.filename"), tr("batch.col.class"),
+            tr("batch.col.confidence"), tr("batch.col.error"),
+        ])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
@@ -273,7 +276,7 @@ class BatchInferencePage(QWidget):
         """Load the model currently selected in the combo box."""
         path = self._model_combo.currentData()
         if not path:
-            QMessageBox.warning(self, "Kein Modell", "Bitte Modell aus Liste wählen.")
+            QMessageBox.warning(self, tr("common.no_model"), "Bitte Modell aus Liste wählen.")
             return
         self._load_model_from_path(path)
 
@@ -308,7 +311,7 @@ class BatchInferencePage(QWidget):
             for cls in self._class_names:
                 self._cls_filter_combo.addItem(cls)
         except Exception as exc:
-            QMessageBox.critical(self, "Modellfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ------------------------------------------------------------------ folder
 
@@ -321,7 +324,7 @@ class BatchInferencePage(QWidget):
     def _use_project_images(self) -> None:
         """Use all images from the currently loaded project as the input list."""
         if not self.project or not self.project.images:
-            QMessageBox.information(self, "Kein Projekt", "Kein Projekt mit Bildern geladen.")
+            QMessageBox.information(self, tr("common.no_project"), tr("batch.no_project_msg"))
             return
         self._image_paths = list(self.project.images)
         self._folder_lbl.setText(f"Projektbilder ({len(self._image_paths)} Bilder)")
@@ -344,10 +347,10 @@ class BatchInferencePage(QWidget):
     def _start_batch(self) -> None:
         """Validate model and image list, then start the background batch thread."""
         if self._model is None:
-            QMessageBox.warning(self, "Kein Modell", "Bitte zuerst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), "Bitte zuerst ein Modell laden.")
             return
         if not getattr(self, "_image_paths", None):
-            QMessageBox.warning(self, "Keine Bilder", "Bitte Ordner wählen oder Projektbilder verwenden.")
+            QMessageBox.warning(self, tr("common.warning"), tr("batch.no_images_msg"))
             return
 
         from core.batch_inference import BatchInferenceWorker
@@ -393,7 +396,7 @@ class BatchInferencePage(QWidget):
         self._progress.setVisible(False)
         self._run_btn.setVisible(True)
         self._cancel_btn.setVisible(False)
-        QMessageBox.critical(self, "Fehler", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     def _cancel_batch(self) -> None:
         """Request cancellation of the running batch and update the status label."""
@@ -470,7 +473,7 @@ class BatchInferencePage(QWidget):
     def _export_low_confidence(self) -> None:
         """Export only results below the warning threshold to a CSV file."""
         if not self._results:
-            QMessageBox.information(self, "Keine Daten", "Bitte zuerst Batch starten.")
+            QMessageBox.information(self, tr("common.ok"), "Bitte zuerst Batch starten.")
             return
         warn_thresh = self._warn_thresh_spin.value()
         low = [r for r in self._results if r["confidence"] < warn_thresh and not r["error"]]
@@ -498,7 +501,7 @@ class BatchInferencePage(QWidget):
                 f"{len(low)} unsichere Ergebnisse gespeichert:\n{path}"
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _apply_filter(self) -> None:
         """Re-apply the current filter to the stored results and refresh the table."""
@@ -510,7 +513,7 @@ class BatchInferencePage(QWidget):
     def _export_csv(self) -> None:
         """Export all batch results (including per-class probabilities) to a CSV file."""
         if not self._results:
-            QMessageBox.information(self, "Keine Daten", "Bitte zuerst Batch starten.")
+            QMessageBox.information(self, tr("common.ok"), "Bitte zuerst Batch starten.")
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "CSV exportieren", "batch_results.csv", "CSV (*.csv)"
@@ -535,6 +538,6 @@ class BatchInferencePage(QWidget):
                         f"{r['confidence']:.4f}", r["error"] or "",
                         *prob_cols,
                     ])
-            QMessageBox.information(self, "Exportiert", f"CSV gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.ok"), f"CSV gespeichert:\n{path}")
         except Exception as exc:
-            QMessageBox.critical(self, "Exportfehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))

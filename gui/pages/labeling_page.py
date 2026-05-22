@@ -79,7 +79,8 @@ class LabelingPage(QWidget):
 
     def _build_left_panel(self) -> QGroupBox:
         """Build the left column: image list, filters, progress bar and AL/bulk panels."""
-        box = QGroupBox("Bilder")
+        from utils.i18n import tr
+        box = QGroupBox(tr("labeling.images_group"))
         v = QVBoxLayout(box)
 
         load_btn = QPushButton("Ordner laden…")
@@ -121,7 +122,7 @@ class LabelingPage(QWidget):
         v.addWidget(self._chip_scroll)
 
         filter_cb_row = QHBoxLayout()
-        self.unlabeled_only_cb = QCheckBox("Nur ungelabelt")
+        self.unlabeled_only_cb = QCheckBox(tr("labeling.filter_unlabeled"))
         self.unlabeled_only_cb.toggled.connect(self._filter_list)
         filter_cb_row.addWidget(self.unlabeled_only_cb)
 
@@ -137,7 +138,7 @@ class LabelingPage(QWidget):
         v.addLayout(filter_cb_row)
 
         filter_cb_row2 = QHBoxLayout()
-        self.uncertain_only_cb = QCheckBox("Nur unsichere Labels")
+        self.uncertain_only_cb = QCheckBox(tr("labeling.filter_uncertain"))
         self.uncertain_only_cb.toggled.connect(self._filter_list)
         filter_cb_row2.addWidget(self.uncertain_only_cb)
         v.addLayout(filter_cb_row2)
@@ -407,6 +408,7 @@ class LabelingPage(QWidget):
 
     def _build_right_panel(self) -> QScrollArea:
         """Build the right column: label controls, ROI list, navigation and statistics."""
+        from utils.i18n import tr
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -415,16 +417,13 @@ class LabelingPage(QWidget):
         scroll.setWidget(container)
 
         # Image label (single-label combo or multi-label checkboxes)
-        img_lbl_box = QGroupBox("Bild-Label")
+        img_lbl_box = QGroupBox(tr("labeling.labels_group"))
         ib = QVBoxLayout(img_lbl_box)
         ib.setSpacing(4)
 
-        self._ml_toggle_btn = QPushButton("Multi-Label aktivieren")
+        self._ml_toggle_btn = QPushButton(tr("labeling.multi_label_cb"))
         self._ml_toggle_btn.setCheckable(True)
-        self._ml_toggle_btn.setToolTip(
-            "Mehrere Labels pro Bild erlauben.\n"
-            "Wechsel erfordert Re-Training mit BCEWithLogitsLoss."
-        )
+        self._ml_toggle_btn.setToolTip(tr("labeling.multi_label_tooltip"))
         self._ml_toggle_btn.setStyleSheet(
             "QPushButton{background:#2a2a3a;color:#888;border:1px solid #444;"
             "border-radius:3px;padding:3px 6px;font-size:10px;}"
@@ -463,7 +462,7 @@ class LabelingPage(QWidget):
         ib.addWidget(self._label_stack)
 
         flag_row = QHBoxLayout()
-        self._uncertain_btn = QPushButton("? Unsicher")
+        self._uncertain_btn = QPushButton(tr("labeling.uncertain_cb"))
         self._uncertain_btn.setCheckable(True)
         self._uncertain_btn.setFixedHeight(24)
         self._uncertain_btn.setToolTip("Label als unsicher markieren (benötigt QA-Review)")
@@ -477,7 +476,7 @@ class LabelingPage(QWidget):
         flag_row.addWidget(self._uncertain_btn)
 
         self._uncertain_comment_edit = QLineEdit()
-        self._uncertain_comment_edit.setPlaceholderText("Kommentar…")
+        self._uncertain_comment_edit.setPlaceholderText(tr("labeling.comment_placeholder"))
         self._uncertain_comment_edit.setStyleSheet("font-size:10px;")
         self._uncertain_comment_edit.setVisible(False)
         self._uncertain_comment_edit.editingFinished.connect(self._on_comment_changed)
@@ -817,6 +816,7 @@ class LabelingPage(QWidget):
         self._refresh_thumb_list()
         self._update_stats()
         self.refresh_al_queue_panel()
+        from utils.i18n import tr
         is_ml = getattr(project.config, "multi_label", False) if project else False
         self._ml_toggle_btn.blockSignals(True)
         self._ml_toggle_btn.setChecked(is_ml)
@@ -886,9 +886,9 @@ class LabelingPage(QWidget):
 
     def _on_files_dropped(self, paths: list) -> None:
         """Handle files/folders dragged onto the thumbnail list."""
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt",
-                                "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         added = 0
         for path in paths:
@@ -902,11 +902,12 @@ class LabelingPage(QWidget):
 
     def _load_folder(self) -> None:
         """Open a folder chooser, scan for images and add new ones to the project."""
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         from utils.config import IMAGE_FORMATS
-        folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
+        folder = QFileDialog.getExistingDirectory(self, tr("data.dlg.folder_select"))
         if not folder:
             return
         added = 0
@@ -921,7 +922,7 @@ class LabelingPage(QWidget):
         self.project.config.image_dir = folder
         self._update_stats()
         if added:
-            QMessageBox.information(self, "Geladen", f"{added} Bilder hinzugefügt.")
+            QMessageBox.information(self, tr("common.saved"), tr("data.msg.images_loaded", added=added, folder=folder))
 
     from PySide6.QtWidgets import QFileDialog  # needed for _load_folder
 
@@ -997,7 +998,8 @@ class LabelingPage(QWidget):
                 w.deleteLater()
         self._label_chip_btns.clear()
 
-        self._all_chip = QPushButton("Alle")
+        from utils.i18n import tr
+        self._all_chip = QPushButton(tr("labeling.filter_all"))
         self._all_chip.setCheckable(True)
         self._all_chip.setChecked(True)
         self._all_chip.setFixedHeight(22)
@@ -1355,6 +1357,7 @@ class LabelingPage(QWidget):
 
     def _toggle_multi_label_mode(self, checked: bool) -> None:
         """Switch the project between single-label and multi-label mode with user confirmation."""
+        from utils.i18n import tr
         if not self.project:
             self._ml_toggle_btn.setChecked(False)
             return
@@ -1647,13 +1650,14 @@ class LabelingPage(QWidget):
 
     def _apply_roi_to_all(self) -> None:
         """Copy the current image's ROIs to every image in the project."""
+        from utils.i18n import tr
         if not self.project or not self._current_image:
-            QMessageBox.warning(self, "Kein Bild", "Bitte zuerst ein Bild auswählen.")
+            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
             return
         self._save_current_rois()
         src_rois = self.project.get_rois(self._current_image)
         if not src_rois:
-            QMessageBox.warning(self, "Keine ROIs",
+            QMessageBox.warning(self, tr("common.warning"),
                                 "Das aktuelle Bild hat keine ROIs zum Kopieren.")
             return
         n = len(self.project.images)
@@ -1682,13 +1686,14 @@ class LabelingPage(QWidget):
 
     def _apply_roi_size_to_all(self) -> None:
         """Copy only w+h of the selected ROI to every image; per-image x/y is kept."""
+        from utils.i18n import tr
         if not self.project or not self._current_image:
-            QMessageBox.warning(self, "Kein Bild", "Bitte zuerst ein Bild auswählen.")
+            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
             return
         self._save_current_rois()
         src_rois = self.project.get_rois(self._current_image)
         if not src_rois:
-            QMessageBox.warning(self, "Keine ROIs",
+            QMessageBox.warning(self, tr("common.warning"),
                                 "Das aktuelle Bild hat keine ROIs.")
             return
 
@@ -1771,7 +1776,8 @@ class LabelingPage(QWidget):
             self._pre_run_btn.setEnabled(bool(self.project and self.project.images))
         except Exception as exc:
             from PySide6.QtWidgets import QMessageBox as _QMB
-            _QMB.critical(self, "Fehler beim Laden", str(exc))
+            from utils.i18n import tr
+            _QMB.critical(self, tr("common.error"), str(exc))
 
     @Slot()
     def _pre_run(self):

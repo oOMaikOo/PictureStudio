@@ -91,25 +91,25 @@ class SettingsPage(QWidget):
         layout.addWidget(lang_group)
 
         # Appearance
-        app_group = QGroupBox("Erscheinungsbild")
+        app_group = QGroupBox(tr("settings.appearance_group"))
         af = QFormLayout(app_group)
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["dark", "light"])
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
-        af.addRow("Design:", self.theme_combo)
+        af.addRow(tr("settings.theme_label"), self.theme_combo)
 
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(7, 16)
         self.font_size_spin.setValue(9)
-        af.addRow("Schriftgröße:", self.font_size_spin)
+        af.addRow(tr("settings.font_size_label"), self.font_size_spin)
         layout.addWidget(app_group)
 
         # Project
-        proj_group = QGroupBox("Projekt & Autosave")
+        proj_group = QGroupBox(tr("settings.project_group"))
         pf = QFormLayout(proj_group)
 
-        self.autosave_cb = QCheckBox("Autosave aktiviert")
+        self.autosave_cb = QCheckBox(tr("settings.autosave_cb"))
         self.autosave_cb.setChecked(True)
         pf.addRow("", self.autosave_cb)
 
@@ -117,66 +117,66 @@ class SettingsPage(QWidget):
         self.autosave_spin.setRange(30, 3600)
         self.autosave_spin.setValue(300)
         self.autosave_spin.setSuffix(" s")
-        pf.addRow("Autosave-Intervall:", self.autosave_spin)
+        pf.addRow(tr("settings.autosave_interval"), self.autosave_spin)
 
-        self.backup_cb = QCheckBox("Backup vor Speichern")
+        self.backup_cb = QCheckBox(tr("settings.backup_cb"))
         self.backup_cb.setChecked(True)
         pf.addRow("", self.backup_cb)
         layout.addWidget(proj_group)
 
         # Labeling
-        lbl_group = QGroupBox("Labeling")
+        lbl_group = QGroupBox(tr("settings.labeling_group"))
         lf = QFormLayout(lbl_group)
 
         self.thumb_size_spin = QSpinBox()
         self.thumb_size_spin.setRange(60, 240)
         self.thumb_size_spin.setValue(100)
         self.thumb_size_spin.setSuffix(" px")
-        lf.addRow("Thumbnail-Größe:", self.thumb_size_spin)
+        lf.addRow(tr("settings.thumb_size_label"), self.thumb_size_spin)
 
-        self.show_roi_labels_cb = QCheckBox("ROI-Labels im Editor anzeigen")
+        self.show_roi_labels_cb = QCheckBox(tr("settings.roi_labels_cb"))
         self.show_roi_labels_cb.setChecked(True)
         lf.addRow("", self.show_roi_labels_cb)
         layout.addWidget(lbl_group)
 
         # Inference
-        inf_group = QGroupBox("Inferenz")
+        inf_group = QGroupBox(tr("settings.inference_group"))
         inf_f = QFormLayout(inf_group)
 
         self.low_conf_spin = QDoubleSpinBox()
         self.low_conf_spin.setRange(0.0, 1.0)
         self.low_conf_spin.setValue(0.70)
         self.low_conf_spin.setSingleStep(0.05)
-        inf_f.addRow("Schwelle 'unsicher':", self.low_conf_spin)
+        inf_f.addRow(tr("settings.low_conf_label"), self.low_conf_spin)
 
         self.top_k_spin = QSpinBox()
         self.top_k_spin.setRange(1, 5)
         self.top_k_spin.setValue(3)
-        inf_f.addRow("Standard Top-K:", self.top_k_spin)
+        inf_f.addRow(tr("settings.top_k_label"), self.top_k_spin)
         layout.addWidget(inf_group)
 
         # REST API
-        api_group = QGroupBox("REST-API Server")
+        api_group = QGroupBox(tr("settings.api_group"))
         ag = QVBoxLayout(api_group)
 
         api_form = QFormLayout()
         self.api_port_spin = QSpinBox()
         self.api_port_spin.setRange(1024, 65535)
         self.api_port_spin.setValue(8765)
-        api_form.addRow("Port:", self.api_port_spin)
+        api_form.addRow(tr("settings.api_port_label"), self.api_port_spin)
 
         # API Key
         key_row = QHBoxLayout()
         self._api_key_edit = QLineEdit()
         self._api_key_edit.setReadOnly(True)
-        self._api_key_edit.setPlaceholderText("Kein API-Key (Authentifizierung deaktiviert)")
+        self._api_key_edit.setPlaceholderText(tr("settings.api_key_placeholder"))
         self._api_key_edit.setEchoMode(QLineEdit.Password)
         key_row.addWidget(self._api_key_edit)
-        gen_key_btn = QPushButton("Generieren")
+        gen_key_btn = QPushButton(tr("settings.api_generate_btn"))
         gen_key_btn.setToolTip("Neuen zufälligen API-Key erstellen")
         gen_key_btn.clicked.connect(self._generate_api_key)
         key_row.addWidget(gen_key_btn)
-        show_key_btn = QPushButton("Anzeigen")
+        show_key_btn = QPushButton(tr("settings.api_show_btn"))
         show_key_btn.setCheckable(True)
         show_key_btn.toggled.connect(
             lambda on: self._api_key_edit.setEchoMode(
@@ -184,27 +184,27 @@ class SettingsPage(QWidget):
             )
         )
         key_row.addWidget(show_key_btn)
-        clear_key_btn = QPushButton("Löschen")
+        clear_key_btn = QPushButton(tr("settings.api_clear_btn"))
         clear_key_btn.setToolTip("API-Key entfernen — Authentifizierung deaktivieren")
         clear_key_btn.clicked.connect(self._clear_api_key)
         key_row.addWidget(clear_key_btn)
-        api_form.addRow("API-Key:", key_row)
+        api_form.addRow(tr("settings.api_key_label"), key_row)
         ag.addLayout(api_form)
 
-        self.api_status_label = QLabel("Gestoppt")
+        self.api_status_label = QLabel(tr("settings.api_status_stopped"))
         self.api_status_label.setStyleSheet("color:#E74C3C; font-size:10px;")
         self.api_status_label.setWordWrap(True)
         ag.addWidget(self.api_status_label)
 
         api_btn_row = QHBoxLayout()
-        self.api_toggle_btn = QPushButton("API starten")
+        self.api_toggle_btn = QPushButton(tr("settings.api_start_btn"))
         self.api_toggle_btn.setStyleSheet(
             "background:#2ECC71;color:white;padding:5px 10px;font-weight:bold;border-radius:4px;"
         )
         self.api_toggle_btn.clicked.connect(self._toggle_api)
         api_btn_row.addWidget(self.api_toggle_btn)
 
-        self.api_copy_btn = QPushButton("URL kopieren")
+        self.api_copy_btn = QPushButton(tr("settings.api_copy_url_btn"))
         self.api_copy_btn.setEnabled(False)
         self.api_copy_btn.setToolTip("Basis-URL in Zwischenablage kopieren")
         self.api_copy_btn.clicked.connect(self._copy_api_url)
@@ -236,25 +236,25 @@ class SettingsPage(QWidget):
         layout.addWidget(api_group)
 
         # MQTT
-        mqtt_group = QGroupBox("MQTT-Alarm (Anomalie-Erkennung)")
+        mqtt_group = QGroupBox(tr("settings.mqtt_group"))
         mf = QFormLayout(mqtt_group)
-        self.mqtt_enabled_cb = QCheckBox("MQTT-Publishing aktiviert")
+        self.mqtt_enabled_cb = QCheckBox(tr("settings.mqtt_enabled_cb"))
         mf.addRow("", self.mqtt_enabled_cb)
         self.mqtt_host_edit = QLineEdit("localhost")
-        mf.addRow("Broker-Host:", self.mqtt_host_edit)
+        mf.addRow(tr("settings.mqtt_broker_label"), self.mqtt_host_edit)
         self.mqtt_port_spin = QSpinBox()
         self.mqtt_port_spin.setRange(1, 65535)
         self.mqtt_port_spin.setValue(1883)
-        mf.addRow("Port:", self.mqtt_port_spin)
+        mf.addRow(tr("settings.mqtt_port_label"), self.mqtt_port_spin)
         self.mqtt_topic_edit = QLineEdit("picture_studio/anomaly")
-        mf.addRow("Topic:", self.mqtt_topic_edit)
+        mf.addRow(tr("settings.mqtt_topic_label"), self.mqtt_topic_edit)
         self.mqtt_user_edit = QLineEdit()
         self.mqtt_user_edit.setPlaceholderText("optional")
-        mf.addRow("Benutzername:", self.mqtt_user_edit)
+        mf.addRow(tr("settings.mqtt_user_label"), self.mqtt_user_edit)
         self.mqtt_pass_edit = QLineEdit()
         self.mqtt_pass_edit.setEchoMode(QLineEdit.Password)
         self.mqtt_pass_edit.setPlaceholderText("optional")
-        mf.addRow("Passwort:", self.mqtt_pass_edit)
+        mf.addRow(tr("settings.mqtt_pass_label"), self.mqtt_pass_edit)
         self.mqtt_status_lbl = QLabel("Nicht verbunden")
         self.mqtt_status_lbl.setStyleSheet("color:#7F8C8D;font-size:10px;")
         mf.addRow("Status:", self.mqtt_status_lbl)
@@ -268,44 +268,44 @@ class SettingsPage(QWidget):
         layout.addWidget(mqtt_group)
 
         # Alarm notifier (E-Mail & Webhook)
-        alarm_group = QGroupBox("Alarmierung (E-Mail & Webhook)")
+        alarm_group = QGroupBox(tr("settings.alarm_group"))
         af2 = QFormLayout(alarm_group)
 
         # --- E-Mail section ---
         email_lbl = QLabel("<b>E-Mail</b>")
         af2.addRow(email_lbl)
 
-        self._email_enabled_cb = QCheckBox("E-Mail-Benachrichtigung aktivieren")
+        self._email_enabled_cb = QCheckBox(tr("settings.email_enabled_cb"))
         af2.addRow("", self._email_enabled_cb)
 
         self._smtp_host_edit = QLineEdit()
         self._smtp_host_edit.setPlaceholderText("smtp.gmail.com")
-        af2.addRow("SMTP-Host:", self._smtp_host_edit)
+        af2.addRow(tr("settings.smtp_host_label"), self._smtp_host_edit)
 
         self._smtp_port_spin = QSpinBox()
         self._smtp_port_spin.setRange(1, 65535)
         self._smtp_port_spin.setValue(587)
-        af2.addRow("SMTP-Port:", self._smtp_port_spin)
+        af2.addRow(tr("settings.smtp_port_label"), self._smtp_port_spin)
 
         self._smtp_user_edit = QLineEdit()
-        af2.addRow("Benutzername:", self._smtp_user_edit)
+        af2.addRow(tr("settings.smtp_user_label"), self._smtp_user_edit)
 
         self._smtp_pass_edit = QLineEdit()
         self._smtp_pass_edit.setEchoMode(QLineEdit.Password)
-        af2.addRow("Passwort:", self._smtp_pass_edit)
+        af2.addRow(tr("settings.smtp_pass_label"), self._smtp_pass_edit)
 
-        self._smtp_tls_cb = QCheckBox("TLS verwenden")
+        self._smtp_tls_cb = QCheckBox(tr("settings.smtp_tls_cb"))
         self._smtp_tls_cb.setChecked(True)
         af2.addRow("", self._smtp_tls_cb)
 
         self._email_from_edit = QLineEdit()
-        af2.addRow("Absender:", self._email_from_edit)
+        af2.addRow(tr("settings.email_from_label"), self._email_from_edit)
 
         self._email_to_edit = QLineEdit()
         self._email_to_edit.setPlaceholderText("emp1@domain.de, emp2@domain.de")
-        af2.addRow("Empfänger:", self._email_to_edit)
+        af2.addRow(tr("settings.email_to_label"), self._email_to_edit)
 
-        test_email_btn = QPushButton("Test-E-Mail senden")
+        test_email_btn = QPushButton(tr("settings.test_email_btn"))
         test_email_btn.clicked.connect(self._test_email)
         af2.addRow("", test_email_btn)
 
@@ -313,14 +313,14 @@ class SettingsPage(QWidget):
         webhook_lbl = QLabel("<b>Webhook</b>")
         af2.addRow(webhook_lbl)
 
-        self._webhook_enabled_cb = QCheckBox("Webhook aktivieren")
+        self._webhook_enabled_cb = QCheckBox(tr("settings.webhook_enabled_cb"))
         af2.addRow("", self._webhook_enabled_cb)
 
         self._webhook_url_edit = QLineEdit()
         self._webhook_url_edit.setPlaceholderText("https://hooks.example.com/...")
-        af2.addRow("URL:", self._webhook_url_edit)
+        af2.addRow(tr("settings.webhook_url_label"), self._webhook_url_edit)
 
-        test_webhook_btn = QPushButton("Test-Webhook senden")
+        test_webhook_btn = QPushButton(tr("settings.test_webhook_btn"))
         test_webhook_btn.clicked.connect(self._test_webhook)
         af2.addRow("", test_webhook_btn)
 
@@ -332,30 +332,30 @@ class SettingsPage(QWidget):
         self._notify_cooldown_spin.setRange(10, 3600)
         self._notify_cooldown_spin.setValue(60)
         self._notify_cooldown_spin.setSuffix(" s")
-        af2.addRow("Mindestabstand zwischen Alarmen:", self._notify_cooldown_spin)
+        af2.addRow(tr("settings.cooldown_label"), self._notify_cooldown_spin)
 
         layout.addWidget(alarm_group)
 
         # Industrieanbindung (OPC-UA & Modbus)
-        industrial_group = QGroupBox("Industrieanbindung (OPC-UA & Modbus)")
+        industrial_group = QGroupBox(tr("settings.industrial_group"))
         ind_f = QFormLayout(industrial_group)
 
         # OPC-UA section
         opcua_lbl = QLabel("<b>OPC-UA</b>")
         ind_f.addRow(opcua_lbl)
 
-        self._opcua_enabled_cb = QCheckBox("OPC-UA aktivieren")
+        self._opcua_enabled_cb = QCheckBox(tr("settings.opcua_enabled_cb"))
         ind_f.addRow("", self._opcua_enabled_cb)
 
         self._opcua_url_edit = QLineEdit()
         self._opcua_url_edit.setPlaceholderText("opc.tcp://192.168.1.10:4840")
-        ind_f.addRow("Server-URL:", self._opcua_url_edit)
+        ind_f.addRow(tr("settings.opcua_url_label"), self._opcua_url_edit)
 
         self._opcua_node_edit = QLineEdit()
         self._opcua_node_edit.setPlaceholderText("ns=2;i=1001")
-        ind_f.addRow("Node-ID:", self._opcua_node_edit)
+        ind_f.addRow(tr("settings.opcua_node_label"), self._opcua_node_edit)
 
-        self._test_opcua_btn = QPushButton("Verbindung testen")
+        self._test_opcua_btn = QPushButton(tr("settings.opcua_test_btn"))
         self._test_opcua_btn.clicked.connect(self._test_opcua_connection)
         ind_f.addRow("", self._test_opcua_btn)
 
@@ -363,29 +363,29 @@ class SettingsPage(QWidget):
         modbus_lbl = QLabel("<b>Modbus TCP</b>")
         ind_f.addRow(modbus_lbl)
 
-        self._modbus_enabled_cb = QCheckBox("Modbus TCP aktivieren")
+        self._modbus_enabled_cb = QCheckBox(tr("settings.modbus_enabled_cb"))
         ind_f.addRow("", self._modbus_enabled_cb)
 
         self._modbus_host_edit = QLineEdit()
         self._modbus_host_edit.setPlaceholderText("192.168.1.20")
-        ind_f.addRow("Host/IP:", self._modbus_host_edit)
+        ind_f.addRow(tr("settings.modbus_host_label"), self._modbus_host_edit)
 
         self._modbus_port_spin = QSpinBox()
         self._modbus_port_spin.setRange(1, 65535)
         self._modbus_port_spin.setValue(502)
-        ind_f.addRow("Port:", self._modbus_port_spin)
+        ind_f.addRow(tr("settings.modbus_port_label"), self._modbus_port_spin)
 
         self._modbus_coil_spin = QSpinBox()
         self._modbus_coil_spin.setRange(0, 65535)
         self._modbus_coil_spin.setValue(0)
-        ind_f.addRow("Coil-Adresse:", self._modbus_coil_spin)
+        ind_f.addRow(tr("settings.modbus_coil_label"), self._modbus_coil_spin)
 
         self._modbus_unit_spin = QSpinBox()
         self._modbus_unit_spin.setRange(1, 247)
         self._modbus_unit_spin.setValue(1)
-        ind_f.addRow("Unit-ID:", self._modbus_unit_spin)
+        ind_f.addRow(tr("settings.modbus_unit_label"), self._modbus_unit_spin)
 
-        self._test_modbus_btn = QPushButton("Verbindung testen")
+        self._test_modbus_btn = QPushButton(tr("settings.modbus_test_btn"))
         self._test_modbus_btn.clicked.connect(self._test_modbus_connection)
         ind_f.addRow("", self._test_modbus_btn)
 
@@ -415,14 +415,14 @@ class SettingsPage(QWidget):
         self._notify_cooldown_spin.valueChanged.connect(self._save_alarm_notifier_settings)
 
         # SSH profiles
-        ssh_group = QGroupBox("SSH-Profile")
+        ssh_group = QGroupBox(tr("settings.ssh_group"))
         ssh_v = QVBoxLayout(ssh_group)
         self.ssh_list = QListWidget()
         ssh_v.addWidget(self.ssh_list)
         ssh_btn_row = QHBoxLayout()
-        add_ssh = QPushButton("Profil hinzufügen")
+        add_ssh = QPushButton(tr("settings.ssh_add_btn"))
         add_ssh.clicked.connect(self._add_ssh_profile)
-        del_ssh = QPushButton("Profil löschen")
+        del_ssh = QPushButton(tr("settings.ssh_del_btn"))
         del_ssh.clicked.connect(self._del_ssh_profile)
         ssh_btn_row.addWidget(add_ssh)
         ssh_btn_row.addWidget(del_ssh)
@@ -464,8 +464,9 @@ class SettingsPage(QWidget):
         self.mqtt_user_edit.setText(mqtt.get("username", ""))
         self.mqtt_pass_edit.setText(mqtt.get("password", ""))
         from core.mqtt_client import HAS_MQTT
+        from utils.i18n import tr
         if not HAS_MQTT:
-            self.mqtt_status_lbl.setText("paho-mqtt nicht installiert")
+            self.mqtt_status_lbl.setText(tr("settings.mqtt_not_installed"))
             self.mqtt_status_lbl.setStyleSheet("color:#F85149;font-size:10px;")
         self._load_alarm_notifier_settings()
         self._load_industrial_settings()
@@ -578,51 +579,55 @@ class SettingsPage(QWidget):
 
     def _test_opcua_connection(self) -> None:
         """Test the OPC-UA connection and show a QMessageBox with the result."""
+        from utils.i18n import tr
         if not self._industrial_notifier:
-            QMessageBox.warning(self, "Kein Notifier", "Industrial Notifier nicht initialisiert.")
+            QMessageBox.warning(self, tr("common.warning"), "Industrial Notifier nicht initialisiert.")
             return
         self._save_industrial_settings()
         success, msg = self._industrial_notifier.test_opcua()
         if success:
-            QMessageBox.information(self, "OPC-UA Test", "Verbindung erfolgreich.")
+            QMessageBox.information(self, "OPC-UA Test", tr("settings.test_success"))
         else:
-            QMessageBox.critical(self, "OPC-UA Test fehlgeschlagen", msg)
+            QMessageBox.critical(self, tr("common.error"), msg)
 
     def _test_modbus_connection(self) -> None:
         """Test the Modbus TCP connection and show a QMessageBox with the result."""
+        from utils.i18n import tr
         if not self._industrial_notifier:
-            QMessageBox.warning(self, "Kein Notifier", "Industrial Notifier nicht initialisiert.")
+            QMessageBox.warning(self, tr("common.warning"), "Industrial Notifier nicht initialisiert.")
             return
         self._save_industrial_settings()
         success, msg = self._industrial_notifier.test_modbus()
         if success:
-            QMessageBox.information(self, "Modbus Test", "Verbindung erfolgreich.")
+            QMessageBox.information(self, "Modbus Test", tr("settings.test_success"))
         else:
-            QMessageBox.critical(self, "Modbus Test fehlgeschlagen", msg)
+            QMessageBox.critical(self, tr("common.error"), msg)
 
     def _test_email(self) -> None:
         """Send a test e-mail via the notifier and show the result."""
+        from utils.i18n import tr
         if not self._notifier:
-            QMessageBox.warning(self, "Kein Notifier", "Notifier nicht initialisiert.")
+            QMessageBox.warning(self, tr("common.warning"), "Notifier nicht initialisiert.")
             return
         self._save_alarm_notifier_settings()
         success, msg = self._notifier.test_email()
         if success:
-            QMessageBox.information(self, "Test-E-Mail", "Test-E-Mail erfolgreich gesendet.")
+            QMessageBox.information(self, tr("common.info"), tr("settings.email_sent"))
         else:
-            QMessageBox.critical(self, "Test-E-Mail fehlgeschlagen", msg)
+            QMessageBox.critical(self, tr("common.error"), msg)
 
     def _test_webhook(self) -> None:
         """Send a test webhook call via the notifier and show the result."""
+        from utils.i18n import tr
         if not self._notifier:
-            QMessageBox.warning(self, "Kein Notifier", "Notifier nicht initialisiert.")
+            QMessageBox.warning(self, tr("common.warning"), "Notifier nicht initialisiert.")
             return
         self._save_alarm_notifier_settings()
         success, msg = self._notifier.test_webhook()
         if success:
-            QMessageBox.information(self, "Test-Webhook", "Test-Webhook erfolgreich gesendet.")
+            QMessageBox.information(self, tr("common.info"), tr("settings.webhook_sent"))
         else:
-            QMessageBox.critical(self, "Test-Webhook fehlgeschlagen", msg)
+            QMessageBox.critical(self, tr("common.error"), msg)
 
     def _refresh_ssh_list(self) -> None:
         """Rebuild the SSH profile list widget from saved settings."""
@@ -639,20 +644,21 @@ class SettingsPage(QWidget):
     def _add_ssh_profile(self) -> None:
         """Open a dialog to collect SSH profile details and save the new entry."""
         from PySide6.QtWidgets import QDialog, QDialogButtonBox
+        from utils.i18n import tr
         if not self._settings:
             return
         dlg = QDialog(self)
-        dlg.setWindowTitle("SSH-Profil hinzufügen")
+        dlg.setWindowTitle(tr("settings.ssh_dlg_title"))
         dlg.setMinimumWidth(360)
         form = QFormLayout(dlg)
         name_edit = QLineEdit()
         host_edit = QLineEdit()
         user_edit = QLineEdit()
         key_edit  = QLineEdit()
-        form.addRow("Profilname:", name_edit)
-        form.addRow("Host:", host_edit)
-        form.addRow("Benutzername:", user_edit)
-        form.addRow("SSH-Key-Pfad:", key_edit)
+        form.addRow(tr("settings.ssh_name_label"), name_edit)
+        form.addRow(tr("settings.ssh_host_label"), host_edit)
+        form.addRow(tr("settings.ssh_user_label"), user_edit)
+        form.addRow(tr("settings.ssh_key_label"), key_edit)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(dlg.accept)
         buttons.rejected.connect(dlg.reject)
@@ -685,12 +691,13 @@ class SettingsPage(QWidget):
 
     def set_api_server(self, server) -> None:
         """Inject the ``RestApiServer`` instance and sync the toggle button state."""
+        from utils.i18n import tr
         self._api_server = server
         if server:
             server.set_status_callback(self._on_api_status)
             # Sync button states in case the API was already running
             if server.is_running:
-                self.api_toggle_btn.setText("API stoppen")
+                self.api_toggle_btn.setText(tr("settings.api_stop_btn"))
                 self.api_toggle_btn.setStyleSheet(
                     "background:#E74C3C;color:white;padding:5px 10px;"
                     "font-weight:bold;border-radius:4px;"
@@ -701,11 +708,12 @@ class SettingsPage(QWidget):
 
     def _toggle_api(self) -> None:
         """Start or stop the REST API server and update button appearance accordingly."""
+        from utils.i18n import tr
         if not self._api_server:
             return
         if self._api_server.is_running:
             self._api_server.stop()
-            self.api_toggle_btn.setText("API starten")
+            self.api_toggle_btn.setText(tr("settings.api_start_btn"))
             self.api_toggle_btn.setStyleSheet(
                 "background:#2ECC71;color:white;padding:5px 10px;"
                 "font-weight:bold;border-radius:4px;"
@@ -717,7 +725,7 @@ class SettingsPage(QWidget):
             port = self.api_port_spin.value()
             ok = self._api_server.start(port)
             if ok:
-                self.api_toggle_btn.setText("API stoppen")
+                self.api_toggle_btn.setText(tr("settings.api_stop_btn"))
                 self.api_toggle_btn.setStyleSheet(
                     "background:#E74C3C;color:white;padding:5px 10px;"
                     "font-weight:bold;border-radius:4px;"

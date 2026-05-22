@@ -21,6 +21,7 @@ from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPai
 
 from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread, apply_cam_props, apply_frame_filter
 from utils.logging_utils import get_logger
+from utils.i18n import tr
 
 log = get_logger()
 
@@ -381,18 +382,18 @@ class CameraCaptureDialog(QDialog):
         lv.addLayout(conn_row)
 
         # ── Camera settings ──────────────────────────────────────────────────
-        cam_settings_grp = QGroupBox("Kamera-Einstellungen")
+        cam_settings_grp = QGroupBox(tr("camera.settings_group"))
         cam_settings_grp.setCheckable(True)
         cam_settings_grp.setChecked(False)
         cs = QFormLayout(cam_settings_grp)
         cs.setSpacing(4)
 
         _SLIDER_DEFS = [
-            ("Helligkeit:", "brightness", -64, 64, 0),
-            ("Kontrast:",   "contrast",    0, 95,  0),
-            ("Sättigung:",  "saturation",  0, 100, 0),
-            ("Schärfe:",    "sharpness",   0, 7,   0),
-            ("Belichtung:", "exposure",  -13, -1,  -6),
+            (tr("camera.brightness_label"), "brightness", -64, 64, 0),
+            (tr("camera.contrast_label"),   "contrast",    0, 95,  0),
+            (tr("camera.saturation_label"), "saturation",  0, 100, 0),
+            (tr("camera.sharpness_label"),  "sharpness",   0, 7,   0),
+            (tr("camera.exposure_label"),   "exposure",  -13, -1,  -6),
         ]
         self._cam_sliders: dict[str, QSlider] = {}
         for label, prop, lo, hi, default in _SLIDER_DEFS:
@@ -414,30 +415,30 @@ class CameraCaptureDialog(QDialog):
             self._cam_sliders[prop] = sl
             cs.addRow(label, row)
 
-        reset_cam_btn = QPushButton("Zurücksetzen")
+        reset_cam_btn = QPushButton(tr("camera.reset_btn"))
         reset_cam_btn.setFixedHeight(24)
         reset_cam_btn.clicked.connect(self._reset_cam_settings)
         cs.addRow("", reset_cam_btn)
         lv.addWidget(cam_settings_grp)
 
         # ── Preprocessing filter ─────────────────────────────────────────────
-        filter_grp = QGroupBox("Vorverarbeitung")
+        filter_grp = QGroupBox(tr("camera.filter_group"))
         ff = QFormLayout(filter_grp)
         ff.setSpacing(4)
         self._filter_combo_dlg = QComboBox()
         for display, key in [
-            ("Kein Filter", "none"),
-            ("Graustufen", "grayscale"),
-            ("Canny-Kanten", "canny"),
-            ("Sobel-Gradient", "sobel"),
-            ("Laplacian", "laplacian"),
+            (tr("camera.filter_none"), "none"),
+            (tr("camera.filter_grayscale"), "grayscale"),
+            (tr("camera.filter_canny"), "canny"),
+            (tr("camera.filter_sobel"), "sobel"),
+            (tr("camera.filter_laplacian"), "laplacian"),
         ]:
             self._filter_combo_dlg.addItem(display, key)
         idx = self._filter_combo_dlg.findData(self._active_filter)
         if idx >= 0:
             self._filter_combo_dlg.setCurrentIndex(idx)
         self._filter_combo_dlg.currentIndexChanged.connect(self._on_filter_changed)
-        ff.addRow("Filter:", self._filter_combo_dlg)
+        ff.addRow(tr("camera.filter_label"), self._filter_combo_dlg)
         lv.addWidget(filter_grp)
 
         # ── Capture controls ─────────────────────────────────────────────────
@@ -544,7 +545,7 @@ class CameraCaptureDialog(QDialog):
         rv = QVBoxLayout(right)
 
         # Anomaly alarm banner (hidden until triggered)
-        self._alarm_banner = QLabel("  ⚠  ANOMALIE ERKANNT")
+        self._alarm_banner = QLabel(tr("camera.alarm_banner"))
         self._alarm_banner.setAlignment(Qt.AlignCenter)
         self._alarm_banner.setStyleSheet(
             "background:#C0392B;color:white;font-weight:bold;font-size:15px;padding:6px;"
@@ -643,7 +644,7 @@ class CameraCaptureDialog(QDialog):
 
         # ── Bottom buttons ───────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        cancel_btn = QPushButton("Abbrechen")
+        cancel_btn = QPushButton(tr("common.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
         btn_row.addStretch()
@@ -744,7 +745,7 @@ class CameraCaptureDialog(QDialog):
         ep_row.addWidget(self._ae_epochs)
         tl.addLayout(ep_row)
 
-        self._ae_hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")
+        self._ae_hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")  # not in key list, keep as-is
         self._ae_hpt_btn.setEnabled(False)
         self._ae_hpt_btn.setToolTip(
             "Optuna-basierte Suche nach optimalen Autoencoder-Parametern\n"
@@ -759,7 +760,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_hpt_btn.clicked.connect(self._start_ae_hpt)
         tl.addWidget(self._ae_hpt_btn)
 
-        self._ae_train_btn = QPushButton("Training starten")
+        self._ae_train_btn = QPushButton(tr("common.start"))
         self._ae_train_btn.setEnabled(False)
         self._ae_train_btn.clicked.connect(self._train_autoencoder)
         tl.addWidget(self._ae_train_btn)
@@ -778,7 +779,7 @@ class CameraCaptureDialog(QDialog):
         score_grp = QGroupBox("3 · Live-Erkennung")
         sl = QVBoxLayout(score_grp)
 
-        self._ae_heatmap_cb = QCheckBox("Heatmap-Overlay (zeigt anomale Bereiche)")
+        self._ae_heatmap_cb = QCheckBox(tr("camera.heatmap_cb"))
         self._ae_heatmap_cb.setToolTip(
             "Überlagert das Live-Bild mit einer Wärmekarte der Rekonstruktionsfehler.\n"
             "Rot = hoher Fehler = potenzielle Anomalie.\n"
@@ -786,7 +787,7 @@ class CameraCaptureDialog(QDialog):
         )
         sl.addWidget(self._ae_heatmap_cb)
 
-        self._ae_gradcam_cb = QCheckBox("Grad-CAM anzeigen")
+        self._ae_gradcam_cb = QCheckBox(tr("camera.gradcam_cb"))
         self._ae_gradcam_cb.setToolTip(
             "Grad-CAM Aktivierungskarte über dem Live-Frame.\n"
             "Zeigt welche Regionen den Rekonstruktionsfehler verursachen."
@@ -794,7 +795,7 @@ class CameraCaptureDialog(QDialog):
         sl.addWidget(self._ae_gradcam_cb)
 
         smooth_row = QHBoxLayout()
-        smooth_row.addWidget(QLabel("Glättung:"))
+        smooth_row.addWidget(QLabel(tr("camera.smooth_label")))
         self._ae_smooth_n = QSpinBox()
         self._ae_smooth_n.setRange(1, 20)
         self._ae_smooth_n.setValue(5)
@@ -809,7 +810,7 @@ class CameraCaptureDialog(QDialog):
         sl.addLayout(smooth_row)
 
         dedup_row = QHBoxLayout()
-        dedup_row.addWidget(QLabel("Alarm-Pause:"))
+        dedup_row.addWidget(QLabel(tr("camera.dedup_label")))
         self._dedup_spin = QSpinBox()
         self._dedup_spin.setRange(0, 3600)
         self._dedup_spin.setValue(30)
@@ -824,7 +825,7 @@ class CameraCaptureDialog(QDialog):
         sl.addLayout(dedup_row)
 
         thr_row = QHBoxLayout()
-        thr_row.addWidget(QLabel("Schwellwert:"))
+        thr_row.addWidget(QLabel(tr("camera.threshold_label")))
         self._ae_threshold_spin = QDoubleSpinBox()
         self._ae_threshold_spin.setRange(0.00001, 1.0)
         self._ae_threshold_spin.setDecimals(5)
@@ -1032,7 +1033,7 @@ class CameraCaptureDialog(QDialog):
             current_props = {p: sl.value() for p, sl in self._cam_sliders.items()}
             if any(v != 0 for v in current_props.values()):
                 self._frame_thread.set_cam_props(current_props)
-        self._connect_btn.setText("Stopp")
+        self._connect_btn.setText(tr("common.stop"))
         self._connect_btn.setStyleSheet("background:#E74C3C;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Verbinde…")
         self._status_lbl.setStyleSheet("color:#F39C12;")
@@ -1050,7 +1051,7 @@ class CameraCaptureDialog(QDialog):
             self._stop_recording()
         if self._detector and self._detector.trained:
             self._audit_log.log_unloaded("Kamera getrennt")
-        self._connect_btn.setText("Verbinden")
+        self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Nicht verbunden")
         self._status_lbl.setStyleSheet("color:#E74C3C;")
@@ -1068,7 +1069,7 @@ class CameraCaptureDialog(QDialog):
         """Clean up after the video-file thread signals completion."""
         self._video_thread = None
         self._vid_progress.setVisible(False)
-        self._connect_btn.setText("Verbinden")
+        self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
         self._status_lbl.setText("Video fertig analysiert")
         self._status_lbl.setStyleSheet("color:#3FB950;")
@@ -1269,7 +1270,7 @@ class CameraCaptureDialog(QDialog):
     def _on_camera_error(self, msg: str) -> None:
         """Disconnect and show an error dialog when the camera thread reports a problem."""
         self._disconnect()
-        QMessageBox.warning(self, "Kamerafehler", msg)
+        QMessageBox.warning(self, tr("common.error"), msg)
 
     # ================================================================== SCORE DISPLAY
 
