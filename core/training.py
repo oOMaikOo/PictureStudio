@@ -21,6 +21,30 @@ from utils.reproducibility import set_seed, get_software_versions
 log = get_logger()
 
 
+# ------------------------------------------------------------------ Focal Loss
+
+class FocalLoss(nn.Module if HAS_TORCH else object):
+    """Focal Loss for single-label classification.
+
+    Reduces the loss contribution of easy (high-confidence) examples so training
+    focuses on hard examples. Particularly useful for imbalanced datasets.
+
+    gamma=0 → equivalent to standard CrossEntropyLoss
+    gamma=2 → standard Focal Loss (Lin et al., 2017)
+    """
+
+    def __init__(self, gamma: float = 2.0, weight=None):
+        super().__init__()
+        self.gamma = gamma
+        self.weight = weight  # per-class weights tensor (optional)
+
+    def forward(self, logits, targets):
+        import torch.nn.functional as F
+        ce = F.cross_entropy(logits, targets, weight=self.weight, reduction="none")
+        p_t = torch.exp(-ce)
+        return (((1 - p_t) ** self.gamma) * ce).mean()
+
+
 # ------------------------------------------------------------------ epoch helpers
 
 def train_one_epoch(model, loader, criterion, optimizer, device, scaler=None):
@@ -301,11 +325,15 @@ class TrainingWorker:
             pretrained=self.cfg.get("use_pretrained", True),
         ).to(device)
 
-        criterion = (
-            nn.BCEWithLogitsLoss()
-            if is_ml
-            else nn.CrossEntropyLoss(weight=class_weights_tensor)
-        )
+        use_focal = self.cfg.get("focal_loss", False) and not is_ml
+        if is_ml:
+            criterion = nn.BCEWithLogitsLoss()
+        elif use_focal:
+            gamma = self.cfg.get("focal_gamma", 2.0)
+            criterion = FocalLoss(gamma=gamma, weight=class_weights_tensor)
+            self._emit_log(f"Focal Loss aktiv (γ={gamma:.1f})")
+        else:
+            criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
         lr = self.cfg.get("learning_rate", 0.001)
         opt_name = self.cfg.get("optimizer", "adam").lower()
         wd = self.cfg.get("weight_decay", 1e-4)

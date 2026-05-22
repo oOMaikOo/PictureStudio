@@ -4,6 +4,14 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.6] – 2026-05-22
+
+### Added
+- **Focal Loss** — `core/training.py`: `FocalLoss`-Klasse (Lin et al., 2017). Dämpft den Verlust einfacher Beispiele automatisch und fokussiert das Training auf schwierige/seltene Klassen. Besonders effektiv bei unbalancierten Datensätzen (z.B. wenige Defekt-Bilder vs. viele Normal-Bilder). Parameter `γ` (Gamma) einstellbar von 0.5–5.0 (Standard: 2.0; γ=0 entspricht CrossEntropy). Kombinierbar mit Klassenausgleich (WeightedSampler). Nur für Single-Label-Klassifikation aktiv.
+- **Focal-Loss-UI** — `gui/pages/training_page.py`: Checkbox "Focal Loss" + Gamma-Spinner in den Trainingsparametern. Gamma-Spinner wird nur aktiviert wenn Focal Loss eingeschaltet ist.
+
+---
+
 ## [2.3.5] – 2026-05-22
 
 ### Added

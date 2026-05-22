@@ -356,6 +356,36 @@ class TrainingPage(QWidget):
         )
         form.addRow("", self.class_balance_cb)
 
+        self.focal_loss_cb = QCheckBox("Focal Loss")
+        self.focal_loss_cb.setToolTip(
+            "Focal Loss fokussiert das Training auf schwierige Beispiele.\n"
+            "Empfohlen bei stark ungleichen Klassen (z.B. 10:1 Normal/Defekt).\n"
+            "Nicht aktiv bei Multi-Label-Klassifikation."
+        )
+        self.focal_loss_cb.toggled.connect(self._on_focal_toggled)
+        form.addRow("", self.focal_loss_cb)
+
+        from PySide6.QtWidgets import QDoubleSpinBox as _DSB, QHBoxLayout as _HBox
+        focal_row = _HBox()
+        self._focal_gamma_label = QLabel("γ (Gamma):")
+        self._focal_gamma_label.setEnabled(False)
+        focal_row.addWidget(self._focal_gamma_label)
+        self.focal_gamma_spin = QDoubleSpinBox()
+        self.focal_gamma_spin.setRange(0.5, 5.0)
+        self.focal_gamma_spin.setValue(2.0)
+        self.focal_gamma_spin.setSingleStep(0.5)
+        self.focal_gamma_spin.setDecimals(1)
+        self.focal_gamma_spin.setEnabled(False)
+        self.focal_gamma_spin.setToolTip(
+            "Focal-Loss-Exponent γ (gamma).\n"
+            "γ=0 → identisch mit CrossEntropy\n"
+            "γ=2 → Standardwert (empfohlen)\n"
+            "γ=5 → sehr starker Fokus auf schwierige Bilder"
+        )
+        focal_row.addWidget(self.focal_gamma_spin)
+        focal_row.addStretch()
+        form.addRow("", focal_row)
+
         self.save_dir_label = QLabel("(Projekt öffnen)")
         self.save_dir_label.setWordWrap(True)
         form.addRow("Speicherort:", self.save_dir_label)
@@ -584,6 +614,8 @@ class TrainingPage(QWidget):
             "test_split": max(0.0, 1.0 - self.train_split.value() - self.val_split.value()),
             "use_rois": self.use_rois_cb.isChecked(),
             "class_balance": self.class_balance_cb.isChecked(),
+            "focal_loss": self.focal_loss_cb.isChecked(),
+            "focal_gamma": self.focal_gamma_spin.value(),
             "augmentation": {
                 "flip":                self.aug_flip.isChecked(),
                 "rotation":            self.aug_rotation.isChecked(),
@@ -909,6 +941,11 @@ class TrainingPage(QWidget):
             name = p.get("name", "?")
             host = p.get("host", "?")
             self.ssh_profile_combo.addItem(f"{name}  —  {host}")
+
+    def _on_focal_toggled(self, checked: bool) -> None:
+        """Enable or disable the gamma spinner when Focal Loss is toggled."""
+        self._focal_gamma_label.setEnabled(checked)
+        self.focal_gamma_spin.setEnabled(checked)
 
     def _on_ssh_toggled(self, state: int) -> None:
         """Enable or disable SSH-related controls when the checkbox is toggled."""
