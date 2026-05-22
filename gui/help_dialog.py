@@ -330,6 +330,21 @@ Für pixelgenaue Annotation:<br>
 Linksklick = malen | Rechtsklick = löschen | Scroll = Zoom<br>
 Klasse und Pinselgröße über die Toolbar wählen.<br>
 <i>Maske speichern</i> speichert als PNG neben der Bilddatei.</div>
+
+<h2>🤖 Pre-Labeling</h2>
+<p>Lasse ein bereits trainiertes Modell Vorschläge für ungelabelte Bilder machen.</p>
+<div class="step">
+<b>Schritt 1:</b> Im Abschnitt "Pre-Labeling" (rechte Spalte) → <i>📂</i> → trainiertes
+<code>.pth</code>-Modell wählen.<br>
+<b>Schritt 2:</b> Konfidenz-Schwellwert einstellen (Standard: 75 %).<br>
+<b>Schritt 3:</b> <i>▶ Vorschläge generieren</i> — analysiert alle ungelabelten Bilder.<br>
+<b>Schritt 4:</b> <i>✅ Vorschläge übernehmen</i> — weist Labels zu (vollständiger Undo-Support).<br>
+Vorschläge unter dem Schwellwert oder mit unbekannten Labels werden übersprungen.
+</div>
+<div class="tip">
+<b>Tipp:</b> Pre-Labeling + manuelles Korrigieren ist deutlich schneller als alles manuell
+zu labeln — besonders bei großen Datensätzen mit wenigen Klassen.
+</div>
 """),
 
 # ── 5  Training ───────────────────────────────────────────────────────────────

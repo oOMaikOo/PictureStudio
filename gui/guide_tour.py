@@ -141,6 +141,18 @@ TOUR_STEPS = {
          "'Maske speichern' speichert als PNG\n"
          "neben der Bilddatei.",
          "Maske speichern"),
+        ("Pre-Labeling – Vorschläge vom Modell",
+         "Hast du bereits ein trainiertes Modell?\n"
+         "Lass es Label-Vorschläge machen:\n\n"
+         "1. 📂 (oben rechts im Pre-Labeling-Panel)\n"
+         "   → .pth-Modell auswählen\n"
+         "2. Konfidenz-Schwellwert einstellen\n"
+         "   (Standard: 75%)\n"
+         "3. '▶ Vorschläge generieren'\n"
+         "4. '✅ Vorschläge übernehmen'\n\n"
+         "Nur Bilder über dem Schwellwert werden\n"
+         "gelabelt — Undo jederzeit möglich.",
+         "Vorschläge generieren"),
     ],
     3: [  # Training (nur Bildprojekte)
         ("Training-Seite",

@@ -50,6 +50,8 @@ class LabelingPage(QWidget):
         self._audit = None
         self._undo_stack = QUndoStack(self)
         self._undo_stack.setUndoLimit(100)
+        self._pre_labeler = None
+        self._pre_label_thread = None
         # Debounce stats refreshes: rapid label changes (e.g. bulk-accept) coalesce
         # into a single _do_update_stats() call 80 ms after the last trigger.
         self._stats_timer = QTimer(self)
@@ -679,6 +681,84 @@ class LabelingPage(QWidget):
             sb2.addWidget(w)
         v.addWidget(shortcuts_box)
 
+        # Pre-Labeling panel
+        pre_box = QGroupBox("🤖 Pre-Labeling")
+        pre_box.setStyleSheet("QGroupBox { font-size: 11px; }")
+        pb = QVBoxLayout(pre_box)
+
+        pre_info = QLabel(
+            "Modell auf ungelabelte Bilder anwenden und Labels vorschlagen."
+        )
+        pre_info.setWordWrap(True)
+        pre_info.setStyleSheet("color:#aaa; font-size:10px;")
+        pb.addWidget(pre_info)
+
+        pre_model_row = QHBoxLayout()
+        self._pre_model_lbl = QLabel("Kein Modell geladen.")
+        self._pre_model_lbl.setStyleSheet("color:#ccc; font-size:10px;")
+        self._pre_model_lbl.setWordWrap(True)
+        pre_model_row.addWidget(self._pre_model_lbl, 1)
+        self._pre_load_btn = QPushButton("📂")
+        self._pre_load_btn.setFixedWidth(28)
+        self._pre_load_btn.setToolTip("Trainiertes .pth-Modell laden")
+        self._pre_load_btn.clicked.connect(self._pre_load_model)
+        pre_model_row.addWidget(self._pre_load_btn)
+        pb.addLayout(pre_model_row)
+
+        pre_thr_row = QHBoxLayout()
+        pre_thr_row.addWidget(QLabel("Min. Konfidenz:"))
+        from PySide6.QtWidgets import QDoubleSpinBox as _DSB
+        self._pre_thr_spin = _DSB()
+        self._pre_thr_spin.setRange(0.0, 1.0)
+        self._pre_thr_spin.setSingleStep(0.05)
+        self._pre_thr_spin.setValue(0.75)
+        self._pre_thr_spin.setDecimals(2)
+        self._pre_thr_spin.setToolTip(
+            "Vorschläge unter diesem Schwellwert werden übersprungen."
+        )
+        pre_thr_row.addWidget(self._pre_thr_spin)
+        pb.addLayout(pre_thr_row)
+
+        self._pre_only_unlabeled_cb = QCheckBox("Nur ungelabelte Bilder")
+        self._pre_only_unlabeled_cb.setChecked(True)
+        self._pre_only_unlabeled_cb.setStyleSheet("font-size: 10px;")
+        pb.addWidget(self._pre_only_unlabeled_cb)
+
+        self._pre_run_btn = QPushButton("▶ Vorschläge generieren")
+        self._pre_run_btn.setEnabled(False)
+        self._pre_run_btn.setStyleSheet(
+            "QPushButton{background:#1A4A2A;color:#58D68D;border:1px solid #27AE60;"
+            "border-radius:4px;padding:4px 8px;}"
+            "QPushButton:disabled{color:#555;border-color:#333;background:#1a1a2a;}"
+        )
+        self._pre_run_btn.clicked.connect(self._pre_run)
+        pb.addWidget(self._pre_run_btn)
+
+        self._pre_apply_btn = QPushButton("✅ Vorschläge übernehmen")
+        self._pre_apply_btn.setEnabled(False)
+        self._pre_apply_btn.setToolTip(
+            "Alle Vorschläge über dem Schwellwert als Labels speichern (Undo möglich)."
+        )
+        self._pre_apply_btn.setStyleSheet(
+            "QPushButton{background:#1F6FEB;color:white;border-radius:4px;padding:4px 8px;}"
+            "QPushButton:disabled{color:#555;background:#1a1a2a;border:1px solid #333;}"
+        )
+        self._pre_apply_btn.clicked.connect(self._pre_apply)
+        pb.addWidget(self._pre_apply_btn)
+
+        self._pre_progress = QProgressBar()
+        self._pre_progress.setVisible(False)
+        self._pre_progress.setFixedHeight(8)
+        self._pre_progress.setTextVisible(False)
+        pb.addWidget(self._pre_progress)
+
+        self._pre_status = QLabel("")
+        self._pre_status.setWordWrap(True)
+        self._pre_status.setStyleSheet("color:#aaa; font-size:10px;")
+        pb.addWidget(self._pre_status)
+
+        v.addWidget(pre_box)
+
         v.addStretch()
         return scroll
 
@@ -745,6 +825,8 @@ class LabelingPage(QWidget):
         )
         self._ml_toggle_btn.blockSignals(False)
         self._label_stack.setCurrentIndex(1 if is_ml else 0)
+        has_images = bool(project and project.images)
+        self._pre_run_btn.setEnabled(has_images and self._pre_labeler is not None)
 
     def _refresh_label_combos(self) -> None:
         """Repopulate the label combo, ROI combo, bulk combo, chips and multi-label checkboxes."""
@@ -1664,6 +1746,118 @@ class LabelingPage(QWidget):
             self, "Fertig",
             f"Größe übertragen: {updated} ROIs aktualisiert, {created} neue ROIs erstellt."
         )
+
+    # ------------------------------------------------------------------ pre-labeling
+
+    @Slot()
+    def _pre_load_model(self):
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Modell laden", "", "PyTorch Checkpoint (*.pth)"
+        )
+        if not path:
+            return
+        try:
+            from core.pre_labeling import PreLabeler
+            pl = PreLabeler()
+            meta = pl.load_model(path)
+            self._pre_labeler = pl
+            classes = ", ".join(pl.class_names[:5])
+            if len(pl.class_names) > 5:
+                classes += "…"
+            self._pre_model_lbl.setText(
+                f"✅ {os.path.basename(path)}\n({len(pl.class_names)} Klassen: {classes})"
+            )
+            self._pre_run_btn.setEnabled(bool(self.project and self.project.images))
+        except Exception as exc:
+            from PySide6.QtWidgets import QMessageBox as _QMB
+            _QMB.critical(self, "Fehler beim Laden", str(exc))
+
+    @Slot()
+    def _pre_run(self):
+        if not self.project or not self._pre_labeler:
+            return
+        only_unlabeled = self._pre_only_unlabeled_cb.isChecked()
+        if only_unlabeled:
+            candidates = [p for p in self.project.images if not self.project.get_image_label(p)]
+        else:
+            candidates = list(self.project.images)
+        if not candidates:
+            self._pre_status.setText("Keine Bilder zum Analysieren.")
+            return
+
+        self._pre_suggestions = []
+        self._pre_progress.setMaximum(len(candidates))
+        self._pre_progress.setValue(0)
+        self._pre_progress.setVisible(True)
+        self._pre_run_btn.setEnabled(False)
+        self._pre_apply_btn.setEnabled(False)
+        self._pre_status.setText(f"Analysiere {len(candidates)} Bilder…")
+
+        from core.pre_labeling import PreLabelingThread
+        roi = None
+        if self.project.rois:
+            # Use first project ROI as crop template (same as inference page fallback)
+            for p, rois in self.project.rois.items():
+                if rois:
+                    roi = rois[0]
+                    break
+
+        t = PreLabelingThread(
+            self._pre_labeler,
+            candidates,
+            list(self.project.labels.keys()),
+            confidence_threshold=self._pre_thr_spin.value(),
+            roi=roi,
+            parent=self,
+        )
+        t.progress.connect(lambda c, tot: self._pre_progress.setValue(c))
+        t.finished.connect(self._pre_on_done)
+        t.error.connect(self._pre_on_error)
+        self._pre_label_thread = t
+        t.start()
+
+    @Slot(list)
+    def _pre_on_done(self, results: list):
+        self._pre_progress.setVisible(False)
+        self._pre_run_btn.setEnabled(True)
+        self._pre_suggestions = results
+        accepted = [r for r in results if not r["skip"] and not r["error"]]
+        skipped  = [r for r in results if r["skip"]]
+        errors   = [r for r in results if r["error"]]
+        thr      = self._pre_thr_spin.value()
+        self._pre_status.setText(
+            f"{len(accepted)} Vorschläge ≥ {thr:.0%}  •  "
+            f"{len(skipped)} unter Schwellwert  •  "
+            f"{len(errors)} Fehler"
+        )
+        self._pre_apply_btn.setEnabled(bool(accepted))
+
+    @Slot(str)
+    def _pre_on_error(self, msg: str):
+        self._pre_progress.setVisible(False)
+        self._pre_run_btn.setEnabled(True)
+        self._pre_status.setText(f"Fehler: {msg}")
+
+    @Slot()
+    def _pre_apply(self):
+        if not self.project or not hasattr(self, "_pre_suggestions"):
+            return
+        accepted = [r for r in self._pre_suggestions if not r["skip"] and not r["error"]]
+        if not accepted:
+            return
+        old_labels = {r["path"]: self.project.get_image_label(r["path"]) for r in accepted}
+        label_map  = {r["path"]: r["label"] for r in accepted}
+        from gui.labeling_commands import BulkSetImageLabelCommand
+        self._undo_stack.push(
+            BulkSetImageLabelCommand(
+                self, list(label_map.keys()), "", old_labels, label_map=label_map
+            )
+        )
+        self._pre_apply_btn.setEnabled(False)
+        self._pre_status.setText(f"✅ {len(accepted)} Labels übernommen (Undo mit Strg+Z).")
+
+    # ------------------------------------------------------------------ remove images
 
     def _remove_images(self, paths: list) -> None:
         """Remove one or more images from the project after user confirmation."""

@@ -4,6 +4,17 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.3.9] – 2026-05-22
+
+### Added
+- **Pre-Labeling** — `core/pre_labeling.py`: `PreLabeler`-Klasse führt ein trainiertes Klassifikationsmodell auf ungelabelten Projektbildern aus und schlägt Labels mit Konfidenzwert vor. Konfigurierbar: Konfidenz-Schwellwert (Standard: 75 %), optionaler Projekt-ROI als Crop-Template. Labels unter dem Schwellwert oder außerhalb der Projektklassen werden übersprungen.
+- **Pre-Labeling-Panel in der Labeling-Seite** — Neue Sektion "🤖 Pre-Labeling" in der rechten Spalte: `.pth`-Modell laden → Schwellwert einstellen → Vorschläge generieren (Hintergrund-Thread) → Vorschläge übernehmen. Vollständiger Undo/Redo-Support über `BulkSetImageLabelCommand` mit Per-Bild-Label-Map.
+- **`BulkSetImageLabelCommand` erweitert** — `gui/labeling_commands.py`: Neuer optionaler Parameter `label_map: dict` für Per-Bild-Zuweisung unterschiedlicher Labels. Rückwärtskompatibel — ohne `label_map` Verhalten unverändert.
+- **13 Unit-Tests** — `tests/test_pre_labeling.py`: Suggest-Logik (Schwellwert, unbekannte Labels, Fehlerbehandlung, leere Eingabe), Fortschritts-Callback, BulkCommand mit label_map (redo/undo).
+- **Hilfe + Tour** — Pre-Labeling-Abschnitt in Hilfe (Sektion 4, Labeling & ROIs) und geführte Tour (neuer Schritt in Labeling-Tour).
+
+---
+
 ## [2.3.8] – 2026-05-22
 
 ### Added

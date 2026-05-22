@@ -19,25 +19,33 @@ class BulkSetImageLabelCommand(QUndoCommand):
     when multiple thumbnails are selected.
     """
 
-    def __init__(self, page, image_paths: list, new_label: str, old_labels: dict):
+    def __init__(self, page, image_paths: list, new_label: str, old_labels: dict,
+                 label_map: dict = None):
         """
         Parameters
         ----------
         page        : LabelingPage instance (provides _do_set_image_label).
         image_paths : Paths to be labelled.
         new_label   : Label to assign (empty string = remove label).
+                      Ignored when label_map is provided.
         old_labels  : {path: previous_label} snapshot for undo.
+        label_map   : Optional {path: label} for per-image labels (pre-labeling).
         """
         n = len(image_paths)
-        super().__init__(f"Massen-Label ({n} Bilder → {new_label or '(kein)'})")
+        if label_map is not None:
+            super().__init__(f"Pre-Labeling ({n} Bilder)")
+        else:
+            super().__init__(f"Massen-Label ({n} Bilder → {new_label or '(kein)'})")
         self._page       = page
         self._paths      = list(image_paths)
         self._new        = new_label
         self._old_labels = dict(old_labels)   # path -> old label
+        self._label_map  = dict(label_map) if label_map else None
 
     def redo(self):
         for path in self._paths:
-            self._page._do_set_image_label(path, self._new)
+            lbl = self._label_map[path] if self._label_map else self._new
+            self._page._do_set_image_label(path, lbl)
 
     def undo(self):
         for path in self._paths:
