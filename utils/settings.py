@@ -137,6 +137,13 @@ class AppSettings:
     def save_window_geometry(self, geometry) -> None:
         self._s.setValue("window/geometry", geometry)
 
+    # ---- language ----
+    def get_language(self) -> str:
+        return self._s.value("appearance/language", "de")
+
+    def set_language(self, lang: str) -> None:
+        self._s.setValue("appearance/language", lang)
+
     def sync(self) -> None:
         """Flush pending changes to disk immediately."""
         self._s.sync()

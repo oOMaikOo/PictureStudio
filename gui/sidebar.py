@@ -19,34 +19,34 @@ def _ui_font(size: int = 11) -> QFont:
     return f
 
 
-# (label, icon, stack_idx)
+# (tr-key, icon, stack_idx) — labels are translation keys, resolved at button-build time
 _IMAGE_PAGES: List[Tuple[str, str, int]] = [
-    ("Dashboard",      "🏠", 0),
-    ("Daten",          "📁", 1),
-    ("Labeling",       "🏷", 2),
-    ("Training",       "🧠", 3),
-    ("Modelle",        "📊", 4),
-    ("Klassifikation", "🔍", 5),
-    ("Batch",          "📦", 9),
-    ("Export",         "📤", 6),
-    ("Einstellungen",  "⚙",  7),
-    ("Clustering",     "🔬", 11),
-    ("Datensatz",      "📈", 12),
-    ("Objekterkennung","🎯", 15),
-    ("Data Drift",     "📉", 16),
+    ("nav.dashboard",       "🏠", 0),
+    ("nav.data",            "📁", 1),
+    ("nav.labeling",        "🏷", 2),
+    ("nav.training",        "🧠", 3),
+    ("nav.models",          "📊", 4),
+    ("nav.inference",       "🔍", 5),
+    ("nav.batch",           "📦", 9),
+    ("nav.export",          "📤", 6),
+    ("nav.settings",        "⚙",  7),
+    ("nav.clustering",      "🔬", 11),
+    ("nav.dataset",         "📈", 12),
+    ("nav.objectdetection", "🎯", 15),
+    ("nav.datadrift",       "📉", 16),
 ]
 
 _VIDEO_PAGES: List[Tuple[str, str, int]] = [
-    ("Dashboard",       "🏠", 0),
-    ("Daten",           "📁", 1),
-    ("Live & Anomalie", "🎥", 8),
-    ("Multi-Kamera",    "📹", 10),
-    ("Video-Annotation","🎬", 13),
-    ("Fleet",           "🌐", 14),
-    ("Modelle",         "📊", 4),
-    ("Export",          "📤", 6),
-    ("Einstellungen",   "⚙",  7),
-    ("Clustering",      "🔬", 11),
+    ("nav.dashboard",      "🏠", 0),
+    ("nav.data",           "📁", 1),
+    ("nav.camera",         "🎥", 8),
+    ("nav.multicamera",    "📹", 10),
+    ("nav.videoannotation","🎬", 13),
+    ("nav.fleet",          "🌐", 14),
+    ("nav.models",         "📊", 4),
+    ("nav.export",         "📤", 6),
+    ("nav.settings",       "⚙",  7),
+    ("nav.clustering",     "🔬", 11),
 ]
 
 _BTN_STYLE = """
@@ -157,7 +157,8 @@ class Sidebar(QWidget):
             QPushButton:hover {{ background: {hover}; color: white; }}
         """
 
-        self._tour_btn = QPushButton("▶  Tour starten")
+        from utils.i18n import tr
+        self._tour_btn = QPushButton(tr("sidebar.tour_btn"))
         self._tour_btn.setFixedHeight(34)
         self._tour_btn.setFont(_ui_font(10))
         self._tour_btn.setCursor(Qt.PointingHandCursor)
@@ -167,7 +168,7 @@ class Sidebar(QWidget):
         self._tour_btn.clicked.connect(self.tour_requested.emit)
         self._layout.addWidget(self._tour_btn)
 
-        self._help_btn = QPushButton("?  Hilfe (F1)")
+        self._help_btn = QPushButton(tr("sidebar.help_btn"))
         self._help_btn.setFixedHeight(34)
         self._help_btn.setFont(_ui_font(10))
         self._help_btn.setCursor(Qt.PointingHandCursor)
@@ -191,8 +192,9 @@ class Sidebar(QWidget):
                 item.widget().deleteLater()
         self._buttons.clear()
 
-        for label, icon, stack_idx in self._page_config:
-            btn = QPushButton(f"{icon}  {label}")
+        from utils.i18n import tr
+        for label_key, icon, stack_idx in self._page_config:
+            btn = QPushButton(f"{icon}  {tr(label_key)}")
             btn.setCheckable(True)
             btn.setFixedHeight(42)
             btn.setFont(_ui_font(12))
@@ -218,7 +220,8 @@ class Sidebar(QWidget):
     def set_project_type(self, type_str: str) -> None:
         """Switch between image and video page configurations."""
         new_config = _VIDEO_PAGES if type_str == "video" else _IMAGE_PAGES
-        badge_text = "📸 Bildprojekt" if type_str == "image" else "🎬 Videoprojekt"
+        from utils.i18n import tr
+        badge_text = tr("sidebar.badge.image") if type_str == "image" else tr("sidebar.badge.video")
         self._type_badge.setText(badge_text)
         self._type_badge.setVisible(True)
         if new_config is self._page_config:

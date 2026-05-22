@@ -200,120 +200,119 @@ class MainWindow(QMainWindow):
 
     def _build_menu(self) -> None:
         """Create the top-level menu bar with all menus and actions."""
+        from utils.i18n import tr
         mb = self.menuBar()
 
         # File
-        fm = mb.addMenu("Datei")
+        fm = mb.addMenu(tr("menu.file"))
         for label, shortcut, slot in [
-            ("Neues Projekt",            "Ctrl+N", self._new_project),
-            ("Projekt öffnen…",           "Ctrl+O", self._open_project),
-            ("Projekt speichern",         "Ctrl+S", self._save_project),
-            ("Projekt speichern unter…",  "Ctrl+Shift+S", self._save_project_as),
-            ("Backup erstellen",          "",       self._create_backup),
+            (tr("menu.file.new"),    "Ctrl+N",       self._new_project),
+            (tr("menu.file.open"),   "Ctrl+O",       self._open_project),
+            (tr("menu.file.save"),   "Ctrl+S",       self._save_project),
+            (tr("menu.file.saveas"), "Ctrl+Shift+S", self._save_project_as),
+            (tr("menu.file.backup"), "",             self._create_backup),
         ]:
             a = QAction(label, self)
             if shortcut:
                 a.setShortcut(QKeySequence(shortcut))
             a.triggered.connect(slot)
             fm.addAction(a)
-        cam_a = QAction("Kamera aufnehmen…", self)
+        cam_a = QAction(tr("menu.file.camera"), self)
         cam_a.setShortcut("Ctrl+K")
         cam_a.triggered.connect(self._open_camera_dialog)
         fm.addAction(cam_a)
         fm.addSeparator()
-        for label, page_idx in [("Zuletzt geöffnet", None)]:
-            pass  # submenu for recent projects added separately
-        recent_menu = fm.addMenu("Zuletzt geöffnet")
+        recent_menu = fm.addMenu(tr("menu.file.recent"))
         self._recent_menu = recent_menu
         self._refresh_recent_menu()
         fm.addSeparator()
-        quit_a = QAction("Beenden", self)
+        quit_a = QAction(tr("menu.file.quit"), self)
         quit_a.setShortcut("Ctrl+Q")
         quit_a.triggered.connect(self.close)
         fm.addAction(quit_a)
 
         # Project
-        pm = mb.addMenu("Projekt")
-        labels_a = QAction("Labels verwalten…", self)
+        pm = mb.addMenu(tr("menu.project"))
+        labels_a = QAction(tr("menu.project.labels"), self)
         labels_a.setShortcut("Ctrl+L")
         labels_a.triggered.connect(self._manage_labels)
         pm.addAction(labels_a)
 
-        validate_a = QAction("Bilddateien prüfen", self)
+        validate_a = QAction(tr("menu.project.validate"), self)
         validate_a.triggered.connect(self._validate_files)
         pm.addAction(validate_a)
 
-        info_a = QAction("Projektinfo…", self)
+        info_a = QAction(tr("menu.project.info"), self)
         info_a.triggered.connect(self._show_project_info)
         pm.addAction(info_a)
 
         pm.addSeparator()
-        report_a = QAction("Bericht erstellen…", self)
+        report_a = QAction(tr("menu.project.report"), self)
         report_a.setShortcut("Ctrl+R")
         report_a.triggered.connect(self._create_report)
         pm.addAction(report_a)
 
         # View
-        vm = mb.addMenu("Ansicht")
+        vm = mb.addMenu(tr("menu.view"))
         for label, idx in [
-            ("Dashboard",      0),
-            ("Daten",          1),
-            ("Labeling",       2),
-            ("Training",       3),
-            ("Modelle",        4),
-            ("Klassifikation", 5),
-            ("Batch-Inferenz", 9),
-            ("Export",         6),
-            ("Einstellungen",  7),
+            (tr("nav.dashboard"),       0),
+            (tr("nav.data"),            1),
+            (tr("nav.labeling"),        2),
+            (tr("nav.training"),        3),
+            (tr("nav.models"),          4),
+            (tr("nav.inference"),       5),
+            (tr("menu.view.batchinference"), 9),
+            (tr("nav.export"),          6),
+            (tr("nav.settings"),        7),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=idx: self._switch_page(i))
             vm.addAction(a)
 
         # Audit
-        audit_m = mb.addMenu("Audit")
-        audit_view_a = QAction("Änderungsprotokoll anzeigen…", self)
+        audit_m = mb.addMenu(tr("menu.audit"))
+        audit_view_a = QAction(tr("menu.audit.changelog"), self)
         audit_view_a.triggered.connect(self._show_audit)
         audit_m.addAction(audit_view_a)
 
         # Help
-        hm = mb.addMenu("Hilfe")
-        manual_a = QAction("Handbuch öffnen…  (F1)", self)
+        hm = mb.addMenu(tr("menu.help"))
+        manual_a = QAction(tr("menu.help.manual"), self)
         manual_a.triggered.connect(lambda: self._show_help())
         hm.addAction(manual_a)
-        tour_a = QAction("Geführte Tour starten", self)
+        tour_a = QAction(tr("menu.help.tour"), self)
         tour_a.triggered.connect(self._start_tour)
         hm.addAction(tour_a)
         hm.addSeparator()
         for label, page_idx in [
-            ("Dashboard – Hilfe",       0),
-            ("Daten – Hilfe",           1),
-            ("Labeling – Hilfe",        2),
-            ("Training – Hilfe",        3),
-            ("Modelle – Hilfe",         4),
-            ("Klassifikation – Hilfe",  5),
-            ("Export – Hilfe",          6),
-            ("Einstellungen – Hilfe",   7),
-            ("Kamera – Hilfe",          10),
-            ("Tastenkürzel",            11),
-            ("Fehlerbehebung",          12),
-            ("Monitor-Client – Hilfe",    13),
-            ("Multi-Kamera – Hilfe",     14),
-            ("Anomalie-Clustering – Hilfe", 15),
-            ("Datensatz-Statistiken – Hilfe", 16),
-            ("Video-Annotation – Hilfe", 17),
-            ("Fleet-Management – Hilfe", 18),
-            ("Modell-Erweitert – Hilfe", 19),
+            (tr("menu.help.dashboard"),       0),
+            (tr("menu.help.data"),            1),
+            (tr("menu.help.labeling"),        2),
+            (tr("menu.help.training"),        3),
+            (tr("menu.help.models"),          4),
+            (tr("menu.help.inference"),       5),
+            (tr("menu.help.export"),          6),
+            (tr("menu.help.settings"),        7),
+            (tr("menu.help.camera"),          10),
+            (tr("menu.help.shortcuts"),       11),
+            (tr("menu.help.troubleshoot"),    12),
+            (tr("menu.help.monitor"),         13),
+            (tr("menu.help.multicamera"),     14),
+            (tr("menu.help.clustering"),      15),
+            (tr("menu.help.datasetstats"),    16),
+            (tr("menu.help.videoannotation"), 17),
+            (tr("menu.help.fleet"),           18),
+            (tr("menu.help.modeladvanced"),   19),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
             hm.addAction(a)
         hm.addSeparator()
-        log_a = QAction("Fehlerlog anzeigen…", self)
+        log_a = QAction(tr("menu.help.log"), self)
         log_a.triggered.connect(self._show_log_viewer)
         hm.addAction(log_a)
         hm.addSeparator()
-        about_a = QAction("Über…", self)
+        about_a = QAction(tr("menu.help.about"), self)
         about_a.triggered.connect(self._show_about)
         hm.addAction(about_a)
 
@@ -327,7 +326,8 @@ class MainWindow(QMainWindow):
         sb = QStatusBar()
         self.setStatusBar(sb)
         from PySide6.QtWidgets import QLabel
-        self._status_label = QLabel("Bereit – kein Projekt geladen")
+        from utils.i18n import tr
+        self._status_label = QLabel(tr("statusbar.ready"))
         sb.addWidget(self._status_label, 1)
         self._autosave_label = QLabel("")
         self._autosave_label.setStyleSheet("color: #3FB950; font-size: 10px; padding-right: 8px;")
@@ -822,7 +822,8 @@ class MainWindow(QMainWindow):
         """Display the About dialog with application version and library versions."""
         from utils.reproducibility import get_software_versions
         vers = get_software_versions()
-        text = f"{APP_NAME} v{APP_VERSION}\n⚠ Beta-Version — nicht für den Produktiveinsatz\n\nBibliotheken:\n"
+        from utils.i18n import tr
+        text = f"{APP_NAME} v{APP_VERSION}\n{tr('about.beta_warning')}\n\nBibliotheken:\n"
         for k, v in vers.items():
             text += f"  {k}: {v}\n"
         QMessageBox.about(self, f"Über {APP_NAME}", text)

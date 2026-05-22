@@ -73,9 +73,22 @@ class SettingsPage(QWidget):
         scroll.setWidget(container)
         outer.addWidget(scroll)
 
-        title = QLabel("Einstellungen")
+        from utils.i18n import tr
+        title = QLabel(tr("settings.title"))
         title.setStyleSheet("font-size:20px;font-weight:bold;color:#3498DB;")
         layout.addWidget(title)
+
+        # Language
+        lang_group = QGroupBox(tr("settings.lang.group"))
+        lf = QFormLayout(lang_group)
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItem("Deutsch", "de")
+        self.lang_combo.addItem("English", "en")
+        lf.addRow(tr("settings.lang.label"), self.lang_combo)
+        lang_hint = QLabel(tr("settings.lang.hint"))
+        lang_hint.setStyleSheet("color:#888; font-size:10px;")
+        lf.addRow("", lang_hint)
+        layout.addWidget(lang_group)
 
         # Appearance
         app_group = QGroupBox("Erscheinungsbild")
@@ -417,7 +430,8 @@ class SettingsPage(QWidget):
         layout.addWidget(ssh_group)
 
         # Save
-        save_btn = QPushButton("Einstellungen speichern")
+        from utils.i18n import tr as _tr
+        save_btn = QPushButton(_tr("settings.save_btn"))
         save_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
         save_btn.clicked.connect(self._save)
         layout.addWidget(save_btn)
@@ -428,6 +442,11 @@ class SettingsPage(QWidget):
         """Populate all form widgets from the current ``AppSettings`` values."""
         if not self._settings:
             return
+        # Language
+        saved_lang = self._settings.get_language()
+        idx = self.lang_combo.findData(saved_lang)
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
         self.theme_combo.setCurrentText(self._settings.get_theme())
         self.font_size_spin.setValue(self._settings.get_font_size())
         self.autosave_cb.setChecked(self._settings.get_autosave_enabled())
@@ -751,6 +770,7 @@ class SettingsPage(QWidget):
         """Persist all settings, emit ``autosave_changed``, and show a confirmation dialog."""
         if not self._settings:
             return
+        self._settings.set_language(self.lang_combo.currentData())
         self._settings.set_theme(self.theme_combo.currentText())
         self._settings.set_font_size(self.font_size_spin.value())
         self._settings.set_autosave_enabled(self.autosave_cb.isChecked())
@@ -770,4 +790,5 @@ class SettingsPage(QWidget):
         })
         self._settings.sync()
         self.autosave_changed.emit(self.autosave_spin.value(), self.autosave_cb.isChecked())
-        QMessageBox.information(self, "Gespeichert", "Einstellungen wurden gespeichert.")
+        from utils.i18n import tr
+        QMessageBox.information(self, tr("settings.saved.title"), tr("settings.saved.msg"))

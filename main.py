@@ -24,6 +24,7 @@ _LOG_DIR = os.path.join(os.path.expanduser("~"), ".image_labeling_studio", "logs
 def _install_exception_hook(log_dir: str) -> None:
     """Catch unhandled exceptions, write to log, show user-friendly dialog."""
     import logging
+    from utils.i18n import tr
     logger = logging.getLogger("ImageLabelingStudio")
 
     def _hook(exc_type, exc_value, exc_tb):
@@ -36,11 +37,8 @@ def _install_exception_hook(log_dir: str) -> None:
         if app:
             dlg = QMessageBox()
             dlg.setIcon(QMessageBox.Critical)
-            dlg.setWindowTitle("Unerwarteter Fehler")
-            dlg.setText(
-                "Ein unerwarteter Fehler ist aufgetreten.\n"
-                f"Details wurden in das Fehlerlog geschrieben:\n{log_dir}"
-            )
+            dlg.setWindowTitle(tr("crash.title"))
+            dlg.setText(tr("crash.text", log_dir=log_dir))
             dlg.setDetailedText(msg)
             dlg.exec()
 
@@ -56,10 +54,16 @@ def main() -> None:
     """
     log_dir = _LOG_DIR
     setup_logging(log_dir=log_dir)
-    _install_exception_hook(log_dir)
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
+
+    # Load language setting and initialise i18n before any UI is created
+    from utils.settings import AppSettings
+    from utils.i18n import init_i18n
+    init_i18n(AppSettings().get_language())
+
+    _install_exception_hook(log_dir)
     app.setOrganizationName("ImageLabelingStudio")
     app.setStyle("Fusion")
 
