@@ -47,23 +47,24 @@ class _PollThread(QThread):
 
 class _AddDeviceDialog(QDialog):
     def __init__(self, parent=None) -> None:
+        from utils.i18n import tr
         super().__init__(parent)
-        self.setWindowTitle("Gerät hinzufügen")
+        self.setWindowTitle(tr("fleet.add_dlg_title"))
         self.setMinimumWidth(380)
         layout = QFormLayout(self)
 
         self._name = QLineEdit()
         self._name.setPlaceholderText("z.B. Kamera Nord")
-        layout.addRow("Name:", self._name)
+        layout.addRow(tr("fleet.device_name_label"), self._name)
 
         self._url = QLineEdit()
         self._url.setPlaceholderText("http://192.168.1.100:8765")
-        layout.addRow("URL:", self._url)
+        layout.addRow(tr("fleet.device_url_label"), self._url)
 
         self._key = QLineEdit()
         self._key.setPlaceholderText("optional")
         self._key.setEchoMode(QLineEdit.Password)
-        layout.addRow("API-Key:", self._key)
+        layout.addRow(tr("fleet.device_apikey_label"), self._key)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._validate_and_accept)
@@ -71,12 +72,13 @@ class _AddDeviceDialog(QDialog):
         layout.addRow(buttons)
 
     def _validate_and_accept(self) -> None:
+        from utils.i18n import tr
         url = self._url.text().strip()
         if not url.startswith(("http://", "https://")):
-            QMessageBox.warning(self, "Ungültige URL", "URL muss mit http:// oder https:// beginnen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("fleet.invalid_url_msg"))
             return
         if not self._name.text().strip():
-            QMessageBox.warning(self, "Name fehlt", "Bitte einen Namen eingeben.")
+            QMessageBox.warning(self, tr("common.warning"), tr("fleet.missing_name_msg"))
             return
         self.accept()
 
@@ -211,7 +213,8 @@ class _RemoteTrainDialog(QDialog):
         self._frame_timer.timeout.connect(self._refresh_preview)
         self._trained_threshold: float = 0.0
 
-        self.setWindowTitle(f"Remote-Training — {device.get('name', '')}")
+        from utils.i18n import tr
+        self.setWindowTitle(tr("fleet.remote_train_dlg", device=device.get('name', '')))
         self.setMinimumSize(520, 520)
         self._build_ui()
 
@@ -256,7 +259,8 @@ class _RemoteTrainDialog(QDialog):
         lay.addWidget(self._ch_preview)
 
         btn_row = QHBoxLayout()
-        refresh_btn = QPushButton("Aktualisieren")
+        from utils.i18n import tr
+        refresh_btn = QPushButton(tr("common.refresh"))
         refresh_btn.clicked.connect(self._load_channels)
         btn_row.addWidget(refresh_btn)
 
@@ -266,7 +270,7 @@ class _RemoteTrainDialog(QDialog):
         btn_row.addWidget(self._select_ch_btn)
         lay.addLayout(btn_row)
 
-        self._tabs.addTab(tab, "Kanäle")
+        self._tabs.addTab(tab, tr("fleet.tab.channels"))
         self._load_channels()
 
     def _build_tab_training(self) -> None:
@@ -289,7 +293,8 @@ class _RemoteTrainDialog(QDialog):
         self._collect_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         collect_lay.addWidget(self._collect_label)
         cb_row = QHBoxLayout()
-        self._collect_btn = QPushButton("Frames sammeln starten")
+        from utils.i18n import tr
+        self._collect_btn = QPushButton(tr("fleet.collect_btn"))
         self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
         self._collect_btn.clicked.connect(self._toggle_collect)
         cb_row.addWidget(self._collect_btn)
@@ -313,14 +318,14 @@ class _RemoteTrainDialog(QDialog):
         self._train_status_label = QLabel("Bereit")
         self._train_status_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         train_lay.addWidget(self._train_status_label)
-        self._train_btn = QPushButton("Training starten")
+        self._train_btn = QPushButton(tr("fleet.train_btn"))
         self._train_btn.setStyleSheet("background: #1C6EA4; color: white; font-weight: bold;")
         self._train_btn.setEnabled(False)
         self._train_btn.clicked.connect(self._start_training)
         train_lay.addWidget(self._train_btn)
         lay.addWidget(train_grp)
 
-        self._tabs.addTab(tab, "Training")
+        self._tabs.addTab(tab, tr("fleet.tab.training"))
 
     def _build_tab_deploy(self) -> None:
         tab = QWidget()
@@ -341,7 +346,8 @@ class _RemoteTrainDialog(QDialog):
         thr_row.addStretch()
         lay.addLayout(thr_row)
 
-        self._deploy_btn = QPushButton("Modell deployen")
+        from utils.i18n import tr
+        self._deploy_btn = QPushButton(tr("fleet.deploy_btn"))
         self._deploy_btn.setStyleSheet("background: #1A8754; color: white; font-weight: bold; padding: 8px;")
         self._deploy_btn.setEnabled(False)
         self._deploy_btn.clicked.connect(self._deploy_model)
@@ -353,7 +359,7 @@ class _RemoteTrainDialog(QDialog):
         lay.addWidget(self._deploy_result)
 
         lay.addStretch()
-        self._tabs.addTab(tab, "Deployen")
+        self._tabs.addTab(tab, tr("fleet.tab.deploy"))
 
     # ── Tab 1: Channels ───────────────────────────────────────────────────────
 
@@ -382,9 +388,10 @@ class _RemoteTrainDialog(QDialog):
 
     def _select_channel(self) -> None:
         """Enable the Training tab with the channel selected in the table."""
+        from utils.i18n import tr
         row = self._ch_table.currentRow()
         if row < 0:
-            QMessageBox.information(self, "Kanal wählen", "Bitte einen Kanal in der Tabelle auswählen.")
+            QMessageBox.information(self, tr("common.info"), tr("fleet.no_channel_msg"))
             return
         item = self._ch_table.item(row, 0)
         if item is None:
@@ -433,7 +440,8 @@ class _RemoteTrainDialog(QDialog):
         if self._collect_thread and self._collect_thread.isRunning():
             self._collect_thread.stop()
             self._collect_thread.wait(2000)
-            self._collect_btn.setText("Frames sammeln starten")
+            from utils.i18n import tr
+            self._collect_btn.setText(tr("fleet.collect_btn"))
             self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
             if self._detector and hasattr(self._detector, "n_collected"):
                 n = self._detector.n_collected()
@@ -459,7 +467,8 @@ class _RemoteTrainDialog(QDialog):
         self._collect_thread.collected.connect(self._on_frame_collected)
         self._collect_thread.error.connect(self._on_collect_error)
         self._collect_thread.start()
-        self._collect_btn.setText("Sammeln stoppen")
+        from utils.i18n import tr
+        self._collect_btn.setText(tr("fleet.collect_stop_btn"))
         self._collect_btn.setStyleSheet("background: #8B2222; color: white; font-weight: bold;")
 
     def _on_frame_collected(self, count: int) -> None:
@@ -473,7 +482,8 @@ class _RemoteTrainDialog(QDialog):
             # Auto-stop
             if self._collect_thread and self._collect_thread.isRunning():
                 self._collect_thread.stop()
-            self._collect_btn.setText("Frames sammeln starten")
+            from utils.i18n import tr
+            self._collect_btn.setText(tr("fleet.collect_btn"))
             self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
 
     def _on_collect_error(self, msg: str) -> None:
@@ -557,13 +567,15 @@ class _RemoteTrainDialog(QDialog):
                 req.add_header("X-Api-Key", self._api_key)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 result = json.loads(resp.read().decode())
+            from utils.i18n import tr
             self._deploy_result.setText(
-                f"Modell erfolgreich deployt.\nPfad auf Gerät: {result.get('model_path', '?')}"
+                tr("fleet.deploy_success", path=result.get('model_path', '?'))
             )
             self._deploy_result.setStyleSheet("color: #2ECC71;")
             self._deploy_btn.setEnabled(False)
         except Exception as exc:
-            self._deploy_result.setText(f"Deploy fehlgeschlagen: {exc}")
+            from utils.i18n import tr
+            self._deploy_result.setText(tr("fleet.deploy_failed", msg=exc))
             self._deploy_result.setStyleSheet("color: #E74C3C;")
 
     def closeEvent(self, event) -> None:
@@ -602,27 +614,28 @@ class FleetPage(QWidget):
     # ── UI ────────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        title = QLabel("🌐 Fleet-Management")
+        title = QLabel(tr("fleet.title"))
         title.setStyleSheet("font-size: 16px; font-weight: bold; color: #E6EDF3;")
         root.addWidget(title)
 
         # Top bar
         top = QHBoxLayout()
-        add_btn = QPushButton("+ Gerät hinzufügen")
+        add_btn = QPushButton(tr("fleet.add_device_btn"))
         add_btn.setStyleSheet("background: #238636; color: white; border-radius: 4px; padding: 5px 12px; font-weight: bold;")
         add_btn.clicked.connect(self._add_device)
         top.addWidget(add_btn)
 
-        refresh_btn = QPushButton("Alle aktualisieren")
+        refresh_btn = QPushButton(tr("fleet.refresh_all_btn"))
         refresh_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 4px; padding: 5px 12px;")
         refresh_btn.clicked.connect(self._poll_all)
         top.addWidget(refresh_btn)
 
-        self._auto_cb = QCheckBox("Auto-Refresh (30 s)")
+        self._auto_cb = QCheckBox(tr("fleet.auto_refresh_cb"))
         self._auto_cb.toggled.connect(self._on_auto_toggled)
         top.addWidget(self._auto_cb)
         top.addStretch()
@@ -630,7 +643,10 @@ class FleetPage(QWidget):
 
         # Table
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Name", "URL", "Status", "Score", "Letzter Alarm", "Aktionen"])
+        self.table.setHorizontalHeaderLabels([
+            tr("fleet.col.name"), tr("fleet.col.url"), tr("fleet.col.status"),
+            tr("fleet.col.score"), tr("fleet.col.alarm"), tr("fleet.col.actions"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         for col in (0, 2, 3, 4, 5):
             self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
@@ -699,11 +715,12 @@ class FleetPage(QWidget):
         dlg.exec()
 
     def _rebuild_table(self) -> None:
+        from utils.i18n import tr
         self.table.setRowCount(len(self._devices))
         for row, dev in enumerate(self._devices):
             self.table.setItem(row, self._COL_NAME, QTableWidgetItem(dev.get("name", "")))
             self.table.setItem(row, self._COL_URL, QTableWidgetItem(dev.get("url", "")))
-            status_item = QTableWidgetItem("⟳ Unbekannt")
+            status_item = QTableWidgetItem(tr("fleet.status_unknown"))
             status_item.setForeground(QColor("#8B949E"))
             self.table.setItem(row, self._COL_STATUS, status_item)
             self.table.setItem(row, self._COL_SCORE, QTableWidgetItem("–"))
@@ -723,19 +740,19 @@ class FleetPage(QWidget):
             dash_btn.clicked.connect(lambda _, u=url: self._open_dashboard(u))
             btn_layout.addWidget(dash_btn)
 
-            setup_btn = QPushButton("Einrichten")
+            setup_btn = QPushButton(tr("fleet.action_setup"))
             setup_btn.setFixedHeight(22)
             setup_btn.setStyleSheet("background: #6C3483; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
             setup_btn.clicked.connect(lambda _, u=url: self._open_setup(u))
             btn_layout.addWidget(setup_btn)
 
-            train_btn = QPushButton("Training")
+            train_btn = QPushButton(tr("fleet.action_training"))
             train_btn.setFixedHeight(22)
             train_btn.setStyleSheet("background: #1A5276; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
             train_btn.clicked.connect(lambda _, d=dict(dev): self._open_remote_training(d))
             btn_layout.addWidget(train_btn)
 
-            del_btn = QPushButton("Entfernen")
+            del_btn = QPushButton(tr("fleet.action_delete"))
             del_btn.setFixedHeight(22)
             del_btn.setStyleSheet("background: #6E2C2C; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
             del_btn.clicked.connect(lambda _, r=row: self._remove_device(r))
@@ -757,11 +774,11 @@ class FleetPage(QWidget):
             return
         if self._poll_thread and self._poll_thread.isRunning():
             return
-        # Set all to "Prüfe..."
+        from utils.i18n import tr
         for row in range(self.table.rowCount()):
             item = self.table.item(row, self._COL_STATUS)
             if item:
-                item.setText("⟳ Prüfe…")
+                item.setText(tr("fleet.status_checking"))
                 item.setForeground(QColor("#F39C12"))
 
         self._poll_thread = _PollThread(self._devices, self)
@@ -777,11 +794,12 @@ class FleetPage(QWidget):
                 alarm_item = self.table.item(row, self._COL_ALARM)
                 if status_item is None:
                     return
+                from utils.i18n import tr
                 if "error" in data:
-                    status_item.setText(f"● Offline ({data['error']})")
+                    status_item.setText(f"{tr('fleet.status_offline')} ({data['error']})")
                     status_item.setForeground(QColor("#E74C3C"))
                 else:
-                    status_item.setText("● Online")
+                    status_item.setText(tr("fleet.status_online"))
                     status_item.setForeground(QColor("#2ECC71"))
                     if score_item:
                         score = data.get("score", data.get("last_score", "–"))

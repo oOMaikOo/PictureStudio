@@ -64,14 +64,15 @@ class ObjectDetectionPage(QWidget):
         self._dep_label.hide()
         v.addWidget(self._dep_label)
 
+        from utils.i18n import tr
         # Dataset info
-        ds_box = QGroupBox("Dataset (ROI-Annotationen)")
+        ds_box = QGroupBox(tr("objdetect.dataset_group"))
         ds_v = QVBoxLayout(ds_box)
-        self._ds_info_label = QLabel("Noch kein Projekt geladen.")
+        self._ds_info_label = QLabel(tr("common.no_project_msg"))
         self._ds_info_label.setWordWrap(True)
         self._ds_info_label.setStyleSheet("color:#aaa;font-size:10px;")
         ds_v.addWidget(self._ds_info_label)
-        self._prepare_btn = QPushButton("Dataset vorbereiten")
+        self._prepare_btn = QPushButton(tr("objdetect.prepare_btn"))
         self._prepare_btn.setToolTip(
             "Konvertiert die ROI-Annotationen des Projekts in das YOLO-Format\n"
             "und legt den Trainings-/Validierungsordner an."
@@ -81,10 +82,10 @@ class ObjectDetectionPage(QWidget):
         v.addWidget(ds_box)
 
         # Training config
-        train_box = QGroupBox("Training")
+        train_box = QGroupBox(tr("objdetect.training_group"))
         tf = QVBoxLayout(train_box)
 
-        tf.addWidget(QLabel("Modellgröße:"))
+        tf.addWidget(QLabel(tr("objdetect.model_size_label")))
         self._model_combo = QComboBox()
         for key, desc in ObjectDetector.MODEL_SIZES.items():
             self._model_combo.addItem(f"{key}  ({desc})", key)
@@ -92,7 +93,7 @@ class ObjectDetectionPage(QWidget):
         tf.addWidget(self._model_combo)
 
         row_epochs = QHBoxLayout()
-        row_epochs.addWidget(QLabel("Epochen:"))
+        row_epochs.addWidget(QLabel(tr("objdetect.epochs_label")))
         self._epochs_spin = QSpinBox()
         self._epochs_spin.setRange(1, 500)
         self._epochs_spin.setValue(50)
@@ -100,7 +101,7 @@ class ObjectDetectionPage(QWidget):
         tf.addLayout(row_epochs)
 
         row_imgsz = QHBoxLayout()
-        row_imgsz.addWidget(QLabel("Bildgröße:"))
+        row_imgsz.addWidget(QLabel(tr("objdetect.image_size_label")))
         self._imgsz_spin = QSpinBox()
         self._imgsz_spin.setRange(320, 1280)
         self._imgsz_spin.setSingleStep(32)
@@ -110,7 +111,7 @@ class ObjectDetectionPage(QWidget):
         tf.addLayout(row_imgsz)
 
         row_batch = QHBoxLayout()
-        row_batch.addWidget(QLabel("Batch-Größe:"))
+        row_batch.addWidget(QLabel(tr("objdetect.batch_size_label")))
         self._batch_spin = QSpinBox()
         self._batch_spin.setRange(1, 128)
         self._batch_spin.setValue(16)
@@ -119,17 +120,17 @@ class ObjectDetectionPage(QWidget):
 
         self._device_combo = QComboBox()
         self._device_combo.addItems(["auto", "cpu", "cuda", "mps"])
-        tf.addWidget(QLabel("Gerät:"))
+        tf.addWidget(QLabel(tr("objdetect.device_label")))
         tf.addWidget(self._device_combo)
 
-        self._train_btn = QPushButton("⚡ Training starten")
+        self._train_btn = QPushButton(tr("objdetect.train_btn"))
         self._train_btn.setStyleSheet(
             "background:#1565C0;color:white;padding:6px;border-radius:4px;font-weight:bold;"
         )
         self._train_btn.clicked.connect(self._start_training)
         tf.addWidget(self._train_btn)
 
-        self._stop_btn = QPushButton("■ Stopp")
+        self._stop_btn = QPushButton(tr("objdetect.stop_btn"))
         self._stop_btn.setEnabled(False)
         self._stop_btn.clicked.connect(self._stop_training)
         tf.addWidget(self._stop_btn)
@@ -146,12 +147,12 @@ class ObjectDetectionPage(QWidget):
         v.addWidget(train_box)
 
         # Model load
-        model_box = QGroupBox("Modell laden")
+        model_box = QGroupBox(tr("objdetect.model_load_group"))
         mv = QVBoxLayout(model_box)
-        self._load_model_btn = QPushButton("Modell laden (.pt)…")
+        self._load_model_btn = QPushButton(tr("objdetect.load_model_btn"))
         self._load_model_btn.clicked.connect(self._load_model)
         mv.addWidget(self._load_model_btn)
-        self._model_info_label = QLabel("Kein Modell geladen.")
+        self._model_info_label = QLabel(tr("objdetect.no_model"))
         self._model_info_label.setWordWrap(True)
         self._model_info_label.setStyleSheet("color:#aaa;font-size:9px;")
         mv.addWidget(self._model_info_label)
@@ -168,8 +169,9 @@ class ObjectDetectionPage(QWidget):
         v.setContentsMargins(4, 4, 4, 4)
 
         # Single image inference
+        from utils.i18n import tr
         img_row = QHBoxLayout()
-        self._pick_img_btn = QPushButton("Bild wählen…")
+        self._pick_img_btn = QPushButton(tr("objdetect.pick_image_btn"))
         self._pick_img_btn.clicked.connect(self._pick_single_image)
         img_row.addWidget(self._pick_img_btn)
 
@@ -178,7 +180,7 @@ class ObjectDetectionPage(QWidget):
         self._conf_spin.setValue(0.25)
         self._conf_spin.setSingleStep(0.05)
         self._conf_spin.setToolTip("Mindest-Konfidenz für Erkennungen (0.25 = Standard)")
-        img_row.addWidget(QLabel("Konf.:"))
+        img_row.addWidget(QLabel(tr("objdetect.conf_label")))
         img_row.addWidget(self._conf_spin)
         img_row.addStretch()
         v.addLayout(img_row)
@@ -210,22 +212,23 @@ class ObjectDetectionPage(QWidget):
         v = QVBoxLayout(w)
         v.setContentsMargins(4, 4, 4, 4)
 
-        infer_box = QGroupBox("Ordner-Erkennung")
+        from utils.i18n import tr
+        infer_box = QGroupBox(tr("objdetect.folder_group"))
         iv = QVBoxLayout(infer_box)
 
         folder_row = QHBoxLayout()
         self._folder_label = QLabel("(kein Ordner)")
         self._folder_label.setWordWrap(True)
         folder_row.addWidget(self._folder_label, 1)
-        pick_folder_btn = QPushButton("Ordner…")
+        pick_folder_btn = QPushButton(tr("objdetect.pick_folder_btn"))
         pick_folder_btn.clicked.connect(self._pick_folder)
         folder_row.addWidget(pick_folder_btn)
         iv.addLayout(folder_row)
 
-        self._recursive_cb = QCheckBox("Unterordner einschließen")
+        self._recursive_cb = QCheckBox(tr("objdetect.recursive_cb"))
         iv.addWidget(self._recursive_cb)
 
-        self._infer_btn = QPushButton("Erkennung starten")
+        self._infer_btn = QPushButton(tr("objdetect.infer_btn"))
         self._infer_btn.setStyleSheet(
             "background:#00695C;color:white;padding:5px;border-radius:4px;"
         )
@@ -238,10 +241,13 @@ class ObjectDetectionPage(QWidget):
         v.addWidget(infer_box)
 
         # Results table
-        res_box = QGroupBox("Ergebnisse")
+        res_box = QGroupBox(tr("objdetect.results_group"))
         rv = QVBoxLayout(res_box)
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["Datei", "Objekte", "Labels", "Fehler"])
+        self._table.setHorizontalHeaderLabels([
+            tr("objdetect.col.file"), tr("objdetect.col.objects"),
+            tr("objdetect.col.labels"), tr("objdetect.col.error"),
+        ])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self._table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -249,7 +255,7 @@ class ObjectDetectionPage(QWidget):
         self._table.itemSelectionChanged.connect(self._on_result_selected)
         rv.addWidget(self._table)
 
-        export_btn = QPushButton("CSV exportieren")
+        export_btn = QPushButton(tr("objdetect.export_csv_btn"))
         export_btn.clicked.connect(self._export_csv)
         rv.addWidget(export_btn)
         v.addWidget(res_box, 1)
@@ -282,10 +288,8 @@ class ObjectDetectionPage(QWidget):
 
     def _check_ultralytics(self):
         if not has_ultralytics():
-            self._dep_label.setText(
-                "⚠ ultralytics nicht installiert.\n"
-                "Bitte ausführen:\n  pip install ultralytics"
-            )
+            from utils.i18n import tr
+            self._dep_label.setText(tr("objdetect.ultralytics_missing"))
             self._dep_label.show()
             self._train_btn.setEnabled(False)
             self._prepare_btn.setEnabled(False)
@@ -294,8 +298,9 @@ class ObjectDetectionPage(QWidget):
     # ------------------------------------------------------------------ dataset
 
     def _prepare_dataset(self):
+        from utils.i18n import tr
         if not self.project:
-            QMessageBox.warning(self, "Kein Projekt", "Bitte zuerst ein Projekt öffnen.")
+            QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         from core.detection_dataset import prepare_yolo_dataset
 
@@ -321,12 +326,13 @@ class ObjectDetectionPage(QWidget):
     def _start_training(self):
         if not has_ultralytics():
             return
+        from utils.i18n import tr
         if not self._dataset_dir or not os.path.exists(
             os.path.join(self._dataset_dir, "data.yaml")
         ):
             reply = QMessageBox.question(
-                self, "Dataset fehlt",
-                "Dataset noch nicht vorbereitet. Jetzt vorbereiten?",
+                self, tr("common.info"),
+                tr("objdetect.missing_dataset_msg"),
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
@@ -384,15 +390,16 @@ class ObjectDetectionPage(QWidget):
 
     @Slot(str)
     def _on_train_finished(self, best_path: str):
+        from utils.i18n import tr
         self._train_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
         self._train_progress.setValue(100)
-        self._train_status.setText("Training abgeschlossen ✓")
+        self._train_status.setText(tr("objdetect.training_complete") + " ✓")
         self._log(f"Bestes Modell: {best_path}")
         if best_path and os.path.exists(best_path):
             reply = QMessageBox.question(
-                self, "Training abgeschlossen",
-                f"Training erfolgreich.\nModell laden?\n{best_path}",
+                self, tr("objdetect.training_complete"),
+                tr("objdetect.load_model_question", path=best_path),
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
@@ -400,11 +407,12 @@ class ObjectDetectionPage(QWidget):
 
     @Slot(str)
     def _on_train_error(self, msg: str):
+        from utils.i18n import tr
         self._train_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
-        self._train_status.setText("Fehler beim Training.")
+        self._train_status.setText(tr("training.error_title"))
         self._log(f"FEHLER: {msg}")
-        QMessageBox.critical(self, "Trainingsfehler", msg)
+        QMessageBox.critical(self, tr("training.error_title"), msg)
 
     # ------------------------------------------------------------------ model
 
@@ -429,20 +437,21 @@ class ObjectDetectionPage(QWidget):
     # ------------------------------------------------------------------ single image
 
     def _pick_single_image(self):
+        from utils.i18n import tr
         path, _ = QFileDialog.getOpenFileName(
-            self, "Bild wählen", "",
+            self, tr("objdetect.pick_image_btn"), "",
             "Bilder (*.jpg *.jpeg *.png *.bmp *.tiff *.webp)"
         )
         if not path:
             return
         if not self._detector.is_ready():
-            QMessageBox.warning(self, "Kein Modell", "Bitte zuerst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("common.no_model_msg"))
             return
         try:
             dets = self._detector.predict_image(path, conf=self._conf_spin.value())
             self._show_image_with_boxes(path, dets)
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _show_image_with_boxes(self, image_path: str, detections: List[Dict]):
         pix = QPixmap(image_path)
@@ -501,12 +510,13 @@ class ObjectDetectionPage(QWidget):
             self._folder_label.setText(folder)
 
     def _start_folder_inference(self):
+        from utils.i18n import tr
         if not self._detector.is_ready():
-            QMessageBox.warning(self, "Kein Modell", "Bitte zuerst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("common.no_model_msg"))
             return
         folder = self._folder_label.text()
         if not os.path.isdir(folder):
-            QMessageBox.warning(self, "Kein Ordner", "Bitte einen gültigen Ordner wählen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("inference.no_folder_msg"))
             return
 
         from core.object_detection import DetectionInferenceThread
@@ -573,8 +583,9 @@ class ObjectDetectionPage(QWidget):
     # ------------------------------------------------------------------ CSV export
 
     def _export_csv(self):
+        from utils.i18n import tr
         if not self._all_results:
-            QMessageBox.information(self, "Keine Daten", "Bitte zuerst eine Erkennung starten.")
+            QMessageBox.information(self, tr("common.info"), "Bitte zuerst eine Erkennung starten.")
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "CSV speichern", "detection_results.csv", "CSV (*.csv)"
@@ -602,7 +613,8 @@ class ObjectDetectionPage(QWidget):
                         "", "", "", "", "", "",
                         r.get("error") or "",
                     ])
-        QMessageBox.information(self, "Exportiert", f"CSV gespeichert: {path}")
+        from utils.i18n import tr
+        QMessageBox.information(self, tr("common.exported"), tr("common.saved") + f"\n{path}")
 
     # ------------------------------------------------------------------ log helper
 

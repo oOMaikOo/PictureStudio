@@ -83,16 +83,17 @@ class DataDriftPage(QWidget):
         info_lbl.setStyleSheet("color: #aaa; font-size: 11px;")
         v.addWidget(info_lbl)
 
+        from utils.i18n import tr
         # ---- Baseline group ----
-        grp_base = QGroupBox("Baseline (Trainingsdaten)")
+        grp_base = QGroupBox(tr("datadrift.baseline_group"))
         gb = QVBoxLayout(grp_base)
 
-        self._baseline_lbl = QLabel("Keine Baseline vorhanden.")
+        self._baseline_lbl = QLabel(tr("datadrift.no_baseline"))
         self._baseline_lbl.setWordWrap(True)
         self._baseline_lbl.setStyleSheet("color: #ccc;")
         gb.addWidget(self._baseline_lbl)
 
-        self._btn_build = QPushButton("📊 Baseline aus Projektbildern erstellen")
+        self._btn_build = QPushButton(tr("datadrift.build_btn"))
         self._btn_build.setToolTip(
             "Analysiert alle Bilder des aktuellen Projekts und speichert deren statistische Verteilung."
         )
@@ -100,17 +101,17 @@ class DataDriftPage(QWidget):
         gb.addWidget(self._btn_build)
 
         row_bl = QHBoxLayout()
-        self._btn_build_folder = QPushButton("📁 Aus Ordner…")
+        self._btn_build_folder = QPushButton(tr("datadrift.build_folder_btn"))
         self._btn_build_folder.setToolTip("Baseline aus einem benutzerdefinierten Ordner erstellen.")
         self._btn_build_folder.clicked.connect(self._build_baseline_from_folder)
         row_bl.addWidget(self._btn_build_folder)
 
-        self._btn_save_bl = QPushButton("💾 Speichern")
+        self._btn_save_bl = QPushButton(tr("datadrift.save_btn"))
         self._btn_save_bl.clicked.connect(self._save_baseline)
         self._btn_save_bl.setEnabled(False)
         row_bl.addWidget(self._btn_save_bl)
 
-        self._btn_load_bl = QPushButton("📂 Laden")
+        self._btn_load_bl = QPushButton(tr("datadrift.load_btn"))
         self._btn_load_bl.clicked.connect(self._load_baseline)
         row_bl.addWidget(self._btn_load_bl)
         gb.addLayout(row_bl)
@@ -122,11 +123,11 @@ class DataDriftPage(QWidget):
         v.addWidget(grp_base)
 
         # ---- Threshold ----
-        grp_thr = QGroupBox("Erkennungs-Schwellwert")
+        grp_thr = QGroupBox(tr("datadrift.threshold_group"))
         gt = QVBoxLayout(grp_thr)
 
         thr_row = QHBoxLayout()
-        thr_row.addWidget(QLabel("Max. Z-Score:"))
+        thr_row.addWidget(QLabel(tr("datadrift.threshold_label")))
         self._thr_spin = QDoubleSpinBox()
         self._thr_spin.setRange(1.0, 20.0)
         self._thr_spin.setSingleStep(0.5)
@@ -149,23 +150,23 @@ class DataDriftPage(QWidget):
         v.addWidget(grp_thr)
 
         # ---- Production folder ----
-        grp_prod = QGroupBox("Produktionsbilder bewerten")
+        grp_prod = QGroupBox(tr("datadrift.production_group"))
         gp = QVBoxLayout(grp_prod)
 
         folder_row = QHBoxLayout()
-        self._folder_lbl = QLabel("Kein Ordner gewählt.")
+        self._folder_lbl = QLabel(tr("datadrift.no_folder"))
         self._folder_lbl.setStyleSheet("color: #ccc; font-size: 11px;")
         folder_row.addWidget(self._folder_lbl, 1)
-        self._btn_pick = QPushButton("📁")
+        self._btn_pick = QPushButton(tr("datadrift.pick_folder_btn"))
         self._btn_pick.setFixedWidth(32)
         self._btn_pick.clicked.connect(self._pick_folder)
         folder_row.addWidget(self._btn_pick)
         gp.addLayout(folder_row)
 
-        self._recursive_cb = QCheckBox("Unterordner einschließen")
+        self._recursive_cb = QCheckBox(tr("datadrift.recursive_cb"))
         gp.addWidget(self._recursive_cb)
 
-        self._btn_score = QPushButton("🔍 Drift analysieren")
+        self._btn_score = QPushButton(tr("datadrift.score_btn"))
         self._btn_score.setEnabled(False)
         self._btn_score.clicked.connect(self._start_scoring)
         gp.addWidget(self._btn_score)
@@ -181,7 +182,7 @@ class DataDriftPage(QWidget):
         v.addWidget(grp_prod)
 
         # Export
-        self._btn_export = QPushButton("📥 CSV exportieren")
+        self._btn_export = QPushButton(tr("datadrift.export_csv_btn"))
         self._btn_export.setEnabled(False)
         self._btn_export.clicked.connect(self._export_csv)
         v.addWidget(self._btn_export)
@@ -200,9 +201,12 @@ class DataDriftPage(QWidget):
         hdr.setFont(QFont("", 11, QFont.Weight.Bold))
         v.addWidget(hdr)
 
+        from utils.i18n import tr
         self._table = QTableWidget(0, 6)
         self._table.setHorizontalHeaderLabels([
-            "Datei", "Z-Score", "Farbe", "Schärfe", "Kanten", "Histogramm"
+            tr("datadrift.col.file"), tr("datadrift.col.zscore"),
+            tr("datadrift.col.color"), tr("datadrift.col.sharpness"),
+            tr("datadrift.col.edges"), tr("datadrift.col.histogram"),
         ])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, 6):
@@ -229,14 +233,16 @@ class DataDriftPage(QWidget):
 
     @Slot()
     def _build_baseline_from_project(self):
+        from utils.i18n import tr
         if not self.project or not self.project.images:
-            QMessageBox.warning(self, "Keine Bilder", "Das Projekt enthält keine Bilder.")
+            QMessageBox.warning(self, tr("common.no_images"), tr("datadrift.no_images_msg"))
             return
         self._run_baseline(list(self.project.images))
 
     @Slot()
     def _build_baseline_from_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Ordner für Baseline wählen")
+        from utils.i18n import tr
+        folder = QFileDialog.getExistingDirectory(self, tr("datadrift.pick_folder_dlg"))
         if not folder:
             return
         from core.data_drift import IMAGE_EXTS
@@ -246,7 +252,7 @@ class DataDriftPage(QWidget):
             if os.path.splitext(f)[1].lower() in IMAGE_EXTS
         ]
         if not paths:
-            QMessageBox.warning(self, "Keine Bilder", "Keine unterstützten Bilder im Ordner gefunden.")
+            QMessageBox.warning(self, tr("common.no_images"), tr("datadrift.no_folder_msg"))
             return
         self._run_baseline(paths)
 
@@ -271,60 +277,65 @@ class DataDriftPage(QWidget):
         self._btn_build.setEnabled(True)
         self._btn_build_folder.setEnabled(True)
         self._btn_save_bl.setEnabled(True)
+        from utils.i18n import tr
         n_ok  = stats.get("n_ok", 0)
         n_err = stats.get("n_errors", 0)
         self._baseline_lbl.setText(
-            f"✅ Baseline erstellt: {n_ok} Bilder"
+            tr("datadrift.baseline_done", n=n_ok)
             + (f" ({n_err} übersprungen)" if n_err else "")
         )
         self._update_score_btn()
 
     @Slot(str)
     def _on_baseline_error(self, msg: str):
+        from utils.i18n import tr
         self._baseline_prog.setVisible(False)
         self._btn_build.setEnabled(True)
         self._btn_build_folder.setEnabled(True)
-        QMessageBox.critical(self, "Fehler bei Baseline", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     @Slot()
     def _save_baseline(self):
+        from utils.i18n import tr
         path, _ = QFileDialog.getSaveFileName(
-            self, "Baseline speichern", "drift_baseline.json", "JSON (*.json)"
+            self, tr("datadrift.save_dlg"), "drift_baseline.json", "JSON (*.json)"
         )
         if path:
             try:
                 self._detector.save(path)
             except Exception as exc:
-                QMessageBox.critical(self, "Fehler", str(exc))
+                QMessageBox.critical(self, tr("common.error"), str(exc))
 
     @Slot()
     def _load_baseline(self):
+        from utils.i18n import tr
         path, _ = QFileDialog.getOpenFileName(
-            self, "Baseline laden", "", "JSON (*.json)"
+            self, tr("datadrift.load_dlg"), "", "JSON (*.json)"
         )
         if not path:
             return
         try:
             self._detector.load(path)
             self._baseline_lbl.setText(
-                f"✅ Baseline geladen: {self._detector.n_baseline} Bilder\n({path})"
+                tr("datadrift.baseline_loaded", n=self._detector.n_baseline) + f"\n({path})"
             )
             self._btn_save_bl.setEnabled(True)
             self._update_score_btn()
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ------------------------------------------------------------------ folder
 
     @Slot()
     def _pick_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Produktionsordner wählen")
+        from utils.i18n import tr
+        folder = QFileDialog.getExistingDirectory(self, tr("datadrift.pick_production_dlg"))
         if folder:
             self._folder_lbl.setText(folder)
             self._update_score_btn()
 
     def _update_score_btn(self):
-        folder_ok   = self._folder_lbl.text() not in ("", "Kein Ordner gewählt.")
+        folder_ok   = os.path.isdir(self._folder_lbl.text())
         baseline_ok = self._detector.is_ready()
         self._btn_score.setEnabled(folder_ok and baseline_ok)
 
@@ -378,9 +389,10 @@ class DataDriftPage(QWidget):
 
     @Slot(str)
     def _on_scoring_error(self, msg: str):
+        from utils.i18n import tr
         self._score_prog.setVisible(False)
         self._btn_score.setEnabled(True)
-        QMessageBox.critical(self, "Fehler bei Analyse", msg)
+        QMessageBox.critical(self, tr("common.error"), msg)
 
     def _populate_table(self, results: list):
         threshold = self._thr_spin.value()
@@ -430,10 +442,11 @@ class DataDriftPage(QWidget):
 
     @Slot()
     def _export_csv(self):
+        from utils.i18n import tr
         if not self._results:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "CSV exportieren", "data_drift_report.csv", "CSV (*.csv)"
+            self, tr("datadrift.export_dlg"), "data_drift_report.csv", "CSV (*.csv)"
         )
         if not path:
             return
@@ -453,6 +466,8 @@ class DataDriftPage(QWidget):
                         round(det.get("z_histogram",  0.0), 3),
                         r.get("error", ""),
                     ])
-            QMessageBox.information(self, "Exportiert", f"Gespeichert: {path}")
+            from utils.i18n import tr
+            QMessageBox.information(self, tr("common.exported"), tr("common.saved") + f"\n{path}")
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            from utils.i18n import tr
+            QMessageBox.critical(self, tr("common.error"), str(exc))
