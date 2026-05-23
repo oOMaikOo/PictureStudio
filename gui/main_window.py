@@ -65,6 +65,9 @@ class MainWindow(QMainWindow):
         self._autosave_timer.timeout.connect(self._autosave)
         self._reset_autosave_timer()
 
+        # Show first-launch wizard after the window is fully rendered
+        QTimer.singleShot(400, self._maybe_show_wizard)
+
         # Periodic status update
         QTimer(self).timeout.connect(self._update_status)
         self.findChild(QTimer).start(8000) if self.findChild(QTimer) else None
@@ -163,6 +166,7 @@ class MainWindow(QMainWindow):
         self.dashboard_page.open_project_requested.connect(self._open_project)
         self.dashboard_page.open_recent_requested.connect(self._open_recent)
         self.dashboard_page.navigate_to_label_requested.connect(self._navigate_to_label)
+        self.dashboard_page.open_wizard_requested.connect(self._open_wizard)
         self.data_page.images_loaded.connect(self._on_images_loaded)
         self.training_page.training_finished.connect(self._on_training_finished)
         self.models_page.model_loaded.connect(self.inference_page.load_model_path)
@@ -277,6 +281,10 @@ class MainWindow(QMainWindow):
 
         # Help
         hm = mb.addMenu(tr("menu.help"))
+        wizard_a = QAction(tr("menu.help.wizard"), self)
+        wizard_a.triggered.connect(lambda: self._open_wizard("image"))
+        hm.addAction(wizard_a)
+        hm.addSeparator()
         manual_a = QAction(tr("menu.help.manual"), self)
         manual_a.triggered.connect(lambda: self._show_help())
         hm.addAction(manual_a)
@@ -734,6 +742,22 @@ class MainWindow(QMainWindow):
                 f"  Modell:   {last.get('model_type', '?')}\n"
             )
         QMessageBox.information(self, "Projektinfo", info)
+
+    def _maybe_show_wizard(self) -> None:
+        """Show the quick-start wizard on first launch (once per installation)."""
+        from gui.quick_start_wizard import QuickStartWizard
+        if QuickStartWizard.should_show_on_startup():
+            QuickStartWizard.mark_shown()
+            self._open_wizard("image")
+
+    def _open_wizard(self, workflow: str = "image") -> None:
+        """Open the quick-start wizard for the given workflow."""
+        from gui.quick_start_wizard import QuickStartWizard
+        wiz = QuickStartWizard(workflow=workflow, parent=self)
+        wiz.navigate_requested.connect(self._switch_page)
+        wiz.new_project_requested.connect(self._new_project)
+        wiz.open_project_requested.connect(self._open_project)
+        wiz.exec()
 
     def _show_help(self, page_idx: int = None) -> None:
         """Open the help dialog on the page matching *page_idx* (defaults to current page)."""

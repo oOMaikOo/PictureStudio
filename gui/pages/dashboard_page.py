@@ -74,6 +74,7 @@ class DashboardPage(QWidget):
     new_project_requested = Signal()
     open_recent_requested = Signal(str)   # emits file path
     navigate_to_label_requested = Signal(str)  # emits label name
+    open_wizard_requested = Signal(str)   # emits workflow ("image" or "video")
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -130,6 +131,9 @@ class DashboardPage(QWidget):
 
         layout.addWidget(self._no_project_widget)
 
+        # Quick-start paths panel
+        layout.addWidget(self._build_quickstart_group())
+
         # Stats cards grid
         cards_group = QGroupBox(tr("dashboard.dataset_group"))
         cards_grid = QGridLayout(cards_group)
@@ -180,6 +184,56 @@ class DashboardPage(QWidget):
         layout.addWidget(self._warn_group)
 
         layout.addStretch()
+
+    def _build_quickstart_group(self) -> QGroupBox:
+        """Build the two-card quick-start panel shown on the dashboard."""
+        from utils.i18n import tr
+        group = QGroupBox(tr("dashboard.quickstart_group"))
+        outer = QHBoxLayout(group)
+        outer.setSpacing(12)
+
+        _card_btn_ss = (
+            "QPushButton {{ background: transparent; color: {c}; border: 1px solid {c};"
+            " border-radius: 4px; padding: 5px 12px; font-size: 11px; }}"
+            "QPushButton:hover {{ background: {c}; color: white; }}"
+        )
+
+        for workflow, icon, title_key, steps_key, color in [
+            ("image", "🖼", "dashboard.qs.image_title", "dashboard.qs.image_steps", "#388BFD"),
+            ("video", "🎥", "dashboard.qs.video_title", "dashboard.qs.video_steps", "#BC8CFF"),
+        ]:
+            card = QFrame()
+            card.setStyleSheet(
+                f"QFrame {{ background: #161B22; border-radius: 8px;"
+                f" border: 1px solid #30363D; border-top: 3px solid {color}; }}"
+            )
+            cv = QVBoxLayout(card)
+            cv.setContentsMargins(16, 12, 16, 12)
+            cv.setSpacing(6)
+
+            title_lbl = QLabel(f"{icon}  {tr(title_key)}")
+            title_lbl.setStyleSheet(
+                f"color: {color}; font-size: 13px; font-weight: bold;"
+                " background: transparent; border: none;"
+            )
+            cv.addWidget(title_lbl)
+
+            steps_lbl = QLabel(tr(steps_key))
+            steps_lbl.setStyleSheet(
+                "color: #8B949E; font-size: 11px; background: transparent; border: none;"
+            )
+            steps_lbl.setWordWrap(True)
+            cv.addWidget(steps_lbl, 1)
+
+            wiz_btn = QPushButton(tr("dashboard.qs.open_wizard"))
+            wiz_btn.setStyleSheet(_card_btn_ss.format(c=color))
+            wf = workflow
+            wiz_btn.clicked.connect(lambda _, w=wf: self.open_wizard_requested.emit(w))
+            cv.addWidget(wiz_btn)
+
+            outer.addWidget(card)
+
+        return group
 
     def set_project(self, project) -> None:
         """Accept a new (or newly-loaded) project and refresh the display."""

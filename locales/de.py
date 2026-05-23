@@ -46,6 +46,7 @@ STRINGS: dict = {
     "menu.audit":               "Audit",
     "menu.audit.changelog":     "Änderungsprotokoll anzeigen…",
     "menu.help":                "Hilfe",
+    "menu.help.wizard":         "Schnellstart-Assistent…",
     "menu.help.manual":         "Handbuch öffnen…  (F1)",
     "menu.help.tour":           "Geführte Tour starten",
     "menu.help.log":            "Fehlerlog anzeigen…",
@@ -121,6 +122,12 @@ STRINGS: dict = {
     "dashboard.warnings_group":     "Warnungen / Hinweise",
     "dashboard.no_warnings":        "Keine Warnungen.",
     "dashboard.navigate_label_hint":"Klick: Beschriftungsseite auf '{lbl}' filtern",
+    "dashboard.quickstart_group":   "Schnellstart-Pfade",
+    "dashboard.qs.image_title":     "Bildklassifikation",
+    "dashboard.qs.image_steps":     "① Projekt erstellen\n② Bilder importieren\n③ Labels vergeben\n④ Modell trainieren\n⑤ Neue Bilder klassifizieren",
+    "dashboard.qs.video_title":     "Videoanalyse & Anomalie",
+    "dashboard.qs.video_steps":     "① Videoprojekt erstellen\n② Gut-Bilder aufnehmen\n③ Detektor trainieren\n④ Live-Monitoring starten",
+    "dashboard.qs.open_wizard":     "Assistenten öffnen…",
 
     # ------------------------------------------------------------------ Neues Projekt Dialog
     "new_project.title":            "Neues Projekt erstellen",

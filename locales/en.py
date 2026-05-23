@@ -46,6 +46,7 @@ STRINGS: dict = {
     "menu.audit":               "Audit",
     "menu.audit.changelog":     "Show Changelog…",
     "menu.help":                "Help",
+    "menu.help.wizard":         "Quick-Start Wizard…",
     "menu.help.manual":         "Open Manual…  (F1)",
     "menu.help.tour":           "Start Guided Tour",
     "menu.help.log":            "Show Error Log…",
@@ -121,6 +122,12 @@ STRINGS: dict = {
     "dashboard.warnings_group":     "Warnings / Notes",
     "dashboard.no_warnings":        "No warnings.",
     "dashboard.navigate_label_hint":"Click: Filter labeling page to '{lbl}'",
+    "dashboard.quickstart_group":   "Quick Start Paths",
+    "dashboard.qs.image_title":     "Image Classification",
+    "dashboard.qs.image_steps":     "① Create project\n② Import images\n③ Assign labels\n④ Train model\n⑤ Classify new images",
+    "dashboard.qs.video_title":     "Video Analysis & Anomaly",
+    "dashboard.qs.video_steps":     "① Create video project\n② Capture normal frames\n③ Train detector\n④ Start live monitoring",
+    "dashboard.qs.open_wizard":     "Open Wizard…",
 
     # ------------------------------------------------------------------ New Project Dialog
     "new_project.title":            "Create New Project",
