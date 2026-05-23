@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source .venv/bin/activate
 python main.py
 
-# Run all tests (696 pass, 3 skipped; integration tests take ~30 s each)
+# Run all tests (~933 pass; integration tests take ~30 s each)
 .venv/bin/python -m pytest tests/ -v
 
 # Skip slow ML integration tests
@@ -69,6 +69,43 @@ Stack indices (add new pages here):
 - `config.project_type` — `"image"` or `"video"`
 
 Project JSON uses atomic writes (temp file + `os.replace()`). `Project.load(path)` is a classmethod.
+
+### Internationalisation (i18n): `utils/i18n.py`
+
+All UI strings go through `tr(key, **kwargs)` — never hardcode user-visible text in page files.
+
+**Init order is critical**: `init_i18n(lang)` must be called in `main.py` **after** `QApplication` is created and **before** `MainWindow` is instantiated. Pages are constructed inside MainWindow, so all `tr()` calls in page `__init__` methods run after init.
+
+```python
+# main.py (correct order)
+app = QApplication(sys.argv)
+init_i18n(AppSettings().get_language())   # "de" or "en"
+win = MainWindow()
+```
+
+**Never call `tr()` at module level** (e.g. as a default argument or class-level constant) — `_strings` will be empty. Call it inside methods only.
+
+```python
+# Correct — import inside the method that uses it
+def _build_ui(self):
+    from utils.i18n import tr
+    self.btn.setText(tr("my.key"))
+
+# Wrong — module-level call
+LABEL = tr("my.key")   # crashes: i18n not yet initialised
+```
+
+Format args use `.format(**kwargs)`: `tr("fleet.deploy_success", path=p)` → `"…{path}…".format(path=p)`.
+
+Locale files: `locales/de.py` and `locales/en.py` — both export a `STRINGS` dict with dot-notation keys. Keys missing from `en.py` fall back to the key string itself (visible as raw key, not a crash). When adding a string, add it to **both** files.
+
+### Quick-Start Wizard: `gui/quick_start_wizard.py`
+
+`QuickStartWizard(QDialog)` guides new users through their first project. Two workflows: `"image"` (6 steps) and `"video"` (5 steps). Shown automatically on first launch via QSettings key `"wizard/shown_v1"`.
+
+Signals: `navigate_requested(int)` → `MainWindow._switch_page()`, `new_project_requested()`, `open_project_requested()`. Static helpers: `should_show_on_startup()` / `mark_shown()`.
+
+`MainWindow` opens it via `_open_wizard(workflow)`. First-launch check runs on `QTimer.singleShot(400, _maybe_show_wizard)` so the main window renders before the dialog appears. Also reachable from Help menu and from the Dashboard quick-start panel (`DashboardPage.open_wizard_requested` signal).
 
 ### GUI: `gui/main_window.py`
 
