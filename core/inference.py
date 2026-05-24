@@ -1,11 +1,15 @@
 """
 Enhanced inference: top-k predictions, confidence filtering, ROI template support.
 """
-import logging
+import hashlib
+import json
 import os
 from typing import List, Dict, Optional, Tuple
 
-log = logging.getLogger("ImageLabelingStudio.inference")
+from utils.config import IMAGE_FORMATS
+from utils.logging_utils import get_logger
+
+log = get_logger("ImageLabelingStudio.inference")
 
 try:
     import torch
@@ -20,11 +24,6 @@ try:
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
-
-from utils.config import IMAGE_FORMATS
-from utils.logging_utils import get_logger
-
-log = get_logger()
 
 
 class Inferencer:
@@ -48,18 +47,43 @@ class Inferencer:
 
     # ------------------------------------------------------------------ setup
 
+    @staticmethod
+    def verify_checksum(model_path: str) -> tuple:
+        """Return (ok, message). Skips check if no .sha256 sidecar exists."""
+        sidecar = model_path + ".sha256"
+        if not os.path.exists(sidecar):
+            return True, "Keine Prüfsumme vorhanden (älteres Modell)"
+        try:
+            stored = json.load(open(sidecar, encoding="utf-8"))["sha256"]
+            actual = hashlib.sha256(open(model_path, "rb").read()).hexdigest()
+            if actual == stored:
+                return True, f"SHA256 OK: {actual[:16]}…"
+            return False, (
+                f"PRÜFSUMME UNGÜLTIG!\n"
+                f"Erwartet: {stored[:16]}…\nGefunden: {actual[:16]}…"
+            )
+        except Exception as exc:
+            return False, f"Prüfsummen-Fehler: {exc}"
+
     def load_model(self, model_path: str) -> Dict:
         """
         Load a checkpoint from *model_path*.
 
+        Verifies the SHA256 checksum sidecar (if present) before loading.
         Reads class_names, model_type, and image_size from the checkpoint
         metadata, creates the matching architecture, and moves it to the
         best available device. Returns the metadata dict.
         Raises ValueError if the checkpoint has no class information.
+        Raises RuntimeError if the checksum does not match.
         """
         if not HAS_TORCH:
             raise RuntimeError("PyTorch ist nicht installiert.")
         from models.classifier import create_model, load_checkpoint
+
+        ok, msg = self.verify_checksum(model_path)
+        if not ok:
+            raise RuntimeError(f"Integritätsprüfung fehlgeschlagen:\n{msg}")
+        log.debug("Checksumme: %s", msg)
 
         raw = torch.load(model_path, map_location="cpu", weights_only=False)
         meta = raw.get("metadata", {})

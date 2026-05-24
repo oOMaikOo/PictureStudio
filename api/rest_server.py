@@ -17,6 +17,7 @@ POST /api/classify              — live inference  {path, top_k?} or {image_b64
 """
 import base64
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -25,6 +26,8 @@ from typing import Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
 from utils.config import APP_VERSION
+
+log = logging.getLogger("ImageLabelingStudio.rest_server")
 
 
 class _ProjectHandler(BaseHTTPRequestHandler):
@@ -225,14 +228,22 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
         # /api/scores — live anomaly score buffer
         if path == "/api/scores":
-            limit = int(qs.get("limit", ["120"])[0])
+            try:
+                limit = max(1, min(int(qs.get("limit", ["120"])[0]), 2000))
+            except (ValueError, TypeError):
+                self._err("'limit' muss eine positive Ganzzahl sein", 400)
+                return
             buf = _ProjectHandler.score_buffer[-limit:]
             self._send_json({"scores": buf, "count": len(buf)})
             return
 
         # /api/events — recent anomaly events from CSV log
         if path == "/api/events":
-            limit = int(qs.get("limit", ["100"])[0])
+            try:
+                limit = max(1, min(int(qs.get("limit", ["100"])[0]), 2000))
+            except (ValueError, TypeError):
+                self._err("'limit' muss eine positive Ganzzahl sein", 400)
+                return
             events = self._read_event_log(limit)
             self._send_json({"events": events, "count": len(events)})
             return
@@ -341,7 +352,8 @@ class _ProjectHandler(BaseHTTPRequestHandler):
                 reader = csv_mod.DictReader(f)
                 for row in reader:
                     rows.append(dict(row))
-        except Exception:
+        except Exception as exc:
+            log.warning("Event-Log konnte nicht gelesen werden (%s): %s", path, exc)
             return []
         return rows[-limit:]
 
@@ -416,8 +428,15 @@ class _ProjectHandler(BaseHTTPRequestHandler):
                 self._err("No model loaded. Load a model via the Models page first.", 503)
                 return
 
-            top_k = int(body.get("top_k", 3))
+            try:
+                top_k = max(1, min(int(body.get("top_k", 3)), 20))
+            except (ValueError, TypeError):
+                self._err("'top_k' muss eine Ganzzahl zwischen 1 und 20 sein", 400)
+                return
             img_path = body.get("path", "")
+            if not isinstance(img_path, str):
+                self._err("'path' muss ein String sein", 400)
+                return
             b64 = body.get("image_b64", "")
 
             tmp_path = None

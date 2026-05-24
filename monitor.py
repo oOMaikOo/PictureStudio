@@ -1846,9 +1846,26 @@ def run_monitor_multi(
 
     print(f"\nMulti-Channel-Monitor läuft ({len(cam_threads)} Kanal/Kanäle). Strg+C zum Beenden.\n")
 
+    _WATCHDOG_INTERVAL = 5.0
+    _t_watchdog = time.perf_counter()
+
     try:
         while True:
             time.sleep(0.1)
+            now = time.perf_counter()
+            if now - _t_watchdog >= _WATCHDOG_INTERVAL:
+                _t_watchdog = now
+                for i, cam in enumerate(cam_threads):
+                    if not cam.is_alive():
+                        print(f"[Watchdog] Kanal {i}: Thread beendet — starte neu…")
+                        new_cam = _CameraThread(
+                            source=cam._source,
+                            fps=fps,
+                            callback=cam._callback,
+                            reconnect_delay=reconnect_delay,
+                        )
+                        new_cam.start()
+                        cam_threads[i] = new_cam
     except KeyboardInterrupt:
         pass
     finally:

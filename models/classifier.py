@@ -84,12 +84,17 @@ class SimpleCNN(nn.Module if HAS_TORCH else object):
 
 
 def save_checkpoint(model, path: str, metadata: dict = None) -> None:
+    import hashlib
+    import json as _json
     import torch
     payload = {
         "model_state_dict": model.state_dict(),
         "metadata": metadata or {},
     }
     torch.save(payload, path)
+    sha = hashlib.sha256(open(path, "rb").read()).hexdigest()
+    with open(path + ".sha256", "w", encoding="utf-8") as f:
+        _json.dump({"sha256": sha, "file": path}, f)
     log.info("Checkpoint gespeichert: %s", path)
 
 
