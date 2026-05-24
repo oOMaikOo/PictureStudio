@@ -787,7 +787,7 @@ Picture/
 ## Tests ausführen
 
 ```bash
-# Alle Tests (933 Tests, ~210 s)
+# Alle Tests (942 Tests, ~210 s)
 .venv/bin/python -m pytest tests/ -v
 
 # Nur Unit-Tests (schnell, < 5 s)

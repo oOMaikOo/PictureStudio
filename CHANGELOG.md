@@ -20,12 +20,12 @@ All notable changes to PictureStudio are documented here.
 - **Help-Dialog** (`gui/help_dialog.py`): Architektur-Tabelle um `efficientnet_b3`, `convnext_tiny` und `dinov2_vits14` ergänzt. Neuer Abschnitt **Auto-Retraining Loop** und **Shadow Mode / A/B Modellvergleich** in der Kamera-Sektion (Section 10).
 - **Geführte Tour** (`gui/guide_tour.py`): Training-Schritt "Architektur wählen" zeigt DINOv2 und EfficientNet-B3/ConvNeXt-Tiny mit Empfehlungsstern. Neue Tour-Schritte **Auto-Retraining** und **Shadow Mode** in der Kamera-Tour (Section 8).
 - **Quick-Start Wizard** (`gui/quick_start_wizard.py`): Schritt 4 (Modell trainieren) erwähnt DINOv2 als Empfehlung für kleine Datensätze.
-- **README.md**: Neue Feature-Tabellen für v2.5.x, Architektur-Tabellen um DINOv2 ergänzt, Anomalie-Zeile um Auto-Retraining + Shadow Mode erweitert, Test-Anzahl auf 933 korrigiert.
+- **README.md**: Neue Feature-Tabellen für v2.5.x, Architektur-Tabellen um DINOv2 ergänzt, Anomalie-Zeile um Auto-Retraining + Shadow Mode erweitert, Test-Anzahl auf 942 korrigiert.
 - `APP_VERSION` → `2.5.0`
 
 ### Tests
 
-- Alle 933 bestehenden Tests weiterhin grün (9 pre-existing UI-Failures unverändert).
+- 942 Tests grün (vormals 9 pre-existing UI-Failures durch `init_i18n("de")` in `conftest.py` behoben).
 
 ---
 
