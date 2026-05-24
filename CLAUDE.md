@@ -181,7 +181,9 @@ The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPag
 
 `FleetPage` (stack 14) polls remote `monitor.py` daemons via `GET /api/status`. Devices are persisted in `QSettings`. Two per-device actions:
 - **Einrichten** — opens `monitor.py --setup` web UI in browser
-- **Training** — opens `_RemoteTrainDialog` (3 tabs: collect frames via JPEG polling → train locally → deploy model via multipart POST)
+- **Training** — opens `_RemoteTrainDialog` (2 tabs):
+  - *Frames & Training*: downloads buffered frames via `GET /api/frames?n=N` (ZIP of JPEGs) using `_FrameDownloadThread`, then trains `AnomalyDetector` locally via `_LocalTrainThread`
+  - *Deployen*: uploads the `.pth` via `POST /api/deploy` (multipart); `monitor.py` hot-swaps the model without restart
 
 Edge export (`core/edge_export.py`): `EdgeExporter.export_quantized_onnx()` (ONNX INT8) and `export_coreml()` (macOS only, requires `coremltools`).
 
@@ -200,7 +202,13 @@ The setup wizard web UI exposes `/setup/cameras` (GET) which returns the pre-sca
 
 On macOS, `cv2.VideoCapture` for the built-in camera needs up to 60 read() calls before the first frame arrives — the `_CameraThread` warmup limit is set accordingly. Camera permission must be granted to Terminal in System Settings → Privacy & Security → Camera.
 
-Embedded REST API (`--api-port`): `GET /api/status`, `/api/scores`, `/api/latest_alarm`, `/api/frame/<file>`, `/dashboard`. Auth via `--api-key`. MQTT publishing via `--mqtt-host`.
+**Frame ring buffer**: `_MonitorState` keeps up to 200 JPEG frames (`_FRAME_BUF_MAX=200`, sampled at ~2 fps via `_FRAME_BUF_INTERVAL=0.5`). `GET /api/frames?n=N` returns a ZIP archive of up to N frames — used by PictureStudio's `_FrameDownloadThread` to collect training data in one request.
+
+**Hot-swap model deploy**: `POST /api/deploy` (multipart, field `model`) saves the `.pth` to disk and sets `state.pending_model_path`. The main loop calls `_check_hot_swap()` every 0.5 s, reloads the detector, and continues without restart.
+
+**Collection-only mode**: when `--camera` is given but `--model` is omitted, `monitor.py` runs in collection-only mode — it buffers frames and serves them via `GET /api/frames` but does not score. PictureStudio trains the model and deploys it via `POST /api/deploy`.
+
+Embedded REST API (`--api-port`, default 8766): `GET /api/status` (includes `frame_count`, `model_name`), `/api/scores`, `/api/latest_alarm`, `/api/frame/<file>`, `/api/frames?n=N`, `POST /api/deploy`, `/dashboard`. Auth via `--api-key`. MQTT publishing via `--mqtt-host`.
 
 Minimal dependencies for monitor-only deployment: `requirements_monitor.txt` (no PySide6, no GUI).
 

@@ -207,7 +207,7 @@ Checkbox **Focal Loss** in der Trainingsseite — dämpft den Verlust einfacher 
 - **Anomalie-HPT** — Optuna-Suche über `base_ch`, Lernrate, Batch-Größe
 - **Grad-CAM** — Heatmap-Overlay für Anomalie-Erkennung (Checkbox in CameraPage)
 - **Multi-Kamera** — dynamisches Grid (1–9 Kanäle), eigener Detektor je Kanal
-- **Fleet-Management** — Remote-Training und -Deploy über Web-UI
+- **Fleet-Management** — Zentrale Überwachung remote laufender `monitor.py`-Daemons; Remote-Training (Frames per `GET /api/frames` herunterladen, lokal trainieren) und Hot-Swap-Deploy (Modell per `POST /api/deploy` übertragen — kein Neustart)
 
 ---
 
@@ -531,8 +531,11 @@ pip install ultralytics   # einmalig installieren
 ```bash
 source .venv/bin/activate
 
-# Einzelkamera
+# Einzelkamera mit vorhandenem Modell (Port 8766)
 python monitor.py --model autoencoder.pth
+
+# Collection-only (kein Modell — Frames sammeln, später deployen)
+python monitor.py --camera 0 --api-port 8766
 
 # Interaktiver Setup-Wizard (Web-UI auf :8765)
 python monitor.py --setup
@@ -543,21 +546,26 @@ python monitor.py --channels kanäle.json
 
 ---
 
-#### Schritt 2 — Web-Dashboard
+#### Schritt 2 — Web-Dashboard und REST-API
 
-1. In der App: **Einstellungen → REST-API Server → API starten**
-2. Browser: `http://localhost:8765/dashboard`
-3. Automatische Aktualisierung alle 3 Sekunden
+1. Browser: `http://<daemon-ip>:8766/dashboard`
+2. Automatische Aktualisierung alle 3 Sekunden
 
-**API-Endpunkte:**
+**Daemon-REST-API (Port 8766):**
 
 | Endpunkt | Beschreibung |
 |---|---|
 | `GET /dashboard` | HTML Live-Dashboard |
-| `GET /api/status` | Projektstatus und Modell |
+| `GET /api/status` | Status, `frame_count`, `model_name` |
 | `GET /api/scores?limit=120` | Score-Puffer (JSON) |
-| `GET /api/events?limit=50` | Letzte Alarm-Events |
-| `POST /api/classify` | Bild klassifizieren |
+| `GET /api/latest_alarm` | Letztes Alarm-Event |
+| `GET /api/frames?n=150` | ZIP-Archiv mit bis zu N gepufferten JPEG-Frames |
+| `POST /api/deploy` | Modell hochladen (multipart, Feld `model`) → Hot-Swap ohne Neustart |
+
+**PictureStudio-Integration (Fleet-Seite):**
+
+1. Gerät mit URL `http://<ip>:8766` hinzufügen
+2. **Training** → Frames herunterladen → lokal trainieren → Modell deployen (Hot-Swap)
 
 ---
 

@@ -1311,17 +1311,21 @@ So bekommst du einen vielfältigen Trainingsdatensatz aus einem einzigen Video.<
 
 <h2>Gerät hinzufügen</h2>
 <div class="step"><b>Schritt 1</b> – Klicke <b>+ Gerät hinzufügen</b>.<br>
-Gib einen Namen, die Basis-URL (z. B. <code>http://192.168.1.100:8765</code>) und
+Gib einen Namen, die Basis-URL (z. B. <code>http://192.168.1.100:8766</code>) und
 optional einen API-Key ein.<br>
-Die URL muss auf einen laufenden <code>monitor.py --api-port</code> Prozess zeigen.</div>
+Die URL muss auf einen laufenden <code>monitor.py --api-port 8766</code> Prozess zeigen.</div>
 
 <h2>Status prüfen</h2>
 <div class="step"><b>Schritt 2</b> – Klicke <b>Alle aktualisieren</b> oder aktiviere
 <b>Auto-Refresh (30 s)</b>.<br>
 Die Tabelle zeigt für jedes Gerät: Online/Offline, letzten Score und letzten Alarm-Zeitstempel.</div>
 
-<h2>Dashboard öffnen</h2>
-<p>Klicke <b>Dashboard</b> in der Aktionen-Spalte um das Web-Dashboard des Geräts im Browser zu öffnen.</p>
+<h2>Remote-Training &amp; Hot-Swap Deploy</h2>
+<div class="step"><b>Training</b> in der Aktionen-Spalte öffnet den 2-Tab-Dialog:<br>
+<b>Tab 1 — Frames &amp; Training:</b> Gerätestatus prüfen → Frames per <code>GET /api/frames</code>
+herunterladen (ein ZIP-Request statt 150 Einzelabfragen) → Modell lokal trainieren.<br>
+<b>Tab 2 — Deployen:</b> Schwellwert anpassen → Modell per <code>POST /api/deploy</code>
+hochladen. Der Daemon tauscht das Modell im laufenden Betrieb aus (kein Neustart).</div>
 
 <h2>Persistenz</h2>
 <p>Die Gerätliste wird in QSettings gespeichert und beim nächsten Start automatisch geladen.</p>
@@ -1329,7 +1333,11 @@ Die Tabelle zeigt für jedes Gerät: Online/Offline, letzten Score und letzten A
 <h2>monitor.py starten</h2>
 <p>Auf jedem Edge-Gerät:</p>
 <pre style="background:#0D1117;color:#F8C471;padding:8px;border-radius:4px;font-size:11px">
-python monitor.py --model modell.onnx --api-port 8765 --api-key MEIN_SCHLÜSSEL
+# Mit vorhandenem Modell
+python monitor.py --model modell.pth --api-port 8766 --api-key MEIN_SCHLÜSSEL
+
+# Collection-only (erst Frames sammeln, dann von PictureStudio deployen)
+python monitor.py --camera 0 --api-port 8766
 </pre>
 <div class="tip"><b>Docker-Deployment</b><br>
 Auf der Modelle-Seite → <b>Docker-Deployment generieren…</b> erzeugt ein fertiges

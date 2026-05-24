@@ -29,13 +29,15 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import sys
 import threading
 import time
+import zipfile
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from typing import Callable, Optional, Union
 from urllib.parse import parse_qs, urlparse
 
@@ -189,6 +191,32 @@ class _CameraThread(threading.Thread):
             else:
                 delay = 1.0 / max(self._fps, 1.0)
 
+            # macOS AVFoundation: after open() the sensor needs several seconds to
+            # adjust exposure — frames arrive with ret=True but are pure black.
+            # Sleep briefly, then discard dark frames for up to 5 s.
+            # Require 3 consecutive bright frames so we don't stop on a fluke.
+            if (not self._is_video and isinstance(self._source, int)
+                    and os.uname().sysname == "Darwin"):
+                time.sleep(0.8)  # let AVFoundation session stabilise
+                bright = 0
+                deadline = time.time() + 5.0
+                while time.time() < deadline:
+                    ret_w, f_w = cap.read()
+                    if ret_w and f_w is not None:
+                        m = float(f_w.mean())
+                        if m > 5.0:
+                            bright += 1
+                            if bright >= 3:
+                                print(f"[Kamera] Index {self._source}: Sensor bereit "
+                                      f"(Helligkeit {m:.1f})")
+                                break
+                        else:
+                            bright = 0
+                    time.sleep(0.04)
+                else:
+                    print(f"[Kamera] Warnung: Index {self._source} liefert nach 5 s "
+                          f"noch schwarze Frames — prüfe Kamera-Berechtigung für Terminal")
+
             consec_fail = 0
             first_frame = True
             # Live cameras (especially built-in on macOS) need up to 30 read()
@@ -247,6 +275,9 @@ class _CameraThread(threading.Thread):
 # Shared monitor state (thread-safe; updated by the frame callback)
 # ---------------------------------------------------------------------------
 
+_FRAME_BUF_MAX = 200   # max JPEG frames kept in memory (~10 MB at quality 70)
+_FRAME_BUF_INTERVAL = 0.5  # seconds between buffer pushes (≈2 fps) to limit CPU
+
 class _MonitorState:
     """Central store for score history and alarm data used by the REST API."""
 
@@ -263,6 +294,12 @@ class _MonitorState:
         self.score_buffer: list = []          # [{ts, score, threshold, alarm}]
         self.latest_alarm: dict = {}          # {ts, score, threshold, frame_filename}
         self.start_time: float = time.time()
+        # Frame ring-buffer: stores JPEG bytes for GET /api/frames
+        self._frame_buf: list = []            # list[bytes]
+        self._frame_buf_lock = threading.Lock()
+        self._frame_buf_last_t: float = 0.0
+        # Hot-swap: set by POST /api/deploy, consumed by run_monitor main loop
+        self.pending_model_path: str = ""
 
     def push_score(self, score: float, threshold: float) -> None:
         entry = {
@@ -288,8 +325,30 @@ class _MonitorState:
             }
             self.event_count += 1
 
+    def push_frame(self, frame) -> None:
+        """Store a JPEG-compressed copy of frame in the ring buffer (throttled to ~2 fps)."""
+        now = time.time()
+        if now - self._frame_buf_last_t < _FRAME_BUF_INTERVAL:
+            return
+        self._frame_buf_last_t = now
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ok:
+            return
+        data = buf.tobytes()
+        with self._frame_buf_lock:
+            self._frame_buf.append(data)
+            if len(self._frame_buf) > _FRAME_BUF_MAX:
+                del self._frame_buf[0]
+
+    def get_frames(self, n: int) -> list:
+        """Return up to n most-recent JPEG frame bytes from the ring buffer."""
+        with self._frame_buf_lock:
+            return list(self._frame_buf[-n:])
+
     def snapshot(self) -> dict:
         with self._lock:
+            with self._frame_buf_lock:
+                frame_count = len(self._frame_buf)
             return {
                 "model_name":   self.model_name,
                 "threshold":    self.threshold,
@@ -299,6 +358,7 @@ class _MonitorState:
                 "cam_status":   self.cam_status,
                 "uptime_s":     int(time.time() - self.start_time),
                 "score_count":  len(self.score_buffer),
+                "frame_count":  frame_count,
             }
 
 
@@ -434,7 +494,7 @@ class _MonitorHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Api-Key")
         self.end_headers()
 
@@ -488,6 +548,26 @@ class _MonitorHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, 500)
             return
 
+        if path == "/api/frames":
+            n = min(int(qs.get("n", ["150"])[0]), _FRAME_BUF_MAX)
+            frames = st.get_frames(n)
+            if not frames:
+                self._send_json({"error": "Kein Frame im Puffer — Kamera läuft?"}, 503)
+                return
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+                for i, jpg in enumerate(frames):
+                    zf.writestr(f"frame_{i:04d}.jpg", jpg)
+            data = buf.getvalue()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", 'attachment; filename="frames.zip"')
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if path in ("/dashboard", "/dashboard/"):
             key = st.api_key
             html = _MONITOR_DASHBOARD_HTML.replace("__API_KEY__", f"'{key}'" if key else "''")
@@ -501,6 +581,65 @@ class _MonitorHandler(BaseHTTPRequestHandler):
 
         self._send_json({"error": "Not found"}, 404)
 
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        st = _MonitorHandler.state
+
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized"}, 401)
+            return
+
+        if path == "/api/deploy":
+            ct = self.headers.get("Content-Type", "")
+            length = int(self.headers.get("Content-Length", 0))
+            if length <= 0:
+                self._send_json({"error": "Leerer Body"}, 400)
+                return
+
+            # Multipart: extract first file part
+            raw = self.rfile.read(length)
+            model_data: Optional[bytes] = None
+            if "multipart/form-data" in ct:
+                boundary = None
+                for part in ct.split(";"):
+                    part = part.strip()
+                    if part.startswith("boundary="):
+                        boundary = part[len("boundary="):].strip().encode()
+                if boundary:
+                    parts = raw.split(b"--" + boundary)
+                    for p in parts[1:]:
+                        if b"\r\n\r\n" in p:
+                            _, body = p.split(b"\r\n\r\n", 1)
+                            body = body.rstrip(b"\r\n--")
+                            if len(body) > 100:
+                                model_data = body
+                                break
+            else:
+                # plain binary body
+                model_data = raw
+
+            if not model_data:
+                self._send_json({"error": "Kein Modell-Inhalt"}, 400)
+                return
+
+            os.makedirs(st.output_dir or "monitor_logs", exist_ok=True)
+            save_path = os.path.join(st.output_dir or "monitor_logs", "deployed_model.pth")
+            try:
+                with open(save_path, "wb") as fh:
+                    fh.write(model_data)
+            except Exception as exc:
+                self._send_json({"error": f"Speicherfehler: {exc}"}, 500)
+                return
+
+            st.pending_model_path = save_path
+            print(f"\n[Deploy] Neues Modell empfangen → {save_path} ({len(model_data)} Bytes)")
+            self._send_json({"ok": True, "model_path": save_path,
+                             "size_bytes": len(model_data)})
+            return
+
+        self._send_json({"error": "Not found"}, 404)
+
 
 class _MonitorApiServer:
     """Runs the monitor REST API in a background daemon thread."""
@@ -508,7 +647,7 @@ class _MonitorApiServer:
     def __init__(self, port: int, state: _MonitorState) -> None:
         self._port = port
         _MonitorHandler.state = state
-        self._server = HTTPServer(("", port), _MonitorHandler)
+        self._server = ThreadingHTTPServer(("", port), _MonitorHandler)
         self._server.allow_reuse_address = True
         self._thread = threading.Thread(
             target=self._server.serve_forever,
@@ -638,7 +777,7 @@ def save_alarm(
 # ---------------------------------------------------------------------------
 
 def run_monitor(
-    model_path: str,
+    model_path: str = "",
     *,
     camera_source: Union[int, str, None] = None,   # int=USB index, str=URL/file, None=auto
     threshold_override: Optional[float] = None,
@@ -656,43 +795,64 @@ def run_monitor(
     api_port: int = 0,
     api_key: str = "",
 ) -> int:
-    """Run the monitor loop. Returns the number of alarm events logged (≥0), or -1 on error."""
+    """Run the monitor loop. Returns alarm event count (≥0), or -1 on error.
 
-    # ── Load model ─────────────────────────────────────────────────────────────
-    print(f"Lade Modell: {model_path}")
-    if model_path.lower().endswith(".onnx"):
-        if not HAS_ORT:
-            print("Fehler: onnxruntime nicht installiert.  pip install onnxruntime")
-            return -1
-        det = OnnxAnomalyScorer.from_path(model_path)
-        print("  ONNX-Modell geladen (kein PyTorch nötig)")
-    else:
-        det = AnomalyDetector()
+    If model_path is empty, starts in collection-only mode: camera runs and
+    frames are buffered for GET /api/frames, but no scoring occurs until a
+    model is deployed via POST /api/deploy.
+    """
+
+    # ── Load model (optional — empty = collection-only mode) ───────────────────
+    # det_ref[0] is replaced atomically by the hot-swap check in the main loop.
+    det_ref: list = [None]
+    roi: Optional[list] = None
+    threshold: float = 0.0
+
+    def _load_detector(path: str) -> bool:
+        """Load or reload the anomaly detector from path. Returns True on success."""
+        nonlocal roi, threshold
         try:
-            det.load(model_path)
+            if path.lower().endswith(".onnx"):
+                if not HAS_ORT:
+                    print("Fehler: onnxruntime nicht installiert.  pip install onnxruntime")
+                    return False
+                d = OnnxAnomalyScorer.from_path(path)
+                print("  ONNX-Modell geladen (kein PyTorch nötig)")
+            else:
+                d = AnomalyDetector()
+                d.load(path)
+            if threshold_override is not None:
+                d.threshold = threshold_override
+            meta = d.metadata
+            roi       = meta.get("roi")
+            threshold = d.threshold
+            print(f"  Beschreibung : {meta.get('description', '-')}")
+            print(f"  Trainiert    : {meta.get('trained_at', '-')}")
+            print(f"  ROI          : {'aktiv ' + str(roi) if roi else 'nein'}")
+            print(f"  Schwellwert  : {threshold:.6f}")
+            det_ref[0] = d
+            return True
         except Exception as exc:
             print(f"Fehler beim Laden des Modells: {exc}")
+            return False
+
+    if model_path:
+        print(f"Lade Modell: {model_path}")
+        if not _load_detector(model_path):
             return -1
-
-    meta = det.metadata
-    roi: Optional[list] = meta.get("roi")
-    threshold: float    = det.threshold
-
-    if threshold_override is not None:
-        det.threshold = threshold_override
-        threshold = det.threshold
-
-    print(f"  Beschreibung : {meta.get('description', '-')}")
-    print(f"  Trainiert    : {meta.get('trained_at', '-')}")
-    print(f"  ROI          : {'aktiv ' + str(roi) if roi else 'nein'}")
-    print(f"  Schwellwert  : {threshold:.6f}")
+    else:
+        print("Kein Modell angegeben — Sammel-Modus (Frames puffern für GET /api/frames).")
+        print("Modell deployen: POST /api/deploy oder PictureStudio → Fleet → Deployen")
 
     # ── Determine camera source ─────────────────────────────────────────────────
     if camera_source is None:
-        # Auto-detect from model metadata
-        meta_cam = meta.get("camera_source", "")
-        cam_source: Union[int, str] = find_camera_index(meta_cam)
-        print(f"  Kamera       : Index {cam_source} (aus Modell-Metadaten)")
+        if det_ref[0] is not None:
+            meta_cam = det_ref[0].metadata.get("camera_source", "")
+            cam_source: Union[int, str] = find_camera_index(meta_cam)
+            print(f"  Kamera       : Index {cam_source} (aus Modell-Metadaten)")
+        else:
+            cam_source = 0
+            print(f"  Kamera       : Index {cam_source} (Standard)")
     elif isinstance(camera_source, int):
         cam_source = camera_source
         print(f"  Kamera       : Index {cam_source} (manuell)")
@@ -705,7 +865,8 @@ def run_monitor(
     # ── Alarm notifier (E-Mail / Webhook) ──────────────────────────────────────
     if no_notify:
         notifier = None
-        print("  Benachrichtigung: deaktiviert (--no-notify)")
+        if model_path:
+            print("  Benachrichtigung: deaktiviert (--no-notify)")
     else:
         try:
             from core.alarm_notifier import AlarmNotifier
@@ -731,7 +892,7 @@ def run_monitor(
                 username=mqtt_user, password=mqtt_pass,
             )
             if mqtt_client.connect():
-                time.sleep(0.5)   # give connection time to establish
+                time.sleep(0.5)
                 status = "verbunden" if mqtt_client.connected else "Verbindung ausstehend"
                 print(f"  MQTT         : {mqtt_host}:{mqtt_port}/{mqtt_topic} ({status})")
             else:
@@ -740,7 +901,7 @@ def run_monitor(
 
     # ── Shared state ───────────────────────────────────────────────────────────
     state = _MonitorState()
-    state.model_name = os.path.basename(model_path)
+    state.model_name = os.path.basename(model_path) if model_path else "—"
     state.threshold  = threshold
     state.output_dir = output_dir
     state.api_key    = api_key
@@ -753,6 +914,8 @@ def run_monitor(
             api_server = _MonitorApiServer(api_port, state)
             api_server.start()
             print(f"  REST-API     : http://localhost:{api_port}/api/status")
+            print(f"  Frames-API   : http://localhost:{api_port}/api/frames")
+            print(f"  Deploy-API   : http://localhost:{api_port}/api/deploy  (POST)")
             print(f"  Dashboard    : http://localhost:{api_port}/dashboard")
             if api_key:
                 print(f"  API-Key      : {api_key}")
@@ -776,6 +939,17 @@ def run_monitor(
     def on_frame(frame: np.ndarray) -> None:
         nonlocal latest_frame, latest_display, score_val, is_anom, last_alarm_t
 
+        # Always buffer frames for GET /api/frames (training data collection)
+        state.push_frame(frame)
+
+        det = det_ref[0]
+        if det is None:
+            # Collection-only mode: store raw frame for display, no scoring
+            with frame_lock:
+                latest_frame   = frame.copy()
+                latest_display = frame.copy()
+            return
+
         cropped = apply_roi(frame, roi)
         try:
             score, _rec, overlay_crop, _bbox = det.score_detailed(cropped)
@@ -784,10 +958,7 @@ def run_monitor(
 
         is_anomaly = score > threshold
 
-        if roi:
-            display = composite_overlay(frame, overlay_crop, roi)
-        else:
-            display = overlay_crop
+        display = composite_overlay(frame, overlay_crop, roi) if roi else overlay_crop
 
         with frame_lock:
             score_val      = score
@@ -795,7 +966,6 @@ def run_monitor(
             latest_frame   = frame.copy()
             latest_display = display
 
-        # Update shared state for REST API
         state.push_score(score, threshold)
 
         if headless:
@@ -808,16 +978,17 @@ def run_monitor(
             now = time.perf_counter()
             if now - last_alarm_t >= cooldown:
                 last_alarm_t = now
+                cur_model = os.path.basename(state.model_name)
                 fname = save_alarm(frame, score, threshold, output_dir, log_path,
                                    state.event_count + 1)
                 state.push_alarm(score, threshold, fname)
 
                 fpath = os.path.join(output_dir, fname) if fname else ""
-                model_name = os.path.basename(model_path)
 
                 if notifier:
                     try:
-                        notifier.notify(score, threshold, frame_path=fpath, model_name=model_name)
+                        notifier.notify(score, threshold, frame_path=fpath,
+                                        model_name=cur_model)
                     except Exception as exc:
                         print(f"\n[Warnung] Benachrichtigung fehlgeschlagen: {exc}")
 
@@ -844,7 +1015,6 @@ def run_monitor(
     time.sleep(0.6)
 
     if cam.error and not cam._is_video:
-        # For live streams, the thread keeps retrying — only fatal for video files
         if isinstance(cam_source, str) and not cam._is_video:
             pass   # reconnect loop running
         else:
@@ -853,21 +1023,39 @@ def run_monitor(
                 api_server.stop()
             return -1
 
-    print(f"\nMonitor läuft. Ausgabe → {output_dir}")
+    mode_str = "Sammel-Modus (kein Modell)" if det_ref[0] is None else "Anomalie-Erkennung aktiv"
+    print(f"\nMonitor läuft ({mode_str}). Ausgabe → {output_dir}")
     if not headless:
         print("Zum Beenden: Q oder ESC drücken.\n")
     else:
         print("Headless-Modus. Zum Beenden: Strg+C\n")
 
-    # ── Display / event loop ───────────────────────────────────────────────────
+    # ── Display / event loop with hot-swap support ─────────────────────────────
+    def _check_hot_swap() -> None:
+        """If a new model was POSTed, reload it (called from main loop)."""
+        nonlocal threshold
+        path = state.pending_model_path
+        if not path:
+            return
+        state.pending_model_path = ""
+        print(f"\n[Deploy] Lade neues Modell: {path}")
+        if _load_detector(path):
+            state.model_name = os.path.basename(path)
+            state.threshold  = threshold
+            print(f"[Deploy] Modell aktiv: {state.model_name}  Schwellwert: {threshold:.6f}")
+        else:
+            print("[Deploy] Laden fehlgeschlagen — altes Modell bleibt aktiv.")
+
     try:
         if headless:
             while True:
-                time.sleep(0.1)
+                _check_hot_swap()
+                time.sleep(0.5)
         else:
-            win = f"PictureStudio Monitor — {os.path.basename(model_path)}"
-            cv2.namedWindow(win, cv2.WINDOW_RESIZABLE)
+            win_title = f"PictureStudio Monitor — {os.path.basename(model_path) if model_path else 'Sammel-Modus'}"
+            cv2.namedWindow(win_title, cv2.WINDOW_RESIZABLE)
             while True:
+                _check_hot_swap()
                 with frame_lock:
                     disp  = latest_display
                     score = score_val
@@ -877,7 +1065,7 @@ def run_monitor(
 
                 if disp is not None:
                     hud = draw_hud(disp, score, threshold, ia, ec, roi, cs)
-                    cv2.imshow(win, hud)
+                    cv2.imshow(win_title, hud)
 
                 key = cv2.waitKey(30) & 0xFF
                 if key in (ord('q'), ord('Q'), 27):
@@ -1025,7 +1213,7 @@ function buildCard(ch) {
   div.innerHTML = `
     <div class="ch-title">Kanal ${id} &nbsp;<span class="badge badge-pending" id="badge-${id}">pending</span></div>
     <div class="ch-canvas-wrap">
-      <img id="img-${id}" src="" alt="">
+      <img id="img-${id}" alt="" style="background:#1B2028">
       <canvas id="canvas-${id}"></canvas>
     </div>
     <div class="ch-info">
@@ -1059,12 +1247,26 @@ function refreshCard(card, ch) {
 }
 
 // ─── Frame polling per channel ────────────────────────────────────────────────
+// Fetch JPEG bytes and set img.src as a data: URL.
+// This completely bypasses Safari's image caching and blob-URL lifecycle quirks.
 function startFramePoll(id) {
-  function poll() {
-    const img = document.getElementById('img-'+id);
-    if (!img) return; // card removed
-    img.src = '/setup/channels/'+id+'/frame.jpg?t='+Date.now();
-    setTimeout(poll, 400);
+  async function poll() {
+    if (!document.getElementById('img-'+id)) return;
+    try {
+      const res = await fetch('/setup/channels/'+id+'/frame.jpg?t='+Date.now(),
+                              {cache: 'no-store'});
+      if (res.ok) {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        // Convert to base64 in 8 KB chunks to avoid call-stack limits
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        }
+        const img = document.getElementById('img-'+id);
+        if (img) img.src = 'data:image/jpeg;base64,' + btoa(binary);
+      }
+    } catch(e) {}
+    setTimeout(poll, 250);
   }
   poll();
 }
@@ -1410,8 +1612,8 @@ class _SetupHandler(BaseHTTPRequestHandler):
                     return
                 frame = ch.get_frame()
                 if frame is None:
-                    # Return a small black placeholder JPEG so <img> never breaks
-                    placeholder = np.zeros((120, 160, 3), dtype=np.uint8)
+                    # Grey placeholder while the camera is still warming up
+                    placeholder = np.full((120, 160, 3), 60, dtype=np.uint8)
                     ok, buf = cv2.imencode(".jpg", placeholder, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 else:
                     ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
@@ -1424,7 +1626,9 @@ class _SetupHandler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
                 self._cors()
                 self.end_headers()
                 self.wfile.write(data)
@@ -1596,7 +1800,7 @@ class _SetupApiServer:
         _SetupHandler.state = state
         _SetupHandler.output_dir = output_dir
         _SetupHandler.discovered_cameras = getattr(_SetupHandler, 'discovered_cameras', [])
-        self._server = HTTPServer(("", port), _SetupHandler)
+        self._server = ThreadingHTTPServer(("", port), _SetupHandler)
         self._server.allow_reuse_address = True
         self._thread = threading.Thread(
             target=self._server.serve_forever,
@@ -2068,8 +2272,13 @@ def main() -> None:
         )
         return
 
+    # ── api_port: default to 8766 for collection/deploy mode ──────────────────
+    # If --api-port wasn't specified explicitly but we're in collect mode (no model),
+    # default to 8766 so PictureStudio can reach /api/frames and /api/deploy.
+    effective_api_port = args.api_port if args.api_port > 0 else (8766 if not args.model else 0)
+
     # ── No arguments: interactive camera selection → auto setup wizard ─────────
-    if not args.model:
+    if not args.model and not args.camera and args.url is None:
         import webbrowser
         print("\n╔══════════════════════════════════════════════════════════════╗")
         print("║  PictureStudio Monitor — Kamera-Erkennung                   ║")
@@ -2140,6 +2349,33 @@ def main() -> None:
                 mqtt_pass=args.mqtt_pass,
             )
         return
+    # ── Collection-only mode: camera specified but no model yet ───────────────
+    if not args.model:
+        if args.url:
+            camera_source: Union[int, str, None] = args.url
+        elif args.camera is not None:
+            camera_source = args.camera
+        else:
+            camera_source = 0
+        print("\n╔══════════════════════════════════════════════════════════════════╗")
+        print("║  PictureStudio Monitor — Sammel-Modus (kein Modell)             ║")
+        print("╠══════════════════════════════════════════════════════════════════╣")
+        print(f"║  Frames API : http://localhost:{effective_api_port}/api/frames          ║")
+        print(f"║  Deploy API : http://localhost:{effective_api_port}/api/deploy   (POST) ║")
+        print("╚══════════════════════════════════════════════════════════════════╝\n")
+        result = run_monitor(
+            model_path="",
+            camera_source=camera_source,
+            output_dir=args.output,
+            fps=args.fps,
+            headless=args.headless,
+            no_notify=True,
+            reconnect_delay=args.reconnect_delay,
+            api_port=effective_api_port,
+            api_key=args.api_key,
+        )
+        sys.exit(0 if result >= 0 else 1)
+
     if not os.path.isfile(args.model):
         parser.error(f"Modell-Datei nicht gefunden: {args.model}")
 
@@ -2166,7 +2402,7 @@ def main() -> None:
         mqtt_topic=args.mqtt_topic,
         mqtt_user=args.mqtt_user,
         mqtt_pass=args.mqtt_pass,
-        api_port=args.api_port,
+        api_port=args.api_port or effective_api_port,
         api_key=args.api_key,
     )
     sys.exit(0 if result >= 0 else 1)

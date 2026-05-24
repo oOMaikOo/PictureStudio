@@ -58,7 +58,7 @@ class _AddDeviceDialog(QDialog):
         layout.addRow(tr("fleet.device_name_label"), self._name)
 
         self._url = QLineEdit()
-        self._url.setPlaceholderText("http://192.168.1.100:8765")
+        self._url.setPlaceholderText("http://192.168.1.100:8766")
         layout.addRow(tr("fleet.device_url_label"), self._url)
 
         self._key = QLineEdit()
@@ -95,60 +95,61 @@ class _AddDeviceDialog(QDialog):
 # Remote-Training helpers
 # ---------------------------------------------------------------------------
 
-class _FrameCollectThread(QThread):
-    """
-    Fetches JPEG frames from a remote setup endpoint and collects them via
-    an AnomalyDetector instance.
+class _FrameDownloadThread(QThread):
+    """Downloads frames ZIP from GET /api/frames and feeds them to AnomalyDetector.
 
-    Signals
-    -------
-    collected(int):
-        Emitted after each successfully collected frame with the running total.
-    error(str):
-        Emitted on a non-recoverable network or image-decode error.
+    One HTTP request replaces 150 individual frame polls.
+    Signals: progress(int 0-100), finished(int frame_count), error(str).
     """
 
-    collected = Signal(int)
-    error = Signal(str)
+    progress = Signal(int)
+    finished = Signal(int)
+    error    = Signal(str)
 
-    def __init__(self, device_url: str, channel_id: int, detector, parent=None) -> None:
+    def __init__(self, device_url: str, api_key: str, count: int,
+                 detector, parent=None) -> None:
         super().__init__(parent)
-        self._url = device_url.rstrip("/")
-        self._channel_id = channel_id
+        self._url      = device_url.rstrip("/")
+        self._api_key  = api_key
+        self._count    = count
         self._detector = detector
-        self._running = False
-        self._count = 0
 
     def run(self) -> None:
-        """Poll frames at ~10 Hz and feed them to the detector."""
-        self._running = True
-        frame_url = f"{self._url}/setup/channels/{self._channel_id}/frame.jpg"
-        import time
-        while self._running:
-            try:
-                req = urllib.request.Request(frame_url)
-                with urllib.request.urlopen(req, timeout=3) as resp:
-                    if resp.status == 204:
-                        time.sleep(0.1)
-                        continue
-                    data = resp.read()
-                arr = np.frombuffer(data, dtype=np.uint8)
-                import cv2
-                frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                if frame is None:
-                    time.sleep(0.1)
-                    continue
-                self._detector.collect_frame(frame)
-                self._count += 1
-                self.collected.emit(self._count)
-            except Exception as exc:
-                self.error.emit(str(exc))
-                time.sleep(0.2)
-            time.sleep(0.1)
+        import zipfile, cv2
+        try:
+            req = urllib.request.Request(
+                f"{self._url}/api/frames?n={self._count}")
+            if self._api_key:
+                req.add_header("X-Api-Key", self._api_key)
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                raw = resp.read()
+        except Exception as exc:
+            self.error.emit(f"Download fehlgeschlagen: {exc}")
+            return
 
-    def stop(self) -> None:
-        """Request the thread to stop after the current iteration."""
-        self._running = False
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except Exception as exc:
+            self.error.emit(f"ZIP ungültig: {exc}")
+            return
+
+        names = zf.namelist()
+        if not names:
+            self.error.emit("ZIP enthält keine Frames.")
+            return
+
+        loaded = 0
+        for i, name in enumerate(names):
+            jpg = zf.read(name)
+            arr = np.frombuffer(jpg, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is not None:
+                self._detector.collect_frame(frame)
+                loaded += 1
+            self.progress.emit(int((i + 1) / len(names) * 100))
+
+        zf.close()
+        self.finished.emit(loaded)
 
 
 class _LocalTrainThread(QThread):
@@ -191,32 +192,28 @@ class _LocalTrainThread(QThread):
 
 class _RemoteTrainDialog(QDialog):
     """
-    Dialog that guides the user through the remote training workflow for one
-    monitor.py device:
+    Guides the user through remote training for one monitor.py device.
 
-    Tab 1 — Kanäle  : list channels from the device, select one for training.
-    Tab 2 — Training: collect frames from the selected channel, train locally.
-    Tab 3 — Deployen: adjust threshold, upload the trained model to the device.
+    Tab 1 — Frames & Training: download buffered frames via GET /api/frames,
+                               train an AnomalyDetector locally.
+    Tab 2 — Deployen:          hot-swap the .pth model via POST /api/deploy.
     """
 
     def __init__(self, device: dict, parent=None) -> None:
         super().__init__(parent)
-        self._device = device          # {"name": str, "url": str, "api_key": str}
+        self._device     = device
         self._device_url = device.get("url", "").rstrip("/")
-        self._api_key = device.get("api_key", "")
-        self._selected_channel_id: Optional[int] = None
-        self._detector = None          # AnomalyDetector, created lazily
-        self._collect_thread: Optional[_FrameCollectThread] = None
+        self._api_key    = device.get("api_key", "")
+        self._detector   = None
+        self._dl_thread: Optional[_FrameDownloadThread] = None
         self._train_thread: Optional[_LocalTrainThread] = None
-        self._frame_timer = QTimer(self)
-        self._frame_timer.setInterval(500)
-        self._frame_timer.timeout.connect(self._refresh_preview)
         self._trained_threshold: float = 0.0
 
         from utils.i18n import tr
-        self.setWindowTitle(tr("fleet.remote_train_dlg", device=device.get('name', '')))
-        self.setMinimumSize(520, 520)
+        self.setWindowTitle(tr("fleet.remote_train_dlg", device=device.get("name", "")))
+        self.setMinimumSize(480, 460)
         self._build_ui()
+        self._check_device_status()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -224,85 +221,50 @@ class _RemoteTrainDialog(QDialog):
         root = QVBoxLayout(self)
         self._tabs = QTabWidget()
         root.addWidget(self._tabs)
-
-        self._build_tab_channels()
-        self._build_tab_training()
+        self._build_tab_frames()
         self._build_tab_deploy()
-
         self._tabs.setTabEnabled(1, False)
-        self._tabs.setTabEnabled(2, False)
 
-    def _build_tab_channels(self) -> None:
+    def _build_tab_frames(self) -> None:
+        from utils.i18n import tr
         tab = QWidget()
         lay = QVBoxLayout(tab)
 
-        info = QLabel(f"Gerät: <b>{self._device_url}</b>")
-        info.setStyleSheet("color: #8B949E; font-size: 11px;")
-        lay.addWidget(info)
+        self._status_label = QLabel("Verbinde mit Gerät…")
+        self._status_label.setStyleSheet("color: #8B949E; font-size: 11px;")
+        self._status_label.setWordWrap(True)
+        lay.addWidget(self._status_label)
 
-        self._ch_table = QTableWidget(0, 4)
-        self._ch_table.setHorizontalHeaderLabels(["Kanal-ID", "Kamera", "ROI", "Modell"])
-        self._ch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self._ch_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._ch_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._ch_table.setStyleSheet(
-            "QTableWidget { background: #0D1117; color: #E6EDF3; border: 1px solid #30363D; }"
-            "QHeaderView::section { background: #161B22; color: #8B949E; border: 1px solid #21262D; padding: 3px; }"
-        )
-        lay.addWidget(self._ch_table)
+        dl_grp = QGroupBox("Frames herunterladen")
+        dl_lay = QVBoxLayout(dl_grp)
 
-        # Preview label for the hovered/selected channel
-        self._ch_preview = QLabel("Kein Kanal ausgewählt")
-        self._ch_preview.setAlignment(Qt.AlignCenter)
-        self._ch_preview.setMinimumHeight(120)
-        self._ch_preview.setStyleSheet("background: #161B22; border: 1px solid #30363D; color: #545D68;")
-        lay.addWidget(self._ch_preview)
+        cnt_row = QHBoxLayout()
+        cnt_row.addWidget(QLabel("Anzahl:"))
+        self._frame_count_spin = QSpinBox()
+        self._frame_count_spin.setRange(30, 500)
+        self._frame_count_spin.setValue(150)
+        cnt_row.addWidget(self._frame_count_spin)
+        cnt_row.addStretch()
+        dl_lay.addLayout(cnt_row)
 
-        btn_row = QHBoxLayout()
-        from utils.i18n import tr
-        refresh_btn = QPushButton(tr("common.refresh"))
-        refresh_btn.clicked.connect(self._load_channels)
-        btn_row.addWidget(refresh_btn)
+        self._dl_progress = QProgressBar()
+        self._dl_progress.setRange(0, 100)
+        self._dl_progress.setValue(0)
+        dl_lay.addWidget(self._dl_progress)
 
-        self._select_ch_btn = QPushButton("Kanal auswählen → Training")
-        self._select_ch_btn.setStyleSheet("background: #1C6EA4; color: white; font-weight: bold;")
-        self._select_ch_btn.clicked.connect(self._select_channel)
-        btn_row.addWidget(self._select_ch_btn)
-        lay.addLayout(btn_row)
+        self._dl_label = QLabel("Bereit")
+        self._dl_label.setStyleSheet("color: #8B949E; font-size: 11px;")
+        dl_lay.addWidget(self._dl_label)
 
-        self._tabs.addTab(tab, tr("fleet.tab.channels"))
-        self._load_channels()
-
-    def _build_tab_training(self) -> None:
-        tab = QWidget()
-        lay = QVBoxLayout(tab)
-
-        self._train_preview = QLabel("Kanal-Vorschau")
-        self._train_preview.setAlignment(Qt.AlignCenter)
-        self._train_preview.setMinimumHeight(140)
-        self._train_preview.setStyleSheet("background: #161B22; border: 1px solid #30363D; color: #545D68;")
-        lay.addWidget(self._train_preview)
-
-        collect_grp = QGroupBox("Frames sammeln")
-        collect_lay = QVBoxLayout(collect_grp)
-        self._collect_progress = QProgressBar()
-        self._collect_progress.setRange(0, 150)
-        self._collect_progress.setValue(0)
-        collect_lay.addWidget(self._collect_progress)
-        self._collect_label = QLabel("0 / 150 Frames")
-        self._collect_label.setStyleSheet("color: #8B949E; font-size: 11px;")
-        collect_lay.addWidget(self._collect_label)
-        cb_row = QHBoxLayout()
-        from utils.i18n import tr
-        self._collect_btn = QPushButton(tr("fleet.collect_btn"))
-        self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
-        self._collect_btn.clicked.connect(self._toggle_collect)
-        cb_row.addWidget(self._collect_btn)
-        collect_lay.addLayout(cb_row)
-        lay.addWidget(collect_grp)
+        self._dl_btn = QPushButton(tr("fleet.collect_btn"))
+        self._dl_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
+        self._dl_btn.clicked.connect(self._start_download)
+        dl_lay.addWidget(self._dl_btn)
+        lay.addWidget(dl_grp)
 
         train_grp = QGroupBox("Modell trainieren")
         train_lay = QVBoxLayout(train_grp)
+
         ep_row = QHBoxLayout()
         ep_row.addWidget(QLabel("Epochen:"))
         self._epoch_spin = QSpinBox()
@@ -311,13 +273,16 @@ class _RemoteTrainDialog(QDialog):
         ep_row.addWidget(self._epoch_spin)
         ep_row.addStretch()
         train_lay.addLayout(ep_row)
+
         self._train_progress = QProgressBar()
         self._train_progress.setRange(0, 100)
         self._train_progress.setValue(0)
         train_lay.addWidget(self._train_progress)
+
         self._train_status_label = QLabel("Bereit")
         self._train_status_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         train_lay.addWidget(self._train_status_label)
+
         self._train_btn = QPushButton(tr("fleet.train_btn"))
         self._train_btn.setStyleSheet("background: #1C6EA4; color: white; font-weight: bold;")
         self._train_btn.setEnabled(False)
@@ -328,6 +293,7 @@ class _RemoteTrainDialog(QDialog):
         self._tabs.addTab(tab, tr("fleet.tab.training"))
 
     def _build_tab_deploy(self) -> None:
+        from utils.i18n import tr
         tab = QWidget()
         lay = QVBoxLayout(tab)
 
@@ -346,7 +312,6 @@ class _RemoteTrainDialog(QDialog):
         thr_row.addStretch()
         lay.addLayout(thr_row)
 
-        from utils.i18n import tr
         self._deploy_btn = QPushButton(tr("fleet.deploy_btn"))
         self._deploy_btn.setStyleSheet("background: #1A8754; color: white; font-weight: bold; padding: 8px;")
         self._deploy_btn.setEnabled(False)
@@ -361,138 +326,73 @@ class _RemoteTrainDialog(QDialog):
         lay.addStretch()
         self._tabs.addTab(tab, tr("fleet.tab.deploy"))
 
-    # ── Tab 1: Channels ───────────────────────────────────────────────────────
+    # ── Status check ──────────────────────────────────────────────────────────
 
-    def _load_channels(self) -> None:
-        """Fetch /setup/status from the device and populate the channel table."""
+    def _check_device_status(self) -> None:
+        """Query GET /api/status and show frame_count + model info."""
         try:
-            url = f"{self._device_url}/setup/status"
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(f"{self._device_url}/api/status")
             if self._api_key:
                 req.add_header("X-Api-Key", self._api_key)
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode())
-            channels = data.get("channels", [])
-            self._ch_table.setRowCount(len(channels))
-            for row, ch in enumerate(channels):
-                self._ch_table.setItem(row, 0, QTableWidgetItem(str(ch.get("channel_id", ""))))
-                self._ch_table.setItem(row, 1, QTableWidgetItem(str(ch.get("camera_source", ""))))
-                roi = ch.get("roi")
-                self._ch_table.setItem(row, 2, QTableWidgetItem(str(roi) if roi else "—"))
-                mp = ch.get("model_path", "")
-                self._ch_table.setItem(row, 3, QTableWidgetItem("✓ bereit" if mp else "—"))
+            fc    = data.get("frame_count", 0)
+            model = data.get("model_name", "—")
+            self._status_label.setText(
+                f"Gerät erreichbar  |  {fc} Frames im Puffer  |  Modell: {model}")
+            self._status_label.setStyleSheet("color: #2ECC71; font-size: 11px;")
         except Exception as exc:
-            self._ch_table.setRowCount(0)
-            QMessageBox.warning(self, "Verbindungsfehler",
-                                f"Kanäle konnten nicht geladen werden:\n{exc}")
+            self._status_label.setText(f"Gerät nicht erreichbar: {exc}")
+            self._status_label.setStyleSheet("color: #E74C3C; font-size: 11px;")
 
-    def _select_channel(self) -> None:
-        """Enable the Training tab with the channel selected in the table."""
-        from utils.i18n import tr
-        row = self._ch_table.currentRow()
-        if row < 0:
-            QMessageBox.information(self, tr("common.info"), tr("fleet.no_channel_msg"))
-            return
-        item = self._ch_table.item(row, 0)
-        if item is None:
-            return
-        self._selected_channel_id = int(item.text())
-        self._tabs.setTabEnabled(1, True)
-        self._tabs.setCurrentIndex(1)
-        self._frame_timer.start()
+    # ── Tab 1: Frames & Training ───────────────────────────────────────────────
 
-    # ── Tab 2: Training ───────────────────────────────────────────────────────
-
-    def _refresh_preview(self) -> None:
-        """Poll a JPEG frame from the selected channel and display it."""
-        if self._selected_channel_id is None:
-            return
-        try:
-            url = f"{self._device_url}/setup/channels/{self._selected_channel_id}/frame.jpg"
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=2) as resp:
-                if resp.status == 204:
-                    return
-                data = resp.read()
-            pixmap = QPixmap()
-            pixmap.loadFromData(data)
-            if not pixmap.isNull():
-                scaled = pixmap.scaled(
-                    self._train_preview.width(),
-                    self._train_preview.height(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation,
-                )
-                self._train_preview.setPixmap(scaled)
-                self._ch_preview.setPixmap(
-                    pixmap.scaled(
-                        self._ch_preview.width(),
-                        self._ch_preview.height(),
-                        Qt.KeepAspectRatio,
-                        Qt.SmoothTransformation,
-                    )
-                )
-        except Exception:
-            pass
-
-    def _toggle_collect(self) -> None:
-        """Start or stop frame collection."""
-        if self._collect_thread and self._collect_thread.isRunning():
-            self._collect_thread.stop()
-            self._collect_thread.wait(2000)
-            from utils.i18n import tr
-            self._collect_btn.setText(tr("fleet.collect_btn"))
-            self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
-            if self._detector and hasattr(self._detector, "n_collected"):
-                n = self._detector.n_collected()
-                if n >= 30:
-                    self._train_btn.setEnabled(True)
+    def _start_download(self) -> None:
+        if self._dl_thread and self._dl_thread.isRunning():
             return
 
-        # Lazy-create detector
         if self._detector is None:
             try:
                 from core.anomaly_detector import AnomalyDetector
                 self._detector = AnomalyDetector()
             except Exception as exc:
-                QMessageBox.critical(self, "Fehler", f"AnomalyDetector konnte nicht erstellt werden:\n{exc}")
+                QMessageBox.critical(self, "Fehler",
+                                     f"AnomalyDetector konnte nicht erstellt werden:\n{exc}")
                 return
 
-        self._collect_thread = _FrameCollectThread(
+        count = self._frame_count_spin.value()
+        self._dl_btn.setEnabled(False)
+        self._dl_progress.setValue(0)
+        self._dl_label.setText("Lade Frames herunter…")
+
+        self._dl_thread = _FrameDownloadThread(
             device_url=self._device_url,
-            channel_id=self._selected_channel_id,
+            api_key=self._api_key,
+            count=count,
             detector=self._detector,
             parent=self,
         )
-        self._collect_thread.collected.connect(self._on_frame_collected)
-        self._collect_thread.error.connect(self._on_collect_error)
-        self._collect_thread.start()
-        from utils.i18n import tr
-        self._collect_btn.setText(tr("fleet.collect_stop_btn"))
-        self._collect_btn.setStyleSheet("background: #8B2222; color: white; font-weight: bold;")
+        self._dl_thread.progress.connect(self._on_dl_progress)
+        self._dl_thread.finished.connect(self._on_dl_finished)
+        self._dl_thread.error.connect(self._on_dl_error)
+        self._dl_thread.start()
 
-    def _on_frame_collected(self, count: int) -> None:
-        """Update the progress bar as frames arrive."""
-        target = self._collect_progress.maximum()
-        self._collect_progress.setValue(min(count, target))
-        self._collect_label.setText(f"{count} / {target} Frames")
+    def _on_dl_progress(self, pct: int) -> None:
+        self._dl_progress.setValue(pct)
+
+    def _on_dl_finished(self, count: int) -> None:
+        self._dl_label.setText(f"{count} Frames geladen.")
+        self._dl_btn.setEnabled(True)
         if count >= 30:
             self._train_btn.setEnabled(True)
-        if count >= target:
-            # Auto-stop
-            if self._collect_thread and self._collect_thread.isRunning():
-                self._collect_thread.stop()
-            from utils.i18n import tr
-            self._collect_btn.setText(tr("fleet.collect_btn"))
-            self._collect_btn.setStyleSheet("background: #238636; color: white; font-weight: bold;")
+            self._train_status_label.setText(f"{count} Frames bereit — Training möglich.")
 
-    def _on_collect_error(self, msg: str) -> None:
-        self._train_status_label.setText(f"Sammel-Fehler: {msg}")
+    def _on_dl_error(self, msg: str) -> None:
+        self._dl_label.setText(f"Fehler: {msg}")
+        self._dl_btn.setEnabled(True)
 
     def _start_training(self) -> None:
-        """Launch the local training thread."""
         if self._detector is None:
-            QMessageBox.warning(self, "Kein Detector", "Zuerst Frames sammeln.")
             return
         epochs = self._epoch_spin.value()
         self._train_btn.setEnabled(False)
@@ -511,37 +411,31 @@ class _RemoteTrainDialog(QDialog):
     def _on_train_finished(self, threshold: float) -> None:
         self._trained_threshold = threshold
         self._train_progress.setValue(100)
-        self._train_status_label.setText(f"Training abgeschlossen. Schwellwert: {threshold:.6f}")
-        # Enable deploy tab
+        self._train_status_label.setText(
+            f"Training abgeschlossen. Schwellwert: {threshold:.6f}")
         self._thr_spin.setValue(threshold)
-        self._deploy_info.setText(
-            f"Modell trainiert mit {self._collect_progress.value()} Frames.\n"
-            f"Auto-Schwellwert: {threshold:.6f}"
-        )
+        self._deploy_info.setText(f"Modell trainiert.\nAuto-Schwellwert: {threshold:.6f}")
         self._deploy_btn.setEnabled(True)
-        self._tabs.setTabEnabled(2, True)
-        self._tabs.setCurrentIndex(2)
+        self._tabs.setTabEnabled(1, True)
+        self._tabs.setCurrentIndex(1)
 
     def _on_train_error(self, msg: str) -> None:
         self._train_btn.setEnabled(True)
         self._train_status_label.setText(f"Fehler: {msg}")
         QMessageBox.critical(self, "Trainingsfehler", msg)
 
-    # ── Tab 3: Deploy ─────────────────────────────────────────────────────────
+    # ── Tab 2: Deploy ─────────────────────────────────────────────────────────
 
     def _deploy_model(self) -> None:
-        """Save the model to a temp file and POST it to the device."""
+        """Save model to a temp file and POST to POST /api/deploy (hot-swap)."""
         if self._detector is None:
             return
         import tempfile, os
         try:
             with tempfile.NamedTemporaryFile(suffix=".pth", delete=False) as tmp:
                 tmp_path = tmp.name
-
-            # Apply adjusted threshold before saving
             self._detector.threshold = self._thr_spin.value()
             self._detector.save(tmp_path)
-
             with open(tmp_path, "rb") as fh:
                 model_data = fh.read()
             os.unlink(tmp_path)
@@ -550,7 +444,6 @@ class _RemoteTrainDialog(QDialog):
             self._deploy_result.setStyleSheet("color: #E74C3C;")
             return
 
-        # Build multipart/form-data body
         boundary = "PictureStudioBoundary42"
         body = (
             f"--{boundary}\r\n"
@@ -559,8 +452,8 @@ class _RemoteTrainDialog(QDialog):
         ).encode() + model_data + f"\r\n--{boundary}--\r\n".encode()
 
         try:
-            url = f"{self._device_url}/setup/channels/{self._selected_channel_id}/deploy"
-            req = urllib.request.Request(url, data=body, method="POST")
+            req = urllib.request.Request(
+                f"{self._device_url}/api/deploy", data=body, method="POST")
             req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
             req.add_header("Content-Length", str(len(body)))
             if self._api_key:
@@ -569,8 +462,7 @@ class _RemoteTrainDialog(QDialog):
                 result = json.loads(resp.read().decode())
             from utils.i18n import tr
             self._deploy_result.setText(
-                tr("fleet.deploy_success", path=result.get('model_path', '?'))
-            )
+                tr("fleet.deploy_success", path=result.get("model_path", "?")))
             self._deploy_result.setStyleSheet("color: #2ECC71;")
             self._deploy_btn.setEnabled(False)
         except Exception as exc:
@@ -579,11 +471,9 @@ class _RemoteTrainDialog(QDialog):
             self._deploy_result.setStyleSheet("color: #E74C3C;")
 
     def closeEvent(self, event) -> None:
-        """Stop background threads when dialog is closed."""
-        self._frame_timer.stop()
-        if self._collect_thread and self._collect_thread.isRunning():
-            self._collect_thread.stop()
-            self._collect_thread.wait(1000)
+        if self._dl_thread and self._dl_thread.isRunning():
+            self._dl_thread.terminate()
+            self._dl_thread.wait(1000)
         if self._train_thread and self._train_thread.isRunning():
             self._train_thread.terminate()
         super().closeEvent(event)

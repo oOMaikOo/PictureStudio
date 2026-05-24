@@ -864,10 +864,10 @@ TOUR_STEPS = {
          "Klicke '+ Gerät hinzufügen'.\n\n"
          "Name: frei wählbar\n"
          "URL: Basis-URL des monitor.py-Servers\n"
-         "z. B. http://192.168.1.100:8765\n"
+         "z. B. http://192.168.1.100:8766\n"
          "API-Key: wenn --api-key gesetzt\n\n"
          "Auf dem Gerät muss laufen:\n"
-         "python monitor.py --api-port 8765",
+         "python monitor.py --api-port 8766",
          "+ Gerät hinzufügen"),
         ("Status & Auto-Refresh",
          "'Alle aktualisieren' → einmalige Abfrage\n\n"
@@ -877,6 +877,17 @@ TOUR_STEPS = {
          "Web-Dashboard des Geräts im Browser.\n\n"
          "Gerätliste wird in QSettings gespeichert.",
          "Alle aktualisieren"),
+        ("Remote-Training & Hot-Swap Deploy",
+         "Klicke 'Training' in der Aktionen-Spalte.\n\n"
+         "Tab 1 — Frames & Training:\n"
+         "• Gerätestatus prüfen (frame_count)\n"
+         "• Frames per GET /api/frames herunterladen\n"
+         "• Modell lokal trainieren\n\n"
+         "Tab 2 — Deployen:\n"
+         "• Schwellwert anpassen\n"
+         "• Modell per POST /api/deploy hochladen\n"
+         "• Daemon tauscht Modell ohne Neustart",
+         "Training"),
     ],
 
     15: [  # Objekterkennung

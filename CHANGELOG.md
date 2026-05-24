@@ -4,6 +4,20 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.5.1] – 2026-05-24
+
+### Changed
+
+- **Fleet-Workflow vereinfacht** — `_RemoteTrainDialog` in `gui/pages/fleet_page.py` auf 2 Tabs reduziert (war 3). Kanal-Auswahl entfernt; Dialog öffnet direkt mit Status-Check (`GET /api/status`).
+- **Frame-Download statt JPEG-Polling** — `_FrameCollectThread` (150 Einzel-Requests) ersetzt durch `_FrameDownloadThread`: lädt alle Frames in einem einzigen `GET /api/frames?n=N`-Request als ZIP herunter, entpackt sie lokal und füttert den `AnomalyDetector`.
+- **Unified API-Port** — `monitor.py` REST-API auf Port **8766** (default), kein separater Setup-Port für den Deploy-Workflow mehr nötig.
+- **Hot-Swap Model Deploy** — `POST /api/deploy` (multipart) nimmt das `.pth`-Modell entgegen und setzt `pending_model_path`; der Haupt-Loop lädt das Modell im laufenden Betrieb nach (kein Neustart).
+- **Collection-only Mode** — `monitor.py --camera N` ohne `--model` puffert Frames und beantwortet `GET /api/frames`, führt aber kein Scoring aus. PictureStudio trainiert das Modell und deployt es via `POST /api/deploy`.
+- **Frame-Ringpuffer** — `_MonitorState` hält bis zu 200 JPEG-komprimierte Frames (~2 fps), die über `GET /api/frames` abrufbar sind. `GET /api/status` liefert jetzt `frame_count` und `model_name`.
+- **ThreadingHTTPServer** — beide HTTP-Server (`_MonitorApiServer`, `_SetupApiServer`) nutzen jetzt `ThreadingHTTPServer` statt `HTTPServer` — parallele Requests blockieren sich nicht mehr.
+
+---
+
 ## [2.5.0] – 2026-05-24
 
 ### Added
