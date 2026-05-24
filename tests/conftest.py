@@ -11,6 +11,11 @@ import pytest
 # Ensure project root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Initialise i18n once per session so tr() returns real strings (not raw keys).
+# Tests were written against German strings, so we use "de".
+from utils.i18n import init_i18n
+init_i18n("de")
+
 
 @pytest.fixture
 def tmp_dir():
