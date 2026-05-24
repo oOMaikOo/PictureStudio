@@ -10,11 +10,11 @@ STRINGS: dict = {
     "nav.training":         "Training",
     "nav.models":           "Modelle",
     "nav.inference":        "Klassifikation",
-    "nav.batch":            "Batch",
+    "nav.batch":            "Batch-Inferenz",
     "nav.export":           "Export",
     "nav.settings":         "Einstellungen",
     "nav.clustering":       "Clustering",
-    "nav.dataset":          "Datensatz",
+    "nav.dataset":          "Datensatz-Stats",
     "nav.objectdetection":  "Objekterkennung",
     "nav.datadrift":        "Data Drift",
     "nav.camera":           "Live & Anomalie",
@@ -25,6 +25,11 @@ STRINGS: dict = {
     "sidebar.help_btn":     "?  Hilfe (F1)",
     "sidebar.badge.image":  "📸 Bildprojekt",
     "sidebar.badge.video":  "🎬 Videoprojekt",
+    # Sidebar section headers
+    "sidebar.section.workflow": "Workflow",
+    "sidebar.section.analyse":  "Analyse & Tools",
+    "sidebar.section.tools":    "Tools",
+    "sidebar.section.system":   "System",
 
     # Menüs
     "menu.file":                "Datei",

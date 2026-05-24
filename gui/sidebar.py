@@ -1,11 +1,12 @@
 """
 Navigation sidebar with icon + text buttons.
 Supports two page configurations (image / video) and a locked state.
+Section headers use stack_idx=None as a sentinel value.
 """
 import platform
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFrame
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QFont
 
@@ -19,34 +20,41 @@ def _ui_font(size: int = 11) -> QFont:
     return f
 
 
-# (tr-key, icon, stack_idx) — labels are translation keys, resolved at button-build time
-_IMAGE_PAGES: List[Tuple[str, str, int]] = [
+# (tr-key, icon, stack_idx) — labels are translation keys, resolved at button-build time.
+# stack_idx=None marks a section header (no button rendered, no entry in self._buttons).
+_IMAGE_PAGES: List[Tuple[str, str, Optional[int]]] = [
+    ("sidebar.section.workflow",    "",   None),
     ("nav.dashboard",       "🏠", 0),
     ("nav.data",            "📁", 1),
     ("nav.labeling",        "🏷", 2),
     ("nav.training",        "🧠", 3),
     ("nav.models",          "📊", 4),
     ("nav.inference",       "🔍", 5),
+    ("sidebar.section.analyse",     "",   None),
     ("nav.batch",           "📦", 9),
-    ("nav.export",          "📤", 6),
-    ("nav.settings",        "⚙",  7),
+    ("nav.objectdetection", "🎯", 15),
     ("nav.clustering",      "🔬", 11),
     ("nav.dataset",         "📈", 12),
-    ("nav.objectdetection", "🎯", 15),
     ("nav.datadrift",       "📉", 16),
+    ("sidebar.section.system",      "",   None),
+    ("nav.export",          "📤", 6),
+    ("nav.settings",        "⚙",  7),
 ]
 
-_VIDEO_PAGES: List[Tuple[str, str, int]] = [
+_VIDEO_PAGES: List[Tuple[str, str, Optional[int]]] = [
+    ("sidebar.section.workflow",    "",   None),
     ("nav.dashboard",      "🏠", 0),
     ("nav.data",           "📁", 1),
     ("nav.camera",         "🎥", 8),
     ("nav.multicamera",    "📹", 10),
+    ("sidebar.section.tools",       "",   None),
     ("nav.videoannotation","🎬", 13),
     ("nav.fleet",          "🌐", 14),
+    ("nav.clustering",     "🔬", 11),
+    ("sidebar.section.system",      "",   None),
     ("nav.models",         "📊", 4),
     ("nav.export",         "📤", 6),
     ("nav.settings",       "⚙",  7),
-    ("nav.clustering",     "🔬", 11),
 ]
 
 _BTN_STYLE = """
@@ -60,7 +68,7 @@ _BTN_STYLE = """
         font-size: 12px;
     }
     QPushButton:hover:enabled {
-        background: #21262D;
+        background: #3D4657;
         color: #E6EDF3;
     }
     QPushButton:checked {
@@ -69,7 +77,7 @@ _BTN_STYLE = """
         font-weight: bold;
     }
     QPushButton:disabled {
-        color: #30363D;
+        color: #4B5465;
         background: transparent;
     }
 """
@@ -111,7 +119,7 @@ class Sidebar(QWidget):
 
         title_area = QWidget()
         title_area.setStyleSheet(
-            "QWidget { border-bottom: 1px solid #30363D; padding-bottom: 8px; }"
+            "QWidget { border-bottom: 1px solid #3A4252; padding-bottom: 8px; }"
         )
         title_vl = QVBoxLayout(title_area)
         title_vl.setContentsMargins(4, 8, 4, 10)
@@ -185,7 +193,6 @@ class Sidebar(QWidget):
         self._layout.addWidget(ver_lbl)
 
     def _rebuild_buttons(self) -> None:
-        # Remove and delete all existing nav buttons
         while self._btn_layout.count():
             item = self._btn_layout.takeAt(0)
             if item.widget():
@@ -193,10 +200,32 @@ class Sidebar(QWidget):
         self._buttons.clear()
 
         from utils.i18n import tr
+        first_section = True
         for label_key, icon, stack_idx in self._page_config:
+            if stack_idx is None:
+                # Section header: small-caps label + thin separator
+                if not first_section:
+                    spacer = QWidget()
+                    spacer.setFixedHeight(4)
+                    spacer.setStyleSheet("background: transparent;")
+                    self._btn_layout.addWidget(spacer)
+                first_section = False
+                hdr = QLabel(tr(label_key))
+                hdr.setStyleSheet(
+                    "color: #606878; font-size: 9px; font-weight: bold;"
+                    " padding: 6px 12px 1px 12px; background: transparent; border: none;"
+                )
+                self._btn_layout.addWidget(hdr)
+                sep = QFrame()
+                sep.setFrameShape(QFrame.HLine)
+                sep.setFrameShadow(QFrame.Plain)
+                sep.setStyleSheet("QFrame { color: #3A4252; margin: 0 8px; max-height: 1px; }")
+                self._btn_layout.addWidget(sep)
+                continue
+
             btn = QPushButton(f"{icon}  {tr(label_key)}")
             btn.setCheckable(True)
-            btn.setFixedHeight(42)
+            btn.setFixedHeight(38)
             btn.setFont(_ui_font(12))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setStyleSheet(_BTN_STYLE)

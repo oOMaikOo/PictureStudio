@@ -892,7 +892,7 @@ class MainWindow(QMainWindow):
             from gui.theme import apply_dark_theme
             apply_dark_theme(app)
             self.sidebar.setStyleSheet(
-                "QWidget#Sidebar { background: #161B22; border-right: 1px solid #30363D; }"
+                "QWidget#Sidebar { background: #1D2535; border-right: 1px solid #3A4252; }"
             )
         else:
             app.setPalette(app.style().standardPalette())
