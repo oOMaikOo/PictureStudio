@@ -35,7 +35,9 @@ Integration tests (`test_integration.py`) train a small model on 12 synthetic im
 
 ### Project types and sidebar pages
 
-The app has two project types — **Image** (classification) and **Video** (anomaly/stream). The sidebar (`gui/sidebar.py`) switches between `_IMAGE_PAGES` and `_VIDEO_PAGES` lists. `MainWindow` holds a single `QStackedWidget`; sidebar entries are `(label, icon, stack_index)` tuples.
+The app has two project types — **Image** (classification) and **Video** (anomaly/stream). The sidebar (`gui/sidebar.py`) switches between `_IMAGE_PAGES` and `_VIDEO_PAGES` lists. `MainWindow` holds a single `QStackedWidget`; sidebar entries are `(label_key, icon, stack_index)` tuples.
+
+**Section headers** use `stack_idx = None` as a sentinel — these render as a labeled divider and are never added to `self._buttons`, so `set_locked()` / `set_page()` / `_select_by_stack()` work without modification. When adding a new page, add a nav tuple to the correct list; when adding a new section, insert a `("sidebar.section.yourkey", "", None)` tuple and add the key to both locale files.
 
 Stack indices (add new pages here):
 | Index | Page class | Visible in |
@@ -130,6 +132,8 @@ Commands: `SetImageLabelCommand`, `BulkSetImageLabelCommand`, `SetMultiLabelsCom
 
 Button order on `TrainingPage`: ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen.
 
+**DINOv2 frozen backbone** (`models/classifier.py` → `DINOv2Classifier`): ViT-S/14 backbone loaded via `torch.hub`, frozen (`requires_grad=False`), linear head only (384 → N classes). `core/training.py` filters optimizer params with `[p for p in model.parameters() if p.requires_grad]` — this is safe for all architectures since non-frozen models have all params trainable. First use downloads ~85 MB.
+
 SSH remote training: `RemoteTrainingThread` (`core/remote_training.py`) zips images via `core/remote_ssh.py`, uploads, runs `scripts/remote_train.py` (self-contained, no local imports), streams logs, downloads checkpoint.
 
 Hyperparameter search: `HPTWorker` + `HPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `lr`, `batch_size`, `architecture`, `optimizer`. Requires `pip install optuna`.
@@ -146,6 +150,10 @@ Hyperparameter search: `HPTWorker` + `HPTThread` in `core/hyperparameter_tuning.
 - `score_detailed(frame)` → `(score, reconstruction, heatmap_overlay, bbox)`
 
 The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPage`.
+
+**Auto-Retraining** (`CameraPage`): session alarm counter (`_session_alarm_count`) triggers a blue banner after `_RETRAIN_THRESHOLD = 20` alarms. "Jetzt trainieren" navigates to TrainingPage (stack 3); ✕ dismisses and resets the counter.
+
+**Shadow Mode** (`CameraPage`): a second `AnomalyDetector` (`_shadow_detector`) runs in parallel on the same ROI-cropped frame. Divergence (primary alarm ≠ shadow alarm) is shown as `⚡ Divergenz` and logged to `anomaly_events/shadow_divergences.csv`.
 
 **HPT for anomaly**: `AnomalyHPTWorker` + `AnomalyHPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `base_ch` (8/16/32), `lr`, `batch_size`. Triggered from `CameraCaptureDialog`.
 
@@ -209,6 +217,7 @@ Minimal dependencies for monitor-only deployment: `requirements_monitor.txt` (no
 `conftest.py` provides:
 - `sample_project` — 15 fake image paths, 3 labels, 6 ROIs, saved to a temp dir.
 - `sample_images` — 12 real tiny PNG files (requires Pillow; skips otherwise).
+- `init_i18n("de")` is called at module level so `tr()` returns real German strings in all tests. **Do not remove this** — without it, button/label text checks silently compare against raw tr-keys instead of translated strings.
 
 Key facts that have caused test failures:
 - `compute_metrics` in `core/metrics.py` takes **integer** class indices, not label strings.
