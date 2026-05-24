@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source .venv/bin/activate
 python main.py
 
-# Run all tests (~933 pass; integration tests take ~30 s each)
+# Run all tests (~942 pass; integration tests take ~30 s each)
 .venv/bin/python -m pytest tests/ -v
 
 # Skip slow ML integration tests
