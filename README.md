@@ -1,4 +1,4 @@
-# Picture Studio v2.4.0-beta
+# Picture Studio v2.5.0-beta
 
 > ⚠ **Beta-Version** — Funktionsumfang vollständig, noch nicht für den produktiven Einsatz freigegeben.
 
@@ -18,10 +18,10 @@ Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Ano
 | **Pre-Labeling** | Trainiertes Modell schlägt Labels für ungelabelte Bilder vor — konfigurierbarer Konfidenz-Schwellwert, vollständiger Undo/Redo-Support |
 | **Active Learning** | Automatischer Unsicherheits-Scan nach dem Training: findet ungelabelte Bilder mit niedrigster Modell-Confidence, befüllt die AL-Review-Queue — iterativer Label-Kreislauf mit minimalem Aufwand |
 | **ROI-Editor** | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; ROI-Vorlagen; Batch-Übertragung auf alle Bilder; Drag-to-Move |
-| **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0/B3, ConvNeXt-Tiny, SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), Focal Loss, SSH-Ferntraining |
+| **Training** | ResNet-18/50, MobileNetV2, EfficientNet-B0/B3, ConvNeXt-Tiny, **DINOv2 ViT-S/14** (Foundation Model, frozen backbone + linear probe), SimpleCNN; Early Stopping, LR-Scheduler, Mixed Precision, Klassenausgleich (WeightedSampler), Focal Loss, SSH-Ferntraining |
 | **Hyperparameter-Suche** | Optuna-basiert (lr, batch_size, architecture, optimizer), beste Parameter direkt in die UI übernommen, Live-Log-Dialog |
 | **Augmentation-Pipeline** | Rotation, Flip H/V, Helligkeit, Kontrast, Blur, Rauschen; konfigurierbare Kopien pro Bild |
-| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder; Live-Scoring, Heatmap, Bounding Box, Grad-CAM-Overlay, konfigurierbarer Schwellwert, Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm |
+| **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder; Live-Scoring, Heatmap, Bounding Box, Grad-CAM-Overlay, konfigurierbarer Schwellwert, Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm, **Auto-Retraining-Banner** (nach N Alarmen), **Shadow Mode / A/B-Vergleich** (zwei Modelle parallel, Divergenz-CSV) |
 | **Objekterkennung (YOLOv8)** | Bounding-Box-Training auf Projekt-ROIs; Modellgrößen n/s/m/l; Ordner-Inferenz mit konfigurierbarem Konfidenz-Schwellwert; CSV-Export; optional (`pip install ultralytics`) |
 | **Data Drift Detection** | Z-Score-basierter Vergleich von Produktionsbildern zur Trainingsdistribution; Merkmale: Farbe, Schärfe (Laplacian), Kantendichte (Canny), Histogramm; Baseline speicher-/ladbar; farbkodierte Ergebnistabelle |
 | **Kamera-Einstellungen** | Helligkeit, Kontrast, Sättigung, Schärfe, Belichtung live anpassen (USB/UVC); Zurücksetzen auf Neutral |
@@ -55,6 +55,51 @@ Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Ano
 | Lokal / kein Abo | ✅ | ❌ | ❌ | ✅ |
 | Open Source | ✅ | ❌ | ❌ | ❌ |
 | **Preis** | **kostenlos** | ab 249 $/Mo | Enterprise | ~10 k€ |
+
+---
+
+## Neue Features in v2.5.x
+
+### DINOv2 Foundation Model Backbone (v2.5.0)
+
+`DINOv2 ViT-S/14` ist jetzt als Architektur im Training-Dropdown verfügbar:
+
+- **Backbone eingefroren** — die 21 M ViT-Parameter werden nicht trainiert; nur ein linearer Kopf (384 → N Klassen) lernt
+- **Ideal bei wenig Daten** — < 100 Bilder pro Klasse reichen für gute Ergebnisse (klassisches Transfer Learning braucht 200+)
+- **Erster Start** lädt ~85 MB via `torch.hub` (Internet nötig, danach gecacht)
+- Der Optimizer übergibt automatisch nur trainierbare Parameter — kein Extra-Aufwand
+
+```python
+# Training-Seite → Architektur-Dropdown → "dinov2_vits14" wählen → Training starten
+```
+
+---
+
+### Auto-Retraining Loop (v2.5.0)
+
+Die **Live & Anomalie**-Seite zeigt nach 20 geloggten Alarmen automatisch einen Banner:
+
+```
+⚠  20 Alarme in dieser Sitzung  —  Retraining empfohlen
+                                [Jetzt trainieren]  [✕]
+```
+
+- **Jetzt trainieren** navigiert direkt zur Training-Seite
+- **✕** schließt den Banner und setzt den Zähler zurück
+- Schliesst den Lernzyklus: Alarm → neue Daten → Nachtraining → besseres Modell
+
+---
+
+### Shadow Mode / A/B Modellvergleich (v2.5.0)
+
+Ein zweites Anomalie-Modell kann parallel betrieben werden:
+
+1. **Shadow-Modell laden…** (lila Button) → `.pth` wählen
+2. Beide Modelle bewerten jeden Frame gleichzeitig (gleicher ROI-Crop)
+3. **Oranger Balken** zeigt Shadow-Score; **Δ-Anzeige** zeigt Differenz
+4. Bei Meinungsverschiedenheit: **⚡ Divergenz** + Logeintrag in `shadow_divergences.csv`
+
+Anwendungsfall: altes Modell vs. neu trainiertes Modell sicher im Produktivbetrieb vergleichen, bevor umgestellt wird.
 
 ---
 
@@ -527,6 +572,7 @@ python monitor.py --channels kanäle.json
 | EfficientNet-B0 | Kompakt + genau | Standard-Empfehlung |
 | **EfficientNet-B3** ★ | Beste Genauigkeit | Schwierige Aufgaben, GPU vorhanden |
 | **ConvNeXt-Tiny** ★ | Starkes Vortraining | Kleine Datensätze (<200 Bilder) |
+| **DINOv2 ViT-S/14** ★★ | Foundation Model | Sehr wenig Daten (<100/Klasse), Internet beim ersten Start |
 | SimpleCNN | Kein Pretrained | Reine Machbarkeitstests |
 
 ### Hyperparameter-Empfehlungen
@@ -603,6 +649,7 @@ python monitor.py --channels kanäle.json
 | `efficientnet_b0` | EfficientNet-B0 | ~77 % | Gutes Verhältnis |
 | `efficientnet_b3` | EfficientNet-B3 ★ | ~82 % | Beste Genauigkeit |
 | `convnext_tiny` | ConvNeXt-Tiny ★ | ~82 % | Starkes Vortraining |
+| `dinov2_vits14` | DINOv2 ViT-S/14 ★★ | DINO-pretrained | Foundation Model, Linear Probe, ideal < 100 Bilder/Klasse |
 | `simple_cnn` | Eigenes 4-Block-CNN | — | Tests ohne GPU |
 
 ---
@@ -670,7 +717,7 @@ Picture/
 │   └── report.py           # HTML-Trainingsbericht
 │
 ├── models/
-│   └── classifier.py       # Modell-Factory (7 Architekturen), Checkpoint-I/O
+│   └── classifier.py       # Modell-Factory (8 Architekturen inkl. DINOv2), Checkpoint-I/O
 │
 ├── api/
 │   └── rest_server.py      # REST-API (stdlib http.server)
@@ -740,7 +787,7 @@ Picture/
 ## Tests ausführen
 
 ```bash
-# Alle Tests (746 Tests, ~90 s)
+# Alle Tests (933 Tests, ~210 s)
 .venv/bin/python -m pytest tests/ -v
 
 # Nur Unit-Tests (schnell, < 5 s)

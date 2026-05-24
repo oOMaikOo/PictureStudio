@@ -137,8 +137,10 @@ _IMAGE_STEPS = [
             "• Die Standardeinstellungen sind für den Anfang optimal\n"
             "• Klicke 'Training starten'\n"
             "• Das Training dauert je nach Datenmenge 1–15 Minuten\n\n"
-            "Tipp: Mit 'EfficientNet-B0' startest du schnell, "
-            "'ResNet-50' liefert oft bessere Ergebnisse."
+            "Architektur-Empfehlung:\n"
+            "  EfficientNet-B3 ★ — bestes Ergebnis bei ausreichend Daten\n"
+            "  DINOv2 ★★ — Foundation Model, ideal mit wenig Bildern\n"
+            "              (< 100 pro Klasse, erster Start lädt ~85 MB)"
         ),
         "title_en":  "Step 4 — Train a Model",
         "desc_en": (
@@ -147,8 +149,10 @@ _IMAGE_STEPS = [
             "• Default settings are fine for a first run\n"
             "• Click 'Start Training'\n"
             "• Training takes 1–15 minutes depending on dataset size\n\n"
-            "Tip: 'EfficientNet-B0' is fast to start, "
-            "'ResNet-50' often gives better accuracy."
+            "Architecture recommendation:\n"
+            "  EfficientNet-B3 ★ — best accuracy with enough data\n"
+            "  DINOv2 ★★ — Foundation Model, ideal for few images\n"
+            "               (< 100 per class, first run downloads ~85 MB)"
         ),
         "action_de":  "→ Zum Training",
         "action_en":  "→ Go to Training",

@@ -4,6 +4,31 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [2.5.0] – 2026-05-24
+
+### Added
+
+- **DINOv2 Foundation Model Backbone** — `models/classifier.py`: `DINOv2Classifier`-Klasse lädt `dinov2_vits14` via `torch.hub`. Backbone (ViT-S/14, 21 M Parameter) wird eingefroren (`requires_grad=False`); nur der lineare Kopf (384 → N Klassen) trainiert. Ideal für < 100 Bilder pro Klasse — kein vollständiges Retraining nötig. Erste Nutzung lädt ~85 MB (gecacht). Robuste Fehlermeldung bei fehlendem Internet.
+- **`get_available_models()` erweitert** — `"dinov2_vits14"` erscheint automatisch im Training-Dropdown der UI.
+- **Optimizer: nur trainierbare Parameter** — `core/training.py`: Der Optimizer erhält jetzt `[p for p in model.parameters() if p.requires_grad]` statt `model.parameters()`. Für DINOv2 werden damit nur die 197k Kopf-Parameter an Adam übergeben; der Log zeigt "N von M Parametern trainierbar (Backbone eingefroren)". Alle anderen Architekturen verhalten sich unverändert.
+- **Auto-Retraining Loop** — `gui/pages/camera_page.py`: Nach `_RETRAIN_THRESHOLD` (Standard: 20) geloggten Alarm-Events erscheint ein blauer Banner: `⚠ N Alarme — Retraining empfohlen`. Schaltfläche **Jetzt trainieren** navigiert direkt zur Training-Seite (Stack-Index 3); **✕** schließt den Banner und setzt den Alarm-Zähler zurück. Schließt den Lernzyklus ohne manuelle Zählung.
+- **Shadow Mode / A/B Modellvergleich** — `gui/pages/camera_page.py`: Zweites Anomalie-Modell parallel betreiben. Neuer **Shadow-Modell laden…** Button (lila) unter der Haupt-Modell-Zeile. Im Score-Panel: orangefarbener Sekundär-Balken + Shadow-Score-Label + Δ-Divergenz-Anzeige. Bei Meinungsverschiedenheit (Alarm vs. Normal) wird `⚡ Divergenz` angezeigt und der Event in `anomaly_events/shadow_divergences.csv` geloggt. Beiden Detektoren wird derselbe ROI-gecropte Frame übergeben (fairer Vergleich).
+- **Architektur-Tooltip** — `gui/pages/training_page.py`: DINOv2-Eintrag mit Beschreibung und Internet-Hinweis ergänzt.
+
+### Changed
+
+- **Help-Dialog** (`gui/help_dialog.py`): Architektur-Tabelle um `efficientnet_b3`, `convnext_tiny` und `dinov2_vits14` ergänzt. Neuer Abschnitt **Auto-Retraining Loop** und **Shadow Mode / A/B Modellvergleich** in der Kamera-Sektion (Section 10).
+- **Geführte Tour** (`gui/guide_tour.py`): Training-Schritt "Architektur wählen" zeigt DINOv2 und EfficientNet-B3/ConvNeXt-Tiny mit Empfehlungsstern. Neue Tour-Schritte **Auto-Retraining** und **Shadow Mode** in der Kamera-Tour (Section 8).
+- **Quick-Start Wizard** (`gui/quick_start_wizard.py`): Schritt 4 (Modell trainieren) erwähnt DINOv2 als Empfehlung für kleine Datensätze.
+- **README.md**: Neue Feature-Tabellen für v2.5.x, Architektur-Tabellen um DINOv2 ergänzt, Anomalie-Zeile um Auto-Retraining + Shadow Mode erweitert, Test-Anzahl auf 933 korrigiert.
+- `APP_VERSION` → `2.5.0`
+
+### Tests
+
+- Alle 933 bestehenden Tests weiterhin grün (9 pre-existing UI-Failures unverändert).
+
+---
+
 ## [2.3.9] – 2026-05-22
 
 ### Added

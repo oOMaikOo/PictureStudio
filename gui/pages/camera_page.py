@@ -38,6 +38,7 @@ from utils.i18n import tr
 
 _SMOOTH_DEFAULT = 5
 _DEDUP_DEFAULT  = 30   # seconds
+_RETRAIN_THRESHOLD = 20  # logged alarms before auto-retrain banner appears
 
 
 # ── background camera scanner ─────────────────────────────────────────────────
@@ -92,6 +93,14 @@ class CameraPage(QWidget):
         self._log_path: Optional[str] = None
         self._roi: Optional[list] = None  # [x1,y1,x2,y2] normalized, from model metadata
 
+        # USP 2 — auto-retrain suggestion
+        self._session_alarm_count: int = 0
+
+        # USP 3 — shadow / A-B model comparison
+        self._shadow_detector: Optional[AnomalyDetector] = None
+        self._shadow_model_path: Optional[str] = None
+        self._shadow_log_path: Optional[str] = None
+
         self._build_ui()
         self._scan_cameras()
 
@@ -106,6 +115,7 @@ class CameraPage(QWidget):
             )
             os.makedirs(log_dir, exist_ok=True)
             self._log_path = os.path.join(log_dir, "monitoring_events.csv")
+            self._shadow_log_path = os.path.join(log_dir, "shadow_divergences.csv")
             if self._rest_server:
                 self._rest_server.set_event_log_path(self._log_path)
                 self._rest_server.set_alarm_frame_dir(log_dir)
@@ -191,6 +201,34 @@ class CameraPage(QWidget):
 
         root.addLayout(model_row)
 
+        # ── Shadow model row (USP 3) ──────────────────────────────────────────
+        shadow_row = QHBoxLayout()
+        shadow_row.setSpacing(6)
+        shadow_load_btn = QPushButton(tr("camera.shadow_load_btn"))
+        shadow_load_btn.setStyleSheet(
+            "background:#7D3C98;color:white;padding:5px 10px;"
+            "border-radius:4px;font-weight:bold;"
+        )
+        shadow_load_btn.setToolTip(
+            "Zweites Anomalie-Modell (Shadow) laden.\n"
+            "Beide Modelle laufen parallel — Abweichungen werden geloggt."
+        )
+        shadow_load_btn.clicked.connect(self._load_shadow_model)
+        shadow_row.addWidget(shadow_load_btn)
+
+        self._shadow_lbl = QLabel(tr("camera.shadow_no_model"))
+        self._shadow_lbl.setStyleSheet("color:#7F8C8D;")
+        shadow_row.addWidget(self._shadow_lbl, stretch=1)
+
+        self._shadow_clear_btn = QPushButton("✕")
+        self._shadow_clear_btn.setFixedWidth(28)
+        self._shadow_clear_btn.setEnabled(False)
+        self._shadow_clear_btn.setToolTip("Shadow-Modell entfernen")
+        self._shadow_clear_btn.clicked.connect(self._clear_shadow_model)
+        shadow_row.addWidget(self._shadow_clear_btn)
+
+        root.addLayout(shadow_row)
+
         # ── Camera row ────────────────────────────────────────────────────────
         cam_row = QHBoxLayout()
         cam_row.setSpacing(8)
@@ -239,6 +277,34 @@ class CameraPage(QWidget):
         self._alarm_banner.setVisible(False)
         root.addWidget(self._alarm_banner)
 
+        # ── Retrain suggestion banner (USP 2) ─────────────────────────────────
+        self._retrain_banner = QFrame()
+        self._retrain_banner.setStyleSheet(
+            "QFrame{background:#1A5276;border-radius:4px;}"
+        )
+        rb_lay = QHBoxLayout(self._retrain_banner)
+        rb_lay.setContentsMargins(10, 4, 6, 4)
+        rb_lay.setSpacing(8)
+        self._retrain_lbl = QLabel("")
+        self._retrain_lbl.setStyleSheet("color:white;font-weight:bold;font-size:12px;")
+        rb_lay.addWidget(self._retrain_lbl)
+        rb_lay.addStretch()
+        retrain_go_btn = QPushButton(tr("camera.retrain_go_btn"))
+        retrain_go_btn.setStyleSheet(
+            "QPushButton{background:#2E86C1;color:white;border-radius:4px;"
+            "padding:3px 10px;font-weight:bold;}"
+            "QPushButton:hover{background:#1A5276;}"
+        )
+        retrain_go_btn.clicked.connect(self._on_retrain_suggested)
+        rb_lay.addWidget(retrain_go_btn)
+        retrain_dismiss_btn = QPushButton("✕")
+        retrain_dismiss_btn.setFixedWidth(24)
+        retrain_dismiss_btn.setToolTip("Banner schließen (Zähler zurücksetzen)")
+        retrain_dismiss_btn.clicked.connect(self._dismiss_retrain_banner)
+        rb_lay.addWidget(retrain_dismiss_btn)
+        self._retrain_banner.setVisible(False)
+        root.addWidget(self._retrain_banner)
+
         # ── Main splitter ─────────────────────────────────────────────────────
         splitter = QSplitter(Qt.Horizontal)
 
@@ -276,6 +342,34 @@ class CameraPage(QWidget):
             "border-radius:5px;background:#1A252F;color:#7F8C8D;"
         )
         sg.addWidget(self._score_lbl)
+
+        # Shadow score display (USP 3) — hidden until a shadow model is loaded
+        self._shadow_bar = QProgressBar()
+        self._shadow_bar.setRange(0, 100)
+        self._shadow_bar.setValue(0)
+        self._shadow_bar.setTextVisible(False)
+        self._shadow_bar.setFixedHeight(8)
+        self._shadow_bar.setStyleSheet(
+            "QProgressBar{background:#1A252F;border-radius:5px;}"
+            "QProgressBar::chunk{background:#E67E22;border-radius:5px;}"
+        )
+        self._shadow_bar.setVisible(False)
+        sg.addWidget(self._shadow_bar)
+
+        self._shadow_score_lbl = QLabel("")
+        self._shadow_score_lbl.setAlignment(Qt.AlignCenter)
+        self._shadow_score_lbl.setStyleSheet(
+            "font-size:11px;padding:2px;color:#E67E22;"
+        )
+        self._shadow_score_lbl.setVisible(False)
+        sg.addWidget(self._shadow_score_lbl)
+
+        self._divergence_lbl = QLabel("")
+        self._divergence_lbl.setAlignment(Qt.AlignCenter)
+        self._divergence_lbl.setStyleSheet("font-size:11px;color:#85929E;padding:2px;")
+        self._divergence_lbl.setVisible(False)
+        sg.addWidget(self._divergence_lbl)
+
         lv.addWidget(score_grp)
 
         # Detection controls
@@ -632,6 +726,9 @@ class CameraPage(QWidget):
         self._alarm_banner.setVisible(False)
         self._smooth_buf.clear()
         self._score_history.clear()
+        self._shadow_bar.setValue(0)
+        self._shadow_score_lbl.setText("")
+        self._divergence_lbl.setText("")
         self._status_bar.setText("Bereit")
 
     @Slot(str)
@@ -747,6 +844,11 @@ class CameraPage(QWidget):
                     pass
             self._update_score(score)
 
+            # USP 3 — shadow model comparison (same ROI-cropped input for fair comparison)
+            if self._shadow_detector and self._shadow_detector.trained:
+                shadow_score, _, _, _ = self._shadow_detector.score_detailed(analysis)
+                self._update_shadow_score(score, shadow_score)
+
         # Draw cyan ROI rectangle so the monitored region is always visible
         if self._roi is not None:
             if display is frame:
@@ -835,6 +937,14 @@ class CameraPage(QWidget):
                 plural = "e" if self._event_count != 1 else ""
                 self._event_lbl.setText(f"{self._event_count} Alarm{plural} in dieser Sitzung")
                 self._write_event(score, thr)
+                # USP 2 — auto-retrain suggestion
+                self._session_alarm_count += 1
+                if self._session_alarm_count >= _RETRAIN_THRESHOLD:
+                    self._retrain_lbl.setText(
+                        f"⚠  {self._session_alarm_count} Alarme in dieser Sitzung  —  "
+                        "Retraining empfohlen"
+                    )
+                    self._retrain_banner.setVisible(True)
 
     def _write_event(self, score: float, threshold: float) -> None:
         """
@@ -885,6 +995,110 @@ class CameraPage(QWidget):
                     frame_filename,
                 ])
             self._log_btn.setEnabled(True)
+        except Exception:
+            pass
+
+    # ── USP 2: Auto-retrain suggestion ───────────────────────────────────────
+
+    def _on_retrain_suggested(self) -> None:
+        """Navigate to the Training page and dismiss the retrain banner."""
+        self._dismiss_retrain_banner()
+        mw = self.window()
+        if hasattr(mw, "_switch_page"):
+            mw._switch_page(3)
+
+    def _dismiss_retrain_banner(self) -> None:
+        """Hide the retrain banner and reset the session alarm counter."""
+        self._session_alarm_count = 0
+        self._retrain_banner.setVisible(False)
+
+    # ── USP 3: Shadow model / A-B comparison ─────────────────────────────────
+
+    def _load_shadow_model(self) -> None:
+        """Load a second AnomalyDetector to run in parallel for A-B comparison."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("camera.shadow_load_title"), "", "PyTorch-Modell (*.pth)"
+        )
+        if not path:
+            return
+        try:
+            det = AnomalyDetector()
+            det.load(path)
+        except Exception as exc:
+            QMessageBox.critical(self, tr("common.error"), str(exc))
+            return
+        self._shadow_detector = det
+        self._shadow_model_path = path
+        name = os.path.basename(path)
+        self._shadow_lbl.setText(f"Shadow: {name}  (Thr: {det.threshold:.5f})")
+        self._shadow_lbl.setStyleSheet("color:#E67E22;")
+        self._shadow_clear_btn.setEnabled(True)
+        self._shadow_bar.setVisible(True)
+        self._shadow_score_lbl.setVisible(True)
+        self._divergence_lbl.setVisible(True)
+        self._status_bar.setText(f"Shadow-Modell geladen: {name}")
+
+    def _clear_shadow_model(self) -> None:
+        """Unload the shadow model and hide comparison widgets."""
+        self._shadow_detector = None
+        self._shadow_model_path = None
+        self._shadow_lbl.setText(tr("camera.shadow_no_model"))
+        self._shadow_lbl.setStyleSheet("color:#7F8C8D;")
+        self._shadow_clear_btn.setEnabled(False)
+        self._shadow_bar.setValue(0)
+        self._shadow_bar.setVisible(False)
+        self._shadow_score_lbl.setText("")
+        self._shadow_score_lbl.setVisible(False)
+        self._divergence_lbl.setText("")
+        self._divergence_lbl.setVisible(False)
+
+    def _update_shadow_score(self, primary: float, shadow: float) -> None:
+        """Update the shadow score bar and divergence indicator."""
+        thr = self._thr_spin.value()
+        bar_pct = int(min(shadow / max(3 * thr, 1e-9), 1.0) * 100)
+        self._shadow_bar.setValue(bar_pct)
+        shadow_alarm = shadow > thr
+        bar_color = "#E74C3C" if shadow_alarm else "#E67E22"
+        self._shadow_bar.setStyleSheet(
+            f"QProgressBar{{background:#1A252F;border-radius:5px;}}"
+            f"QProgressBar::chunk{{background:{bar_color};border-radius:5px;}}"
+        )
+        self._shadow_score_lbl.setText(f"Shadow: {shadow:.5f}")
+
+        primary_alarm = primary > thr
+        diff = abs(primary - shadow)
+        if primary_alarm != shadow_alarm:
+            self._divergence_lbl.setText(f"⚡ Divergenz Δ{diff:.5f}")
+            self._divergence_lbl.setStyleSheet(
+                "font-size:11px;color:#E67E22;font-weight:bold;padding:2px;"
+            )
+            self._log_shadow_divergence(primary, shadow, thr)
+        else:
+            self._divergence_lbl.setText(f"Δ{diff:.5f}")
+            self._divergence_lbl.setStyleSheet("font-size:11px;color:#85929E;padding:2px;")
+
+    def _log_shadow_divergence(self, primary: float, shadow: float, thr: float) -> None:
+        """Append a divergence event to the shadow-divergences CSV."""
+        if not self._shadow_log_path:
+            return
+        ts = datetime.now(timezone.utc)
+        write_header = not os.path.exists(self._shadow_log_path)
+        try:
+            with open(self._shadow_log_path, "a", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                if write_header:
+                    w.writerow([
+                        "timestamp_utc", "primary_score", "shadow_score",
+                        "threshold", "primary_model", "shadow_model",
+                    ])
+                w.writerow([
+                    ts.isoformat(),
+                    f"{primary:.6f}",
+                    f"{shadow:.6f}",
+                    f"{thr:.6f}",
+                    os.path.basename(self._model_path) if self._model_path else "",
+                    os.path.basename(self._shadow_model_path) if self._shadow_model_path else "",
+                ])
         except Exception:
             pass
 

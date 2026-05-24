@@ -48,6 +48,9 @@ def create_model(model_type: str, num_classes: int, pretrained: bool = True):
         in_features = model.classifier[2].in_features
         model.classifier[2] = nn.Linear(in_features, num_classes)
 
+    elif model_type == "dinov2_vits14":
+        model = DINOv2Classifier(num_classes)
+
     elif model_type == "simple_cnn":
         model = SimpleCNN(num_classes)
 
@@ -56,6 +59,39 @@ def create_model(model_type: str, num_classes: int, pretrained: bool = True):
 
     log.info("Modell '%s' erstellt mit %d Klassen (pretrained=%s)", model_type, num_classes, pretrained)
     return model
+
+
+class DINOv2Classifier(nn.Module if HAS_TORCH else object):
+    """ViT-S/14 foundation model (frozen) + trainable linear probe head.
+
+    Downloads ~85 MB on first use via torch.hub. Subsequent runs use the cache.
+    Training only updates the linear head — the backbone is always frozen.
+    """
+
+    EMBED_DIM = 384  # ViT-S/14 output dimensionality
+
+    def __init__(self, num_classes: int):
+        super().__init__()
+        try:
+            self.backbone = torch.hub.load(
+                "facebookresearch/dinov2",
+                "dinov2_vits14",
+                pretrained=True,
+                verbose=False,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"DINOv2-Backbone konnte nicht geladen werden: {exc}\n"
+                "Bitte Internetverbindung prüfen (erster Download ~85 MB)."
+            ) from exc
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+        self.head = nn.Linear(self.EMBED_DIM, num_classes)
+
+    def forward(self, x):
+        with torch.no_grad():
+            feats = self.backbone(x)
+        return self.head(feats)
 
 
 class SimpleCNN(nn.Module if HAS_TORCH else object):
@@ -110,5 +146,6 @@ def get_available_models():
         "resnet18", "resnet50", "mobilenet_v2",
         "efficientnet_b0", "efficientnet_b3",
         "convnext_tiny",
+        "dinov2_vits14",
         "simple_cnn",
     ]

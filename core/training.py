@@ -341,14 +341,26 @@ class TrainingWorker:
         opt_name = self.cfg.get("optimizer", "adam").lower()
         wd = self.cfg.get("weight_decay", 1e-4)
 
+        # Only pass parameters that require gradients — frozen backbones (e.g. DINOv2)
+        # set requires_grad=False on the backbone; passing them to the optimizer is
+        # harmless but wastes memory and triggers spurious "no gradients" warnings.
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+        n_trainable = sum(p.numel() for p in trainable_params)
+        n_total = sum(p.numel() for p in model.parameters())
+        if n_trainable < n_total:
+            self._emit_log(
+                f"Foundation-Model: {n_trainable:,} von {n_total:,} Parametern trainierbar "
+                f"(Backbone eingefroren)"
+            )
+
         if opt_name == "adam":
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+            optimizer = torch.optim.Adam(trainable_params, lr=lr, weight_decay=wd)
         elif opt_name == "adamw":
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+            optimizer = torch.optim.AdamW(trainable_params, lr=lr, weight_decay=wd)
         elif opt_name == "sgd":
-            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
+            optimizer = torch.optim.SGD(trainable_params, lr=lr, momentum=0.9, weight_decay=wd)
         else:
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+            optimizer = torch.optim.Adam(trainable_params, lr=lr)
 
         # Scheduler
         sched_name = self.cfg.get("scheduler", "reduce_on_plateau")

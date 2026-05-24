@@ -214,9 +214,13 @@ Gehe zur <b>Export-Seite</b>:<br>
   <tr><td><code>resnet50</code></td><td>ResNet-50</td><td>Höhere Kapazität, braucht mehr Daten (~25 M)</td></tr>
   <tr><td><code>mobilenet_v2</code></td><td>MobileNetV2</td><td>Effizient, gut für CPU-Deployment</td></tr>
   <tr><td><code>efficientnet_b0</code></td><td>EfficientNet-B0</td><td>Bestes Genauigkeits-/Größe-Verhältnis</td></tr>
+  <tr><td><code>efficientnet_b3</code></td><td>EfficientNet-B3 ★</td><td>Beste Genauigkeit (~82 % ImageNet-Acc)</td></tr>
+  <tr><td><code>convnext_tiny</code></td><td>ConvNeXt-Tiny ★</td><td>Starkes Vortraining, gut bei kleinen Datensätzen</td></tr>
+  <tr><td><code>dinov2_vits14</code></td><td>DINOv2 ViT-S/14 ★★</td><td>Foundation Model — Backbone eingefroren, nur Linear Probe trainiert. Ideal bei &lt; 100 Bildern/Klasse. Erster Start lädt ~85 MB (Internet nötig).</td></tr>
   <tr><td><code>simple_cnn</code></td><td>SimpleCNN</td><td>Kein Pretrained, schnell für erste Tests</td></tr>
 </table>
-<div class="tip">Alle Transfer-Learning-Modelle nutzen ImageNet Pretrained Weights.
+<div class="tip">Alle Transfer-Learning-Modelle (außer DINOv2) nutzen ImageNet Pretrained Weights.
+DINOv2 nutzt einen selbst-überwacht vortrainierten ViT — der Backbone wird <b>eingefroren</b>, nur der lineare Klassifikationskopf wird trainiert (<i>Linear Probe</i>).
 Deaktiviere Pretrained nur bei sehr spezifischen Datensätzen (z. B. Röntgenbilder, Mikroskopie).</div>
 """),
 
@@ -896,6 +900,45 @@ Die gleiche logische Reihenfolge gilt auch auf der Bildklassifikations-Trainings
 </ul>
 <p>Beste Parameter werden nach Bestätigung direkt auf den Detektor angewendet;
 gesammelte Frames bleiben erhalten.</p>
+
+<hr>
+<h2>Auto-Retraining — geschlossener Lernzyklus</h2>
+<p>Nach einer konfigurierbaren Anzahl geloggter Alarm-Events (Standard: <b>20</b>) erscheint automatisch ein blauer Banner oberhalb des Live-Bilds:</p>
+<div class="step">
+  <code>⚠ N Alarme in dieser Sitzung — Retraining empfohlen</code><br><br>
+  <b>Jetzt trainieren</b> — navigiert direkt zur Training-Seite, damit die gesammelten Alarm-Frames sofort für ein Nachtraining genutzt werden können.<br>
+  <b>✕</b> — schließt den Banner und setzt den Zähler zurück.
+</div>
+<div class="tip"><b>Typischer Zyklus:</b>
+  Live-Monitoring → Alarme sammeln → Banner erscheint → Alarm-Frames labeln und in Trainingsdaten aufnehmen → Modell nachtrainieren → verbessertes Modell laden → weiter überwachen.
+  Dieser Kreislauf verbessert das Modell kontinuierlich ohne manuelles Tracking des Alarm-Volumens.</div>
+
+<hr>
+<h2>Shadow Mode — A/B Modellvergleich</h2>
+<p>Ein zweites Anomalie-Modell kann parallel zum Haupt-Modell betrieben werden — für risikolosen Rollout-Vergleich oder Validierung eines neuen Modells.</p>
+<div class="step">
+  <b>Shadow-Modell laden…</b> (lila Schaltfläche unter der Haupt-Modell-Zeile)<br>
+  → <code>.pth</code>-Datei wählen → Modell läuft ab sofort parallel.<br><br>
+  <b>Anzeige im Score-Bereich (linkes Panel):</b><br>
+  • <b>Blauer Balken</b> — Haupt-Modell (wie gehabt)<br>
+  • <b>Oranger Balken</b> — Shadow-Modell Score<br>
+  • <b>Δ-Anzeige</b> — Differenz der Scores<br>
+  • <b>⚡ Divergenz</b> — die Modelle sind sich uneinig (eines sieht Anomalie, das andere nicht)<br><br>
+  <b>✕</b> — Shadow-Modell entfernen.
+</div>
+<div class="step"><b>Divergenz-Log</b><br>
+  Jede Divergenz (primary ≠ shadow bei Alarm/Normal-Entscheidung) wird automatisch nach
+  <code>anomaly_events/shadow_divergences.csv</code> geschrieben:<br>
+  <code>timestamp_utc, primary_score, shadow_score, threshold, primary_model, shadow_model</code>
+</div>
+<div class="tip"><b>Anwendungsfälle:</b>
+  <ul>
+    <li>Altes vs. neues Modell parallel testen — sicher ohne Produktionsausfallrisiko</li>
+    <li>Zwei Trainingsläufe mit unterschiedlichen Hyperparametern vergleichen</li>
+    <li>Modell mit und ohne Data-Augmentation evaluieren</li>
+  </ul>
+  Beide Detektoren verwenden denselben ROI-cropped Frame — der Vergleich ist immer fair.
+</div>
 """),
 
 # ── 11  Tastenkürzel ──────────────────────────────────────────────────────────

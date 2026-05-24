@@ -165,11 +165,16 @@ TOUR_STEPS = {
         ("Architektur wählen",
          "Im Architektur-Dropdown:\n"
          "• ResNet-18 — schnell, guter Startpunkt\n"
+         "• EfficientNet-B3 ★ — beste Genauigkeit\n"
+         "• ConvNeXt-Tiny ★ — stark bei wenig Daten\n"
          "• MobileNetV2 — effizient, gut für CPU\n"
-         "• EfficientNet-B0 — beste Genauigkeit\n"
+         "• DINOv2 ViT-S/14 ★★ — Foundation Model\n"
+         "  (Backbone eingefroren, nur Head trainiert;\n"
+         "   ideal mit < 100 Bildern pro Klasse;\n"
+         "   erfordert Internet beim ersten Laden)\n"
          "• SimpleCNN — kein GPU nötig, für Tests\n\n"
-         "Alle außer SimpleCNN nutzen vortrainierte\n"
-         "ImageNet-Gewichte (Transfer Learning).",
+         "Alle außer SimpleCNN/DINOv2 nutzen\n"
+         "ImageNet-Pretrained (Transfer Learning).",
          None),
         ("Hyperparameter einstellen",
          "Empfohlene Startwerte:\n"
@@ -525,6 +530,35 @@ TOUR_STEPS = {
          "Score, Schwellwert, Zeitstempel.\n\n"
          "False Positive: Rechtsklick auf Event\n"
          "in der Ereignis-Liste markieren.",
+         None),
+        ("Auto-Retraining — Lernzyklus schließen",
+         "Nach einer konfigurierbaren Anzahl Alarme\n"
+         "(Standard: 20) erscheint ein blauer Banner:\n\n"
+         "  ⚠ N Alarme — Retraining empfohlen\n\n"
+         "→ 'Jetzt trainieren': Wechselt direkt\n"
+         "  zur Training-Seite (Bildprojekt) mit\n"
+         "  allen Alarm-Frames für ein Nachtraining.\n"
+         "→ '✕': Banner schließen, Zähler reset.\n\n"
+         "Der Zyklus: Kamera läuft → Alarme sammeln\n"
+         "→ Banner → Nachtraining → verbessertes\n"
+         "Modell → weiter überwachen.\n\n"
+         "headless (monitor.py): Flag-Datei wird\n"
+         "angelegt sobald Schwellwert erreicht ist.",
+         None),
+        ("Shadow Mode — A/B Modellvergleich",
+         "'Shadow-Modell laden…' (lila Button) lädt\n"
+         "ein zweites Anomalie-Modell parallel.\n\n"
+         "Beide Modelle bewerten jeden Frame:\n"
+         "• Haupt-Modell: blauer Balken (wie gehabt)\n"
+         "• Shadow-Modell: oranger Balken darunter\n\n"
+         "Divergenz-Anzeige:\n"
+         "• Δ0.00xxx — Differenz der Scores\n"
+         "• ⚡ Divergenz — beide Modelle sind sich\n"
+         "  uneinig (Alarm vs. Normal)\n\n"
+         "Divergenz-Events werden separat geloggt:\n"
+         "anomaly_events/shadow_divergences.csv\n\n"
+         "Anwendungsfall: altes vs. neues Modell\n"
+         "parallel testen bevor dem Rollout.",
          None),
         ("MQTT-Alarm & Event-Log",
          "Bei jedem Alarm:\n\n"

@@ -481,6 +481,12 @@ STRINGS: dict = {
     "camera.video_file_option":     "Video File (MP4, AVI, …)",
     "camera.no_camera":             "No USB camera found",
     "camera.reconnecting":          "Connection lost — reconnecting in 5 s…",
+    # USP 2 — auto-retrain banner
+    "camera.retrain_go_btn":        "Retrain now",
+    # USP 3 — shadow model
+    "camera.shadow_load_btn":       "Load shadow model…",
+    "camera.shadow_no_model":       "No shadow model  –  A/B comparison inactive",
+    "camera.shadow_load_title":     "Load shadow model",
 
     # ------------------------------------------------------------------ Settings Page
     "settings.title":               "Settings",

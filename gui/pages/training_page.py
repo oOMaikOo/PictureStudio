@@ -154,6 +154,8 @@ class TrainingPage(QWidget):
             "• EfficientNet-B3 — deutlich besser als B0, ~82% ImageNet-Acc ★\n"
             "• ConvNeXt-Tiny — modernste CNN-Architektur, ~82% ImageNet-Acc ★\n"
             "  Empfehlung: EfficientNet-B3 oder ConvNeXt-Tiny für beste Ergebnisse\n"
+            "• DINOv2 ViT-S/14 — Foundation Model, Backbone eingefroren (linear probe).\n"
+            "  Erfordert Internet beim ersten Laden (~85 MB Download). ★★ wenig Daten\n"
             "• SimpleCNN — kein Transfer Learning, ideal für Tests"
         )
         form.addRow(tr("training.arch_label"), self.model_combo)
