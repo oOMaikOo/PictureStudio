@@ -4,10 +4,13 @@ duplicate detection, class balance warnings.
 """
 import hashlib
 import json
+import logging
 import os
 import random
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Tuple
+
+log = logging.getLogger("ImageLabelingStudio.dataset")
 
 try:
     import torch

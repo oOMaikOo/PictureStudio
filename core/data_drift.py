@@ -7,11 +7,14 @@ optionally cv2 for edge density. scipy is used for KS test if available.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import pickle
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
+
+log = logging.getLogger("ImageLabelingStudio.data_drift")
 
 try:
     from PIL import Image

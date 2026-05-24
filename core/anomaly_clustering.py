@@ -25,10 +25,13 @@ ClusteringThread  — QThread-Wrapper mit Signalen progress, finished, error.
 from __future__ import annotations
 
 import csv
+import logging
 import os
 from typing import Dict, List, Optional
 
 import numpy as np
+
+log = logging.getLogger("ImageLabelingStudio.anomaly_clustering")
 
 try:
     from PIL import Image as _PILImage
@@ -68,8 +71,8 @@ def _load_image_flat(path: str) -> Optional[np.ndarray]:
             img = _PILImage.open(path).convert("RGB")
             img = img.resize((_THUMB_SIZE, _THUMB_SIZE))
             arr = np.array(img, dtype=np.float32)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Bild konnte nicht geladen werden (%s): %s", path, exc)
 
     if arr is None:
         return None

@@ -14,6 +14,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from typing import Optional
 import time as _time
 
+from utils.logging_utils import get_logger
+
+log = get_logger("ImageLabelingStudio.anomaly_detector")
+
 _IMG = 128  # all frames resized to _IMG × _IMG before encode/decode
 
 
@@ -304,11 +308,13 @@ class AnomalyDetector:
             def _noop_add(model_bytes, custom_opsets):  # noqa: E306
                 try:
                     return _orig(model_bytes, custom_opsets)
-                except Exception:
+                except Exception as exc:
+                    log.debug("onnxscript-Patch übersprungen: %s", exc)
                     return model_bytes  # return raw bytes if onnx package absent
             _pu._add_onnxscript_fn = _noop_add
             _patched = True
-        except Exception:
+        except Exception as exc:
+            log.debug("ONNX-Interna nicht patchbar: %s", exc)
             _patched = False
         try:
             torch.onnx.export(

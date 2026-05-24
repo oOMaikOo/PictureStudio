@@ -2,12 +2,15 @@
 Camera capture backend: USB cameras and IP camera streams via OpenCV.
 """
 import json
+import logging
 import platform
 import subprocess
 import threading
 import time
 from datetime import datetime
 from typing import Union
+
+log = logging.getLogger("ImageLabelingStudio.camera")
 
 import cv2
 import numpy as np
@@ -103,8 +106,8 @@ def _macos_avfoundation_names() -> list[str]:
             names = [l.strip() for l in r.stdout.splitlines() if l.strip()]
             if names:
                 return names
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Swift-Kamera-Auflistung fehlgeschlagen: %s", exc)
 
     # --- system_profiler fallback (ordering may not match OpenCV — best effort) ---
     try:
@@ -114,7 +117,8 @@ def _macos_avfoundation_names() -> list[str]:
         )
         data = json.loads(out.stdout)
         return [cam.get("_name", "") for cam in data.get("SPCameraDataType", [])]
-    except Exception:
+    except Exception as exc:
+        log.debug("system_profiler-Fallback fehlgeschlagen: %s", exc)
         return []
 
 
@@ -153,8 +157,8 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
             res = f" ({w}×{h})" if w > 0 and h > 0 else ""
             label = f"{name}{res}" if name else f"Kamera {i}{res}"
             found.append((i, label))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Kamera-Index %d nicht öffenbar: %s", i, exc)
     return found
 
 

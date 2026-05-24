@@ -5,6 +5,7 @@ Backward-compatible with MVP JSON format.
 import json
 import os
 import shutil
+import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -43,6 +44,7 @@ class Project:
     def __init__(self):
         self.config = ProjectConfig()
         self.project_path: str = ""
+        self._save_lock = threading.Lock()
 
         # Data
         self.images: List[str] = []
@@ -85,42 +87,43 @@ class Project:
         Serialise the project to JSON at *path* (or the existing project_path).
 
         Uses an atomic write (temp file → os.replace) to avoid corrupting an
-        existing file on crash or power loss.
+        existing file on crash or power loss. Thread-safe: concurrent save calls
+        are serialised via _save_lock.
         """
         if path:
             self.project_path = path
         if not self.project_path:
             raise ValueError("Kein Projektpfad gesetzt.")
 
-        self.config.modified_at = datetime.now().isoformat()
-        self.config.version = PROJECT_FORMAT_VERSION
+        with self._save_lock:
+            self.config.modified_at = datetime.now().isoformat()
+            self.config.version = PROJECT_FORMAT_VERSION
 
-        data = {
-            "format_version": PROJECT_FORMAT_VERSION,
-            "config": asdict(self.config),
-            "images": self.images,
-            "labels": self.labels,
-            "image_labels": self.image_labels,
-            "image_multi_labels": self.image_multi_labels,
-            "rois": self.rois,
-            "training_runs": self.training_runs,
-            "current_model_path": self.current_model_path,
-            "training_config": self.training_config,
-            "ssh_config": self.ssh_config,
-            "inference_results": self.inference_results,
-            "dataset_splits": self.dataset_splits,
-            "roi_templates": self.roi_templates,
-            "active_learning_queue": self.active_learning_queue,
-            "image_label_flags": self.image_label_flags,
-        }
+            data = {
+                "format_version": PROJECT_FORMAT_VERSION,
+                "config": asdict(self.config),
+                "images": self.images,
+                "labels": self.labels,
+                "image_labels": self.image_labels,
+                "image_multi_labels": self.image_multi_labels,
+                "rois": self.rois,
+                "training_runs": self.training_runs,
+                "current_model_path": self.current_model_path,
+                "training_config": self.training_config,
+                "ssh_config": self.ssh_config,
+                "inference_results": self.inference_results,
+                "dataset_splits": self.dataset_splits,
+                "roi_templates": self.roi_templates,
+                "active_learning_queue": self.active_learning_queue,
+                "image_label_flags": self.image_label_flags,
+            }
 
-        os.makedirs(os.path.dirname(os.path.abspath(self.project_path)), exist_ok=True)
-        # Write atomically via temp file
-        tmp = self.project_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2, ensure_ascii=False)
-        os.replace(tmp, self.project_path)
-        log.debug("Projekt gespeichert: %s", self.project_path)
+            os.makedirs(os.path.dirname(os.path.abspath(self.project_path)), exist_ok=True)
+            tmp = self.project_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2, ensure_ascii=False)
+            os.replace(tmp, self.project_path)
+            log.debug("Projekt gespeichert: %s", self.project_path)
 
     @classmethod
     def load(cls, path: str) -> "Project":

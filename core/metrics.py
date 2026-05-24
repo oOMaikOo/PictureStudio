@@ -1,7 +1,10 @@
 """
 Extended metrics: accuracy, precision, recall, F1, confusion matrix, ROC/AUC, top-k.
 """
+import logging
 from typing import List, Dict, Optional
+
+log = logging.getLogger("ImageLabelingStudio.metrics")
 
 
 def compute_metrics(
@@ -82,8 +85,8 @@ def compute_metrics(
             roc = _compute_binary_roc_auc(true_labels, [p[1] for p in pred_probs])
             result["roc_auc"] = round(roc, 4)
             result["roc_curve"] = _compute_roc_curve(true_labels, [p[1] for p in pred_probs])
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("ROC-AUC-Berechnung fehlgeschlagen: %s", exc)
 
     # Top-k accuracy (if multi-class, k=3)
     if pred_probs and n > 2:

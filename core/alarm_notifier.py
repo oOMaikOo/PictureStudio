@@ -3,6 +3,7 @@ Alarm notification: send email (SMTP) and/or HTTP webhook when anomaly is detect
 Uses only stdlib — no extra dependencies required.
 """
 import json
+import logging
 import os
 import smtplib
 import threading
@@ -15,6 +16,7 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+log = logging.getLogger("ImageLabelingStudio.alarm_notifier")
 
 _MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024  # 2 MB
 
@@ -119,14 +121,14 @@ class AlarmNotifier:
         if cfg.get("email_enabled", False):
             try:
                 self._send_email(score, threshold, frame_path, model_name, cfg)
-            except Exception:
-                pass  # silently swallow; background thread must not crash
+            except Exception as exc:
+                log.warning("E-Mail-Alarm fehlgeschlagen: %s", exc)
 
         if cfg.get("webhook_enabled", False):
             try:
                 self._send_webhook(score, threshold, frame_path, model_name, cfg)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Webhook-Alarm fehlgeschlagen: %s", exc)
 
     def _send_email(self, score, threshold, frame_path, model_name, cfg,
                     subject_override: str = "", body_override: str = "") -> None:

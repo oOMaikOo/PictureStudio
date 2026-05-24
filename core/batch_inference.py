@@ -2,8 +2,11 @@
 Batch inference worker: classifies a list of images through a loaded PyTorch model.
 Called from a QThread; reports progress via callbacks.
 """
+import logging
 import os
 from typing import List, Dict, Callable, Optional
+
+log = logging.getLogger("ImageLabelingStudio.batch_inference")
 
 try:
     import torch

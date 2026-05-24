@@ -2,10 +2,13 @@
 Enhanced training pipeline: early stopping, LR scheduler, mixed precision,
 GPU/CPU selection, checkpoint resume, reproducibility.
 """
+import logging
 import os
 import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Callable
+
+log = logging.getLogger("ImageLabelingStudio.training")
 
 try:
     import torch

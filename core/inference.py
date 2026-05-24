@@ -1,8 +1,11 @@
 """
 Enhanced inference: top-k predictions, confidence filtering, ROI template support.
 """
+import logging
 import os
 from typing import List, Dict, Optional, Tuple
+
+log = logging.getLogger("ImageLabelingStudio.inference")
 
 try:
     import torch
