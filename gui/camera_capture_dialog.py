@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer, QEvent, QRect, QPoint
 from PySide6.QtGui import QPixmap, QFont, QKeySequence, QShortcut, QCursor, QPainter, QPen, QColor
 
-from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread, apply_cam_props, apply_frame_filter
+from core.camera import list_usb_cameras, frame_to_qimage, apply_timestamp, CameraFrameThread, apply_cam_props, apply_frame_filter, check_camera_permission
 from utils.logging_utils import get_logger
 from utils.i18n import tr
 
@@ -1026,6 +1026,11 @@ class CameraCaptureDialog(QDialog):
             source = self._resolve_source()
             if source is None:
                 return
+            if isinstance(source, int):
+                ok, msg = check_camera_permission(source)
+                if not ok:
+                    QMessageBox.warning(self, tr("camera.permission_error_title"), msg)
+                    return
             self._frame_thread = CameraFrameThread(source, fps=15.0, parent=self)
             self._frame_thread.frame_ready.connect(self._on_frame)
             self._frame_thread.error.connect(self._on_camera_error)

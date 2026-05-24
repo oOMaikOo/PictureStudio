@@ -450,6 +450,11 @@ class MainWindow(QMainWindow):
                 if reply == QMessageBox.Yes:
                     project = Project.load(tmp_path)
                     project.project_path = path
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+                if reply == QMessageBox.Yes:
                     self._load_project(project)
                     return
             project = Project.load(path)
@@ -498,6 +503,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} – {project.config.name or project.project_path}")
         self._update_status()
         self._switch_page(0)  # Go to dashboard
+
+        # Fehlende Bilder in Statusbar anzeigen (nicht-blockierend)
+        if project.images:
+            v = project.validate_image_files()
+            n_missing = len(v["missing"]) + len(v["unreadable"])
+            if n_missing:
+                self._status_label.setText(
+                    f"⚠ {n_missing} Bild{'er' if n_missing != 1 else ''} nicht gefunden – "
+                    "Daten → Dateien prüfen für Details"
+                )
+                self._status_label.setStyleSheet("color:#D29922;")
 
     def _open_camera_dialog(self) -> None:
         """

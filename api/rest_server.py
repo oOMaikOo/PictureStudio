@@ -21,6 +21,7 @@ import logging
 import os
 import tempfile
 import threading
+import time as _time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Callable, Optional
 from urllib.parse import parse_qs, urlparse
@@ -54,6 +55,10 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     # Multi-camera per-channel state: list of dicts, one per channel
     mc_channels: list = []           # [{channel, score, threshold, is_alarm, event_count,
                                      #   cam_status, score_buffer, latest_alarm}, ...]
+    # Rate-limiting for /api/classify: one request at a time, max 10/s
+    _classify_lock = threading.Lock()
+    _classify_last_t: float = 0.0
+    _CLASSIFY_MIN_INTERVAL: float = 0.1   # seconds between calls (10 req/s)
 
     # ------------------------------------------------------------------ util
 
@@ -423,6 +428,23 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
         # POST /api/classify — live inference on a single image
         if path == "/api/classify":
+            if not _ProjectHandler._classify_lock.acquire(blocking=False):
+                self._err("Eine Klassifizierung läuft bereits. Bitte kurz warten.", 429)
+                return
+            try:
+                now = _time.monotonic()
+                elapsed = now - _ProjectHandler._classify_last_t
+                if elapsed < _ProjectHandler._CLASSIFY_MIN_INTERVAL:
+                    self._err(
+                        f"Rate limit: max 10 Anfragen/Sekunde. "
+                        f"Bitte {_ProjectHandler._CLASSIFY_MIN_INTERVAL - elapsed:.2f}s warten.",
+                        429,
+                    )
+                    return
+                _ProjectHandler._classify_last_t = now
+            finally:
+                _ProjectHandler._classify_lock.release()
+
             inf = _ProjectHandler.inferencer
             if inf is None or not inf.is_ready():
                 self._err("No model loaded. Load a model via the Models page first.", 503)
