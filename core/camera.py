@@ -162,6 +162,44 @@ def list_usb_cameras(max_index: int = 10) -> list[tuple[int, str]]:
     return found
 
 
+def check_camera_permission(index: int = 0, warmup_frames: int = 5) -> tuple[bool, str]:
+    """
+    Test whether the camera at *index* can be opened and delivers frames.
+
+    Returns (ok, message). On macOS the camera may open but need several reads
+    before the first frame arrives — *warmup_frames* controls the retry count.
+    Call this before starting a CameraFrameThread to give a clear error early.
+    """
+    try:
+        cap = cv2.VideoCapture(index)
+        if not cap.isOpened():
+            cap.release()
+            if platform.system() == "Darwin":
+                return False, (
+                    f"Kamera {index} konnte nicht geöffnet werden.\n"
+                    "macOS: Bitte Terminal-Kamerazugriff erlauben:\n"
+                    "Systemeinstellungen → Datenschutz & Sicherheit → Kamera → Terminal ✓"
+                )
+            return False, f"Kamera {index} konnte nicht geöffnet werden."
+
+        for _ in range(warmup_frames):
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                cap.release()
+                return True, "OK"
+
+        cap.release()
+        if platform.system() == "Darwin":
+            return False, (
+                f"Kamera {index} geöffnet, aber kein Frame empfangen.\n"
+                "macOS: Bitte Terminal-Kamerazugriff unter\n"
+                "Systemeinstellungen → Datenschutz & Sicherheit → Kamera prüfen."
+            )
+        return False, f"Kamera {index}: kein Frame empfangen."
+    except Exception as exc:
+        return False, f"Kamera-Test fehlgeschlagen: {exc}"
+
+
 def apply_timestamp(frame: np.ndarray) -> np.ndarray:
     """Return a copy of frame with current date/time burned into the bottom-left."""
     out = frame.copy()

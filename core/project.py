@@ -125,6 +125,31 @@ class Project:
             os.replace(tmp, self.project_path)
             log.debug("Projekt gespeichert: %s", self.project_path)
 
+    @staticmethod
+    def check_tmp_recovery(path: str) -> tuple[bool, str]:
+        """
+        Check whether a crash-recovery candidate exists for *path*.
+
+        Returns (available, tmp_path). *available* is True when a .tmp file
+        exists next to *path*, is valid JSON, and is **newer** than the
+        main project file (i.e. it was written after the last clean save and
+        the app crashed before the atomic os.replace could complete).
+        """
+        tmp = path + ".tmp"
+        if not os.path.exists(tmp):
+            return False, tmp
+        try:
+            # Must be newer than the main file (or main file absent)
+            if os.path.exists(path):
+                if os.path.getmtime(tmp) <= os.path.getmtime(path):
+                    return False, tmp
+            # Must be valid JSON
+            with open(tmp, encoding="utf-8") as fh:
+                json.load(fh)
+            return True, tmp
+        except Exception:
+            return False, tmp
+
     @classmethod
     def load(cls, path: str) -> "Project":
         """
@@ -173,17 +198,35 @@ class Project:
 
     # ------------------------------------------------------------------ backup
 
-    def create_backup(self, backup_dir: str = None) -> str:
-        """Copy the project JSON to a dated backup file. Returns backup path."""
+    def create_backup(self, backup_dir: str = None, max_backups: int = 20) -> str:
+        """
+        Copy the project JSON to a dated backup file. Returns backup path.
+
+        After writing the new backup, deletes the oldest files in *backup_dir*
+        so that at most *max_backups* backups are retained.
+        """
         if not self.project_path or not os.path.exists(self.project_path):
             return ""
         base = backup_dir or os.path.join(self.get_project_dir(), "backups")
         os.makedirs(base, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         stem = os.path.splitext(os.path.basename(self.project_path))[0]
         dest = os.path.join(base, f"{stem}_{ts}.json")
         shutil.copy2(self.project_path, dest)
         log.info("Backup erstellt: %s", dest)
+
+        # Rotate: keep only the most recent max_backups files
+        try:
+            existing = sorted(
+                (f for f in os.listdir(base) if f.endswith(".json")),
+                key=lambda f: os.path.getmtime(os.path.join(base, f)),
+            )
+            for old in existing[:-max_backups]:
+                os.remove(os.path.join(base, old))
+                log.debug("Altes Backup gelöscht: %s", old)
+        except OSError as exc:
+            log.warning("Backup-Rotation fehlgeschlagen: %s", exc)
+
         return dest
 
     # ------------------------------------------------------------------ file validation

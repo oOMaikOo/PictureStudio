@@ -1,7 +1,11 @@
 """
 Dialog for creating, editing, and deleting class labels.
 """
+import re
 from typing import Dict, List, Optional, Callable
+
+_LABEL_MAX_LEN = 100
+_LABEL_RE = re.compile(r'^[\w\s\-()\[\]]+$', re.UNICODE)
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -106,11 +110,23 @@ class LabelManagerDialog(QDialog):
         self.color_btn.setIcon(QIcon(pix))
         self.color_btn.setText(tr("label_mgr.color_btn"))
 
+    def _validate_name(self, name: str) -> Optional[str]:
+        """Return an error message string, or None if the name is valid."""
+        from utils.i18n import tr
+        if not name:
+            return tr("label_mgr.no_name_msg")
+        if len(name) > _LABEL_MAX_LEN:
+            return tr("label_mgr.name_too_long", max=_LABEL_MAX_LEN)
+        if not _LABEL_RE.match(name):
+            return tr("label_mgr.name_invalid_chars")
+        return None
+
     def _add_label(self) -> None:
         from utils.i18n import tr
         name = self.name_edit.text().strip()
-        if not name:
-            QMessageBox.warning(self, tr("common.error"), tr("label_mgr.no_name_msg"))
+        err = self._validate_name(name)
+        if err:
+            QMessageBox.warning(self, tr("common.error"), err)
             return
         if name in self.project.labels:
             QMessageBox.warning(self, tr("common.error"), tr("label_mgr.duplicate_msg", name=name))
@@ -136,6 +152,10 @@ class LabelManagerDialog(QDialog):
         old_name = item.text()
         new_name = self.name_edit.text().strip()
         if not new_name or new_name == old_name:
+            return
+        err = self._validate_name(new_name)
+        if err:
+            QMessageBox.warning(self, tr("common.error"), err)
             return
         if new_name in self.project.labels:
             QMessageBox.warning(self, tr("common.error"), tr("label_mgr.duplicate_msg", name=new_name))

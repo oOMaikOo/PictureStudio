@@ -17,7 +17,7 @@ import numpy as np
 
 from core.camera import (
     list_usb_cameras, apply_timestamp, CameraFrameThread,
-    apply_cam_props, apply_frame_filter,   # ← neu
+    apply_cam_props, apply_frame_filter, check_camera_permission,
 )
 from core.anomaly_detector import AnomalyDetector
 from core.alarm_notifier import AlarmNotifier
@@ -558,6 +558,12 @@ class CameraPage(QWidget):
         elif source is None:
             self._connect_btn.setChecked(False)
             return
+        elif isinstance(source, int):
+            ok, msg = check_camera_permission(source)
+            if not ok:
+                QMessageBox.warning(self, tr("camera.permission_error_title"), msg)
+                self._connect_btn.setChecked(False)
+                return
 
         self._is_video_file = is_video
         # Only live streams get auto-reconnect

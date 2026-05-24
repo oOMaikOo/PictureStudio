@@ -474,7 +474,8 @@ STRINGS: dict = {
     "camera.status_ready":          "Bereit  –  Modell laden und Kamera verbinden um zu starten.",
     "camera.ip_dialog_title":       "IP-Kamera URL",
     "camera.ip_dialog_prompt":      "Kamera-URL (RTSP / HTTP):",
-    "camera.invalid_url_title":     "Ungültige URL",
+    "camera.invalid_url_title":         "Ungültige URL",
+    "camera.permission_error_title":    "Kamerazugriff verweigert",
     "camera.video_file_dlg":        "Videodatei öffnen",
     "camera.ip_option":             "IP-Kamera (URL eingeben…)",
     "camera.video_file_option":     "Videodatei (MP4, AVI, …)",
@@ -746,6 +747,8 @@ STRINGS: dict = {
     "label_mgr.delete_title":       "Löschen",
     "label_mgr.delete_msg":         "Label '{name}' wirklich löschen?\nAlle zugehörigen Zuweisungen werden entfernt.",
     "label_mgr.color_picker_title": "Farbe wählen",
+    "label_mgr.name_too_long":      "Label-Name zu lang (max. {max} Zeichen).",
+    "label_mgr.name_invalid_chars": "Ungültige Zeichen im Label-Namen.\nErlaubt: Buchstaben, Ziffern, Leerzeichen, - _ ( ) [ ]",
 
     # Bericht-Dialog
     "report.title":                 "Projektbericht erstellen",

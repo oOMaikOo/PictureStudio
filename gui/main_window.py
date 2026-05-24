@@ -437,6 +437,21 @@ class MainWindow(QMainWindow):
             return
         try:
             from core.project import Project
+            recovery_available, tmp_path = Project.check_tmp_recovery(path)
+            if recovery_available:
+                reply = QMessageBox.question(
+                    self,
+                    "Crash-Recovery",
+                    "Eine ungespeicherte Sicherungskopie wurde gefunden "
+                    "(die App wurde möglicherweise unerwartet beendet).\n\n"
+                    "Soll diese Sicherungskopie wiederhergestellt werden?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply == QMessageBox.Yes:
+                    project = Project.load(tmp_path)
+                    project.project_path = path
+                    self._load_project(project)
+                    return
             project = Project.load(path)
             self._load_project(project)
         except Exception as exc:
