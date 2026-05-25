@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any
 
 from utils.config import DEFAULT_TRAIN_CONFIG, DEFAULT_SSH_CONFIG
 from utils.logging_utils import get_logger
+from core.project_index import ProjectSearchIndex
 
 log = get_logger()
 
@@ -75,6 +76,9 @@ class Project:
         # Quality-assurance flags per image: {img_path: {uncertain, comment}}
         self.image_label_flags: Dict[str, Dict] = {}
 
+        # Fast SQL query index — rebuilt after load/save, invalidated on mutations
+        self._index = ProjectSearchIndex()
+
     @property
     def is_multi_label(self) -> bool:
         """True when the project is in multi-label classification mode."""
@@ -124,6 +128,7 @@ class Project:
                 json.dump(data, fh, indent=2, ensure_ascii=False)
             os.replace(tmp, self.project_path)
             log.debug("Projekt gespeichert: %s", self.project_path)
+            self._index.rebuild(self)
 
     @staticmethod
     def check_tmp_recovery(path: str) -> tuple[bool, str]:
@@ -194,6 +199,7 @@ class Project:
         project.roi_templates = data.get("roi_templates", [])
         project.active_learning_queue = data.get("active_learning_queue", [])
         project.image_label_flags = data.get("image_label_flags", {})
+        project._index.rebuild(project)
         return project
 
     # ------------------------------------------------------------------ backup
@@ -349,6 +355,7 @@ class Project:
             self.image_labels[image_path] = label
         else:
             self.image_labels.pop(image_path, None)
+        self._index.invalidate()
 
     def get_image_label(self, image_path: str) -> str:
         """Return the primary label for *image_path*, or an empty string."""
@@ -357,6 +364,7 @@ class Project:
     def set_image_multi_labels(self, image_path: str, labels: List[str]) -> None:
         """Store the full multi-label list for *image_path*, filtering out empty strings."""
         self.image_multi_labels[image_path] = [l for l in labels if l]
+        self._index.invalidate()
 
     def get_image_multi_labels(self, image_path: str) -> List[str]:
         """
@@ -431,7 +439,7 @@ class Project:
         Return a dict mapping each label name to the number of images (or ROIs) assigned.
 
         When *use_rois* is True, counts ROI-level labels instead of image-level labels.
-        In multi-label mode, an image contributes one count per active label.
+        Uses the SQLite index when available (O(1) SQL) and falls back to Python loops.
         """
         counts: Dict[str, int] = {lbl: 0 for lbl in self.labels}
         if use_rois:
@@ -440,7 +448,12 @@ class Project:
                     lbl = roi.get("label", "")
                     if lbl:
                         counts[lbl] = counts.get(lbl, 0) + 1
-        elif self.config.multi_label:
+            return counts
+        if self._index.is_ready:
+            counts.update(self._index.get_label_counts())
+            return counts
+        # Python-loop fallback (index not yet built or invalidated)
+        if self.config.multi_label:
             for lbls in self.image_multi_labels.values():
                 for lbl in lbls:
                     if lbl:
@@ -452,6 +465,8 @@ class Project:
 
     def get_labeled_image_count(self) -> int:
         """Return the count of images that have at least one label assigned."""
+        if self._index.is_ready:
+            return self._index.get_labeled_count()
         if self.config.multi_label:
             return sum(1 for p in self.images if self.image_multi_labels.get(p))
         return len(self.image_labels)
@@ -462,9 +477,18 @@ class Project:
 
     def get_unlabeled_images(self) -> List[str]:
         """Return a list of image paths that have no label assigned."""
+        if self._index.is_ready:
+            return self._index.get_unlabeled()
         if self.config.multi_label:
             return [p for p in self.images if not self.image_multi_labels.get(p)]
         return [p for p in self.images if not self.get_image_label(p)]
+
+    def search_images(self, query: str) -> List[str]:
+        """Return image paths whose filename contains *query* (case-insensitive, via SQL index)."""
+        if self._index.is_ready:
+            return self._index.search_paths(query)
+        q = query.lower()
+        return [p for p in self.images if q in p.lower()]
 
     def migrate_to_multi_label(self) -> int:
         """Copy image_labels into image_multi_labels. Returns count of migrated images."""

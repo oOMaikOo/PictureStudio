@@ -17,6 +17,7 @@ from utils.config import APP_NAME, APP_VERSION
 from utils.logging_utils import get_logger
 from utils.settings import AppSettings
 from gui.sidebar import Sidebar
+from gui.controllers.project_controller import ProjectController
 
 log = get_logger()
 
@@ -53,12 +54,27 @@ class MainWindow(QMainWindow):
         if geo:
             self.restoreGeometry(geo)
 
+        # Project controller — handles file I/O outside of MainWindow
+        self._project_ctrl = ProjectController(self._settings, parent=self)
+        self._project_ctrl.project_loaded.connect(self._load_project)
+        self._project_ctrl.project_saved.connect(lambda _: None)
+        self._project_ctrl.backup_created.connect(
+            lambda p: QMessageBox.information(self, "Backup", f"Backup gespeichert:\n{p}")
+        )
+        self._project_ctrl.error_occurred.connect(
+            lambda title, msg: QMessageBox.critical(self, title, msg)
+        )
+        self._project_ctrl.status_message.connect(
+            lambda msg: self._status_label.setText(msg)
+            if hasattr(self, "_status_label") else None
+        )
+
         self._build_ui()
         self._build_menu()
         self._build_statusbar()
         self._apply_theme(self._settings.get_theme())
         self.dashboard_page.set_recent_projects(self._settings.get_recent_projects())
-        self._check_crash_recovery()
+        self._project_ctrl.check_crash_recovery(self._settings.get_recent_projects())
 
         # Autosave timer
         self._autosave_timer = QTimer(self)
@@ -401,79 +417,47 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ project actions
 
     def _new_project(self) -> None:
-        """Show the new-project dialog, ask for a save path, then load the project."""
+        """Show the new-project dialog, ask for a save path, then delegate to controller."""
         if not self._confirm_save():
             return
         from gui.new_project_dialog import NewProjectDialog
         dlg = NewProjectDialog(self)
         if dlg.exec() != NewProjectDialog.Accepted:
             return
-        name = dlg.project_name
-        project_type = dlg.project_type
-        desc = dlg.description
         path, _ = QFileDialog.getSaveFileName(
-            self, "Projekt speichern", f"{name}.json", "Projektdatei (*.json)"
+            self, "Projekt speichern", f"{dlg.project_name}.json", "Projektdatei (*.json)"
         )
         if not path:
             return
-        from core.project import Project
-        project = Project()
-        project.config.name = name
-        project.config.description = desc
-        project.config.project_type = project_type
-        project.config.created_at = datetime.now().isoformat()
-        project.save(path)
-        self._load_project(project)
-        log.info("Neues Projekt (%s): %s", project_type, path)
+        self._project_ctrl.new_project(
+            name=dlg.project_name,
+            project_type=dlg.project_type,
+            description=dlg.description,
+            save_path=path,
+        )
 
     def _open_project(self) -> None:
-        """Open a file-chooser dialog to select and load a project JSON file."""
+        """Open a file-chooser dialog and delegate loading to the controller."""
         if not self._confirm_save():
             return
         path, _ = QFileDialog.getOpenFileName(
             self, "Projekt öffnen", "", "Projektdatei (*.json);;Alle Dateien (*)"
         )
-        if not path:
-            return
-        try:
-            from core.project import Project
-            recovery_available, tmp_path = Project.check_tmp_recovery(path)
-            if recovery_available:
-                reply = QMessageBox.question(
-                    self,
-                    "Crash-Recovery",
-                    "Eine ungespeicherte Sicherungskopie wurde gefunden "
-                    "(die App wurde möglicherweise unerwartet beendet).\n\n"
-                    "Soll diese Sicherungskopie wiederhergestellt werden?",
-                    QMessageBox.Yes | QMessageBox.No,
-                )
-                if reply == QMessageBox.Yes:
-                    project = Project.load(tmp_path)
-                    project.project_path = path
-                try:
-                    os.remove(tmp_path)
-                except OSError:
-                    pass
-                if reply == QMessageBox.Yes:
-                    self._load_project(project)
-                    return
-            project = Project.load(path)
-            self._load_project(project)
-        except Exception as exc:
-            QMessageBox.critical(self, "Ladefehler", str(exc))
+        if path:
+            self._project_ctrl.open_project(path)
 
     def _load_project(self, project) -> None:
         """
-        Wire a freshly-loaded (or newly-created) project into the whole UI.
+        Wire a freshly-loaded project into the whole UI.
 
-        Creates a new ``AuditTrail``, unlocks the sidebar, propagates the
-        project to every page, updates the REST API, adds the path to recent
-        projects, and navigates to the Dashboard.
+        Called when ProjectController emits project_loaded. Unlocks the sidebar,
+        propagates the project to every page, updates the REST API, and navigates
+        to the Dashboard.
         """
         self.project = project
-        from core.audit import AuditTrail
-        self.audit = AuditTrail(project.get_project_dir(), project.config.name)
-        self.audit.log_project_saved(project.project_path)
+        # Audit trail is created by the controller; mirror the reference here
+        # so existing code that accesses self.audit continues to work.
+        self.audit = self._project_ctrl.audit
 
         # Unlock sidebar and configure for project type
         self.sidebar.set_project_type(getattr(project.config, "project_type", "image"))
@@ -558,64 +542,45 @@ class MainWindow(QMainWindow):
             )
 
     def _save_project(self) -> None:
-        """Save the current project to its existing path."""
+        """Flush ROIs and delegate save to the controller."""
         if not self.project:
             return
-        self._sync_and_save()
+        self.labeling_page._save_current_rois()
+        self._project_ctrl.save_project()
 
     def _save_project_as(self) -> None:
-        """Prompt for a new path, then save a copy of the project there."""
+        """Prompt for a path and delegate save-as to the controller."""
         if not self.project:
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "Speichern unter", "", "Projektdatei (*.json)"
         )
         if path:
-            self._sync_and_save(path)
+            self.labeling_page._save_current_rois()
+            self._project_ctrl.save_project(path)
 
     def _sync_and_save(self, path: str = None) -> None:
-        """
-        Flush unsaved ROIs from the labeling page, optionally create a backup,
-        then persist the project. Shows a critical dialog on error.
-        """
+        """Flush ROIs and save (called internally e.g. after training)."""
         self.labeling_page._save_current_rois()
-        try:
-            if self._settings.get_backup_enabled() and not path:
-                backup = self.project.create_backup()
-                if backup and self.audit:
-                    self.audit.log_project_backup(backup)
-            self.project.save(path)
-            if self.audit:
-                self.audit.log_project_saved(self.project.project_path)
-            self._status_label.setText(
-                f"Gespeichert: {os.path.basename(self.project.project_path)}  "
-                f"({datetime.now().strftime('%H:%M:%S')})"
-            )
-        except Exception as exc:
-            QMessageBox.critical(self, "Speicherfehler", str(exc))
+        self._project_ctrl.save_project(path)
 
     def _create_backup(self) -> None:
-        """Manually trigger a project backup and notify the user of its path."""
-        if not self.project:
-            return
-        backup = self.project.create_backup()
-        if backup:
-            QMessageBox.information(self, "Backup", f"Backup gespeichert:\n{backup}")
+        """Delegate backup creation to the controller."""
+        self._project_ctrl.create_backup()
 
     def _autosave(self) -> None:
         """Timer slot: save the project silently if autosave is enabled in settings."""
         if self.project and self._settings.get_autosave_enabled():
-            try:
-                self.labeling_page._save_current_rois()
-                self.project.save()
-                from datetime import datetime as _dt
+            self.labeling_page._save_current_rois()
+            ok = self._project_ctrl.save_project()
+            from datetime import datetime as _dt
+            if ok:
                 self._autosave_label.setText(
                     f"✓ Auto-gespeichert {_dt.now().strftime('%H:%M:%S')}"
                 )
                 log.debug("Autosave erfolgreich")
-            except Exception as exc:
+            else:
                 self._autosave_label.setText("⚠ Autosave fehlgeschlagen")
-                log.warning("Autosave fehlgeschlagen: %s", exc)
 
     def _reset_autosave_timer(self) -> None:
         """(Re)start the autosave timer using the interval from settings."""
@@ -809,29 +774,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_tour") and self._tour.isVisible():
             self._tour._reposition()
 
-    def _check_crash_recovery(self) -> None:
-        """Scan recent project paths for orphaned .tmp files from a crashed write."""
-        for path in self._settings.get_recent_projects():
-            tmp = path + ".tmp"
-            if os.path.exists(tmp) and not os.path.exists(path):
-                reply = QMessageBox.question(
-                    self, "Crash-Wiederherstellung",
-                    f"Eine unvollständige Speicherung wurde gefunden:\n{tmp}\n\n"
-                    "Soll die Datei als Projektdatei wiederhergestellt werden?",
-                    QMessageBox.Yes | QMessageBox.No,
-                )
-                if reply == QMessageBox.Yes:
-                    try:
-                        os.replace(tmp, path)
-                        from core.project import Project
-                        self._load_project(Project.load(path))
-                    except Exception as exc:
-                        QMessageBox.critical(self, "Wiederherstellungsfehler", str(exc))
-                else:
-                    try:
-                        os.remove(tmp)
-                    except OSError:
-                        pass
+    # _check_crash_recovery is now handled by ProjectController.check_crash_recovery()
+    # called in __init__ after the controller is wired up.
 
     def _show_log_viewer(self) -> None:
         """Open a scrollable dialog showing the current session log file."""
@@ -917,11 +861,7 @@ class MainWindow(QMainWindow):
             return
         if not self._confirm_save():
             return
-        try:
-            from core.project import Project
-            self._load_project(Project.load(path))
-        except Exception as exc:
-            QMessageBox.critical(self, "Ladefehler", str(exc))
+        self._project_ctrl.open_project(path)
 
     def _navigate_to_label(self, label_name: str) -> None:
         """Navigate to the labeling page filtered to the given label."""

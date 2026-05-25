@@ -1,0 +1,22 @@
+[run]
+source = .
+omit =
+    tests/*
+    .venv/*
+    */site-packages/*
+    conftest.py
+    main.py
+    monitor.py
+    scripts/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    ^\s*pass\s*$
+    ^\s*\.\.\.\s*$
+
+[html]
+directory = htmlcov

@@ -107,6 +107,14 @@ class AnomalyDetector:
         """Append a BGR frame to the normal-frame training buffer."""
         self._train_frames.append(self._preprocess(frame).numpy())
 
+    def add_preprocessed_frames(self, frames: list) -> None:
+        """Bulk-append already-preprocessed (float32 C×H×W numpy arrays) to the buffer.
+
+        Use this instead of directly accessing _train_frames — e.g. when copying
+        frames from one detector to another during hyperparameter search.
+        """
+        self._train_frames.extend(frames)
+
     def clear_frames(self) -> None:
         """Discard all buffered normal frames (e.g. to start a new collection)."""
         self._train_frames.clear()

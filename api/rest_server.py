@@ -22,9 +22,12 @@ import os
 import tempfile
 import threading
 import time as _time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
 from urllib.parse import parse_qs, urlparse
+
+_MAX_IMAGE_BYTES: int = 50 * 1024 * 1024   # 50 MB — max decoded image size
+_MAX_BODY_BYTES:  int = 70 * 1024 * 1024   # 70 MB — max raw request body
 
 from utils.config import APP_VERSION
 
@@ -82,11 +85,24 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         self._send_json({"error": msg}, status)
 
     def _read_body(self) -> Optional[dict]:
-        """Parse the JSON request body; returns None on invalid JSON."""
+        """Parse the JSON request body. Returns None and logs a warning on failure."""
         try:
             length = int(self.headers.get("Content-Length", 0))
-            return json.loads(self.rfile.read(length)) if length else {}
-        except Exception:
+        except (ValueError, TypeError):
+            log.warning("REST: ungültiger Content-Length Header von %s", self.client_address)
+            return None
+        if not (0 <= length <= _MAX_BODY_BYTES):
+            log.warning("REST: Content-Length %d überschreitet Limit %d", length, _MAX_BODY_BYTES)
+            return None
+        if length == 0:
+            return {}
+        try:
+            return json.loads(self.rfile.read(length))
+        except json.JSONDecodeError as exc:
+            log.warning("REST: JSON-Parsefehler im Request-Body: %s", exc)
+            return None
+        except Exception as exc:
+            log.warning("REST: Body-Lesefehler: %s", exc)
             return None
 
     def _resolve_image(self, raw: str) -> Optional[str]:
@@ -261,14 +277,20 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         # /api/frame/<filename> — serve a saved alarm frame JPEG
         if path.startswith("/api/frame/"):
             fname = path[len("/api/frame/"):]
-            if not fname or "/" in fname or ".." in fname:
-                self._err("Invalid filename", 400)
-                return
             frame_dir = _ProjectHandler.alarm_frame_dir
             if not frame_dir:
                 self._err("No alarm frame directory configured", 503)
                 return
-            fpath = os.path.join(frame_dir, fname)
+            if not fname:
+                self._err("Invalid filename", 400)
+                return
+            # Prevent path traversal: resolve both paths and verify containment
+            safe_dir = os.path.realpath(frame_dir)
+            fpath = os.path.realpath(os.path.join(frame_dir, fname))
+            if not fpath.startswith(safe_dir + os.sep):
+                log.warning("REST: Path-Traversal-Versuch: '%s' von %s", fname, self.client_address)
+                self._err("Invalid filename", 400)
+                return
             if not os.path.isfile(fpath):
                 self._err(f"Frame '{fname}' not found", 404)
                 return
@@ -375,7 +397,7 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
         body = self._read_body()
         if body is None:
-            self._err("Invalid JSON body")
+            self._err("Ungültiger JSON-Body — Content-Type: application/json erwartet", 400)
             return
 
         if proj is None:
@@ -463,17 +485,30 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
             tmp_path = None
             if b64:
+                # Guard against DoS: check encoded length before decoding
+                if len(b64) > _MAX_IMAGE_BYTES * 4 // 3 + 4:
+                    self._err(
+                        f"Image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413
+                    )
+                    return
                 try:
                     img_bytes = base64.b64decode(b64)
-                    suffix = ".jpg"
-                    if img_bytes[:4] == b'\x89PNG':
-                        suffix = ".png"
+                except Exception as exc:
+                    self._err(f"Base64 decode error: {exc}")
+                    return
+                if len(img_bytes) > _MAX_IMAGE_BYTES:
+                    self._err(
+                        f"Decoded image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413
+                    )
+                    return
+                suffix = ".png" if img_bytes[:4] == b'\x89PNG' else ".jpg"
+                try:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
                         f.write(img_bytes)
                         tmp_path = f.name
                     img_path = tmp_path
                 except Exception as exc:
-                    self._err(f"Base64 decode error: {exc}")
+                    self._err(f"Temp-Datei konnte nicht erstellt werden: {exc}", 500)
                     return
             elif not img_path:
                 self._err("Provide 'path' (file path) or 'image_b64' (base64 image).")
@@ -882,7 +917,7 @@ class RestApiServer:
         self._port = port
         _ProjectHandler.request_count = 0
         try:
-            server = HTTPServer(("", port), _ProjectHandler)
+            server = ThreadingHTTPServer(("", port), _ProjectHandler)
             server.allow_reuse_address = True
             self._server = server
             self._thread = threading.Thread(

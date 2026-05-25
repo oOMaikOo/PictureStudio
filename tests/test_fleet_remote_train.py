@@ -10,7 +10,7 @@ import pytest
 from gui.pages.fleet_page import (
     FleetPage,
     _RemoteTrainDialog,
-    _FrameCollectThread,
+    _FrameDownloadThread,
     _LocalTrainThread,
 )
 
@@ -35,36 +35,35 @@ def test_remote_train_dialog_instantiates(qtbot, dummy_device):
     assert dlg is not None
 
 
-# ── 2. Dialog has three tabs ──────────────────────────────────────────────────
+# ── 2. Dialog has two tabs ────────────────────────────────────────────────────
 
-def test_remote_train_dialog_has_three_tabs(qtbot, dummy_device):
-    """The dialog's QTabWidget must contain exactly three tabs."""
+def test_remote_train_dialog_has_two_tabs(qtbot, dummy_device):
+    """The dialog's QTabWidget must contain exactly two tabs."""
     from PySide6.QtWidgets import QTabWidget
     dlg = _RemoteTrainDialog(dummy_device)
     qtbot.addWidget(dlg)
     tab_widgets = dlg.findChildren(QTabWidget)
     assert tab_widgets, "Kein QTabWidget gefunden"
     tab = tab_widgets[0]
-    assert tab.count() == 3, f"Erwartet 3 Tabs, gefunden {tab.count()}"
+    assert tab.count() == 2, f"Erwartet 2 Tabs, gefunden {tab.count()}"
     labels = [tab.tabText(i) for i in range(tab.count())]
-    # At least one tab should relate to channels and one to deploy
-    assert any("Kan" in lbl for lbl in labels), f"Kein Kanal-Tab: {labels}"
+    assert any("Train" in lbl for lbl in labels), f"Kein Training-Tab: {labels}"
     assert any("Deploy" in lbl for lbl in labels), f"Kein Deploy-Tab: {labels}"
 
 
-# ── 3. _FrameCollectThread instantiates ──────────────────────────────────────
+# ── 3. _FrameDownloadThread instantiates ─────────────────────────────────────
 
-def test_frame_collect_thread_instantiates():
-    """_FrameCollectThread must be creatable without starting it."""
+def test_frame_download_thread_instantiates():
+    """_FrameDownloadThread must be creatable without starting it."""
     from unittest.mock import MagicMock
     detector_mock = MagicMock()
-    thread = _FrameCollectThread(
+    thread = _FrameDownloadThread(
         device_url="http://localhost:9999",
-        channel_id=0,
+        api_key="",
+        count=50,
         detector=detector_mock,
     )
     assert thread is not None
-    # Make sure the thread is not running
     assert not thread.isRunning()
 
 
@@ -87,7 +86,6 @@ def test_fleet_page_has_training_button(qtbot):
     page = FleetPage()
     qtbot.addWidget(page)
 
-    # Inject a dummy device and rebuild
     page._devices = [
         {"name": "Kamera Test", "url": "http://localhost:9999", "api_key": ""}
     ]

@@ -234,8 +234,8 @@ class AnomalyHPTWorker:
 
         from core.anomaly_detector import AnomalyDetector
 
-        # collect frames from the existing detector
-        frames = self._detector._train_frames  # list of collected numpy float32 arrays
+        # collect frames from the existing detector via public API
+        frames = list(self._detector._train_frames)  # snapshot of float32 C×H×W arrays
 
         if not frames:
             raise ValueError("Keine Frames gesammelt — zuerst Frames aufnehmen.")
@@ -252,8 +252,7 @@ class AnomalyHPTWorker:
             batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
 
             det = AnomalyDetector(base_ch=base_ch)
-            for f in frames:
-                det._train_frames.append(f)
+            det.add_preprocessed_frames(frames)
 
             val_loss = det.train(
                 epochs=self._epochs_per_trial,
