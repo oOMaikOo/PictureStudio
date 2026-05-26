@@ -38,3 +38,17 @@ def test_refresh_with_project_does_not_crash(qtbot, sample_project):
     qtbot.addWidget(page)
     page.set_project(sample_project)
     page.refresh()
+
+
+def test_refresh_survives_broken_project(qtbot):
+    """refresh() must not propagate exceptions from a malformed project."""
+
+    class BrokenProject:
+        @property
+        def images(self):
+            raise RuntimeError("intentional test error")
+
+    page = DatasetStatsPage()
+    qtbot.addWidget(page)
+    page.project = BrokenProject()
+    page.refresh()  # must not raise

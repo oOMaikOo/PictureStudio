@@ -306,3 +306,39 @@ class TestAnomalyClusteringPage:
         page = AnomalyClusteringPage()
         qtbot.addWidget(page)
         assert page.btn_start.isEnabled()
+
+    def test_on_finished_sets_thread_to_none(self, qtbot):
+        """_on_finished() must set self._thread = None."""
+        page = AnomalyClusteringPage()
+        qtbot.addWidget(page)
+
+        class _FakeThread:
+            pass
+
+        page._thread = _FakeThread()
+        page._on_finished({})
+        assert page._thread is None
+
+    def test_on_error_sets_thread_to_none(self, qtbot, monkeypatch):
+        """_on_error() must set self._thread = None even on error."""
+        from PySide6.QtWidgets import QMessageBox
+        monkeypatch.setattr(QMessageBox, "critical", lambda *a, **kw: None)
+        page = AnomalyClusteringPage()
+        qtbot.addWidget(page)
+
+        class _FakeThread:
+            pass
+
+        page._thread = _FakeThread()
+        page._on_error("test error")
+        assert page._thread is None
+
+    def test_alarm_paths_cache_not_stale_after_set_project(self, qtbot, sample_project):
+        """set_project() must flush stale cache entries from the previous project."""
+        page = AnomalyClusteringPage()
+        qtbot.addWidget(page)
+        stale_path = "/old/project/stale_image.png"
+        page._alarm_paths_cache = [stale_path]
+        page.set_project(sample_project)
+        # Cache is rebuilt from the new project — stale path must not appear
+        assert page._alarm_paths_cache is None or stale_path not in page._alarm_paths_cache
