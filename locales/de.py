@@ -27,8 +27,8 @@ STRINGS: dict = {
     "sidebar.badge.video":  "🎬 Videoprojekt",
     # Sidebar section headers
     "sidebar.section.workflow": "Workflow",
-    "sidebar.section.analyse":  "Analyse & Tools",
-    "sidebar.section.tools":    "Tools",
+    "sidebar.section.analyse":  "Analyse",
+    "sidebar.section.tools":    "Verwaltung",
     "sidebar.section.system":   "System",
 
     # Menüs
