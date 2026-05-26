@@ -1,6 +1,7 @@
 """
 Persistent user settings via QSettings (INI file).
 """
+from threading import Lock
 from PySide6.QtCore import QSettings
 
 
@@ -18,6 +19,7 @@ class AppSettings:
 
     def __init__(self):
         self._s = QSettings(self._ORG, self._APP)
+        self._lock = Lock()
 
     # ---- appearance ----
     def get_theme(self) -> str:
@@ -56,11 +58,12 @@ class AppSettings:
 
     def add_recent_project(self, path: str) -> None:
         """Prepend *path* to the MRU list, keeping at most 10 entries."""
-        recents = self.get_recent_projects()
-        if path in recents:
-            recents.remove(path)
-        recents.insert(0, path)
-        self._s.setValue("project/recent", recents[:10])
+        with self._lock:
+            recents = self._s.value("project/recent", []) or []
+            if path in recents:
+                recents.remove(path)
+            recents.insert(0, path)
+            self._s.setValue("project/recent", recents[:10])
 
     # ---- labeling ----
     def get_thumbnail_size(self) -> int:
@@ -146,4 +149,5 @@ class AppSettings:
 
     def sync(self) -> None:
         """Flush pending changes to disk immediately."""
-        self._s.sync()
+        with self._lock:
+            self._s.sync()

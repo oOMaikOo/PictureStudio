@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 import os
 from typing import Optional
 from PySide6.QtWidgets import (
@@ -8,6 +9,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QFont
+
+log = logging.getLogger(__name__)
+
 
 class DatasetStatsPage(QWidget):
     """
@@ -26,15 +30,18 @@ class DatasetStatsPage(QWidget):
 
     def refresh(self) -> None:
         """Neu berechnen und alle Widgets aktualisieren."""
-        if not self.project:
-            self._set_empty_state()
-            return
-        self._update_label_distribution()
-        self._update_format_stats()
-        self._update_size_stats()
-        self._update_label_rate()
-        self._dup_list.clear()
-        self._dup_status_lbl.setText("Duplikate noch nicht gesucht.")
+        try:
+            if not self.project:
+                self._set_empty_state()
+                return
+            self._update_label_distribution()
+            self._update_format_stats()
+            self._update_size_stats()
+            self._update_label_rate()
+            self._dup_list.clear()
+            self._dup_status_lbl.setText("Duplikate noch nicht gesucht.")
+        except Exception as exc:
+            log.error("Fehler in DatasetStatsPage.refresh: %s", exc)
 
     def _build_ui(self) -> None:
         from utils.i18n import tr

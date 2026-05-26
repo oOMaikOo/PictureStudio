@@ -72,6 +72,10 @@ class DataPage(QWidget):
     def set_project(self, project) -> None:
         """Accept a new project and clear the previous analysis results."""
         self.project = project
+        has_project = project is not None
+        self._analyze_btn.setEnabled(has_project)
+        for btn in self._export_btns:
+            btn.setEnabled(has_project)
         self._clear()
 
     def _build_ui(self) -> None:
@@ -111,9 +115,9 @@ class DataPage(QWidget):
         video_btn.clicked.connect(self._import_video)
         cv.addWidget(video_btn)
 
-        analyze_btn = QPushButton(tr("data.analyze_btn"))
-        analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
-        analyze_btn.setToolTip(
+        self._analyze_btn = QPushButton(tr("data.analyze_btn"))
+        self._analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
+        self._analyze_btn.setToolTip(
             "Analysiert den Datensatz und zeigt:\n"
             "• Klassenverteilung und Ungleichgewicht\n"
             "• Fehlende oder unlesbare Dateien\n"
@@ -121,8 +125,9 @@ class DataPage(QWidget):
             "• Bildgrößen und Formatstatistiken\n"
             "Empfehlung: vor dem Training ausführen."
         )
-        analyze_btn.clicked.connect(self._run_analysis)
-        cv.addWidget(analyze_btn)
+        self._analyze_btn.clicked.connect(self._run_analysis)
+        self._analyze_btn.setEnabled(False)
+        cv.addWidget(self._analyze_btn)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 0)
@@ -146,6 +151,7 @@ class DataPage(QWidget):
                 "Gut für eigene Tools, Excel oder pandas-Analysen."
             ),
         }
+        self._export_btns = []
         for label, slot in [
             (tr("data.export_coco_btn"), self._export_coco),
             (tr("data.export_yolo_btn"), self._export_yolo),
@@ -155,7 +161,9 @@ class DataPage(QWidget):
             btn.clicked.connect(slot)
             if label in _export_tips:
                 btn.setToolTip(_export_tips[label])
+            btn.setEnabled(False)
             eg.addWidget(btn)
+            self._export_btns.append(btn)
         cv.addWidget(export_group)
 
         valid_group = QGroupBox(tr("data.validation_group"))
@@ -184,6 +192,7 @@ class DataPage(QWidget):
         self._summary_text = QTextEdit()
         self._summary_text.setReadOnly(True)
         self._summary_text.setFont(QFont("Courier New", 9))
+        self._summary_text.setPlaceholderText(tr("data.no_project_hint"))
         self._tabs.addTab(self._summary_text, tr("data.tab.summary"))
 
         self._missing_list = QListWidget()

@@ -128,6 +128,17 @@ class TrainingPage(QWidget):
         self._settings = settings
         self._refresh_ssh_profiles()
 
+    def closeEvent(self, event) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.request_stop()
+            self._thread.quit()
+            self._thread.wait(5000)
+        if self._al_thread and self._al_thread.isRunning():
+            self._al_thread.request_stop()
+            self._al_thread.quit()
+            self._al_thread.wait(3000)
+        super().closeEvent(event)
+
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self) -> None:

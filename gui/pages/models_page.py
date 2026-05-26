@@ -409,6 +409,13 @@ class ModelsPage(QWidget):
             return item.data(Qt.UserRole)
         return None
 
+    def _get_selected_model(self):
+        """Return the ModelRecord for the currently selected row, or None."""
+        mid = self._selected_model_id()
+        if not mid or not self._manager:
+            return None
+        return self._manager.get_by_id(mid)
+
     def _on_selection_changed(self) -> None:
         """Slot for ``itemSelectionChanged``; delegates to ``_on_row_selected``."""
         self._on_row_selected(self.table.currentRow())
@@ -465,10 +472,15 @@ class ModelsPage(QWidget):
         if not mid or not self._manager:
             return
         m = self._manager.get_by_id(mid)
-        if m and os.path.exists(m.model_path):
-            self.model_loaded.emit(m.model_path)
-            QMessageBox.information(self, tr("models.loaded_title"),
-                                    tr("models.loaded_msg", name=m.name))
+        if not m:
+            return
+        if not os.path.exists(m.model_path):
+            QMessageBox.critical(self, tr("common.error"),
+                                 tr("models.file_not_found", path=m.model_path))
+            return
+        self.model_loaded.emit(m.model_path)
+        QMessageBox.information(self, tr("models.loaded_title"),
+                                tr("models.loaded_msg", name=m.name))
 
     def _export_onnx(self) -> None:
         mid = self._selected_model_id()
@@ -487,7 +499,7 @@ class ModelsPage(QWidget):
             return
         try:
             path = self._manager.export_torchscript(mid)
-            QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
+            QMessageBox.information(self, tr("models.ts_success"), f"Gespeichert:\n{path}")
         except Exception as exc:
             QMessageBox.critical(self, tr("common.error"), str(exc))
 

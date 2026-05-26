@@ -792,6 +792,9 @@ class LabelingPage(QWidget):
             )
         else:
             self._assign_label_direct(self._current_image, "")
+        mw = self.window()
+        if hasattr(mw, "statusBar"):
+            mw.statusBar().showMessage("Label gelöscht — Strg+Z zum Rückgängigmachen", 3000)
 
     def _shortcut_toggle_uncertain(self) -> None:
         """U shortcut: toggle the uncertain flag on the current image."""
@@ -1193,6 +1196,10 @@ class LabelingPage(QWidget):
         if old == label:
             return
         self._undo_stack.push(SetImageLabelCommand(self, image_path, label, old))
+        if label:
+            mw = self.window()
+            if hasattr(mw, "statusBar"):
+                mw.statusBar().showMessage(f"Label gesetzt: {label}", 2000)
 
     # --- actual worker called by commands ---
 
@@ -1670,7 +1677,8 @@ class LabelingPage(QWidget):
         reply = QMessageBox.question(
             self, "ROIs übertragen",
             f"Die {len(src_rois)} ROI(s) dieses Bildes werden auf alle "
-            f"{n} Bilder kopiert.\nVorhandene ROIs werden überschrieben.\n\nFortfahren?",
+            f"{n} Bilder kopiert.\nVorhandene ROIs werden überschrieben.\n\n"
+            "⚠ Diese Aktion kann nicht rückgängig gemacht werden.\n\nFortfahren?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:

@@ -191,6 +191,7 @@ STRINGS: dict = {
     "data.video_imported_title":    "Video importiert",
     "data.camera_captured_title":   "Aufnahmen hinzugefügt",
     "data.paths_updated_title":     "Pfadkorrektur",
+    "data.no_project_hint":         "Kein Projekt geöffnet. Bitte zuerst ein Projekt laden oder erstellen.",
 
     # ------------------------------------------------------------------ Labeling-Seite
     "labeling.title":               "Labeling",
@@ -352,6 +353,8 @@ STRINGS: dict = {
     "models.onnx_success":          "ONNX exportiert",
     "models.onnx_saved":            "Gespeichert:\n{path}",
     "models.docker_success":        "Docker-Deployment erstellt",
+    "models.ts_success":            "TorchScript exportiert",
+    "models.file_not_found":        "Modelldatei nicht gefunden:\n{path}",
 
     # ------------------------------------------------------------------ Inferenz-Seite
     "inference.title":              "Klassifikation",

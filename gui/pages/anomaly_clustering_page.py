@@ -133,6 +133,7 @@ class AnomalyClusteringPage(QWidget):
         self._thread: Optional[QThread] = None
         self._cluster_cards: Dict[int, _ClusterCard] = {}
         self._selected_cluster_id: Optional[int] = None
+        self._alarm_paths_cache: Optional[List[str]] = None
         self._build_ui()
 
     # ------------------------------------------------------------------ project
@@ -143,6 +144,7 @@ class AnomalyClusteringPage(QWidget):
         self._clustering = None
         self._cluster_cards.clear()
         self._selected_cluster_id = None
+        self._alarm_paths_cache = None
         self._clear_cards()
         self._clear_image_list()
         self._status_lbl.setText("Projekt geladen. Clustering starten, um Bilder zu gruppieren.")
@@ -289,6 +291,8 @@ class AnomalyClusteringPage(QWidget):
         """Return image paths that are labeled as 'anomalie' / 'alarm' / 'Anomalie' etc."""
         if not self.project:
             return []
+        if self._alarm_paths_cache is not None:
+            return self._alarm_paths_cache
         alarm_keywords = {"anomalie", "alarm", "fehler", "defekt", "error"}
         paths: List[str] = []
         for path in self.project.images:
@@ -302,6 +306,7 @@ class AnomalyClusteringPage(QWidget):
         # Ultimate fallback: all images
         if not paths:
             paths = list(self.project.images)
+        self._alarm_paths_cache = paths
         return paths
 
     @Slot()
@@ -320,7 +325,8 @@ class AnomalyClusteringPage(QWidget):
             )
             return
 
-        n_clusters = self.spin_clusters.value()
+        n_clusters = min(self.spin_clusters.value(), max(2, len(paths)))
+        self.spin_clusters.setMaximum(max(2, min(20, len(paths))))
         if self._thread and self._thread.isRunning():
             return  # already running
 
@@ -332,11 +338,15 @@ class AnomalyClusteringPage(QWidget):
         self._clear_cards()
         self._clear_image_list()
 
-        self._thread = ClusteringThread(paths, n_clusters, parent=self)
-        self._thread.progress.connect(self._on_progress)
-        self._thread.finished.connect(self._on_finished)
-        self._thread.error.connect(self._on_error)
-        self._thread.start()
+        try:
+            self._thread = ClusteringThread(paths, n_clusters, parent=self)
+            self._thread.progress.connect(self._on_progress)
+            self._thread.finished.connect(self._on_finished)
+            self._thread.error.connect(self._on_error)
+            self._thread.start()
+        except Exception as exc:
+            self._thread = None
+            self._on_error(str(exc))
 
     @Slot(int, int)
     def _on_progress(self, current: int, total: int) -> None:
@@ -349,6 +359,7 @@ class AnomalyClusteringPage(QWidget):
         from utils.i18n import tr
         if self._thread and hasattr(self._thread, "clustering"):
             self._clustering = self._thread.clustering
+        self._thread = None
         self._progress.setValue(100)
         self._progress.setVisible(False)
         self.btn_start.setEnabled(True)
@@ -365,10 +376,17 @@ class AnomalyClusteringPage(QWidget):
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         from utils.i18n import tr
+        self._thread = None
         self._progress.setVisible(False)
         self.btn_start.setEnabled(True)
         self._status_lbl.setText(f"Fehler: {msg}")
         QMessageBox.critical(self, tr("common.error"), msg)
+
+    def hideEvent(self, event) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait(2000)
+        super().hideEvent(event)
 
     # ------------------------------------------------------------------ cards
 
