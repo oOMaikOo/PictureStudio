@@ -90,18 +90,28 @@ if HAS_QT:
             self.confidence_threshold = confidence_threshold
             self.n_samples            = n_samples
             self.roi_template         = roi_template
+            self._stop                = False
+
+        def request_stop(self) -> None:
+            self._stop = True
 
         def run(self) -> None:
             try:
                 sampler = ActiveLearningSampler()
+
+                def _progress(c: int, t: int) -> None:
+                    if not self._stop:
+                        self.progress.emit(c, t)
+
                 results = sampler.run(
                     self.model_path,
                     self.image_paths,
                     self.confidence_threshold,
                     self.n_samples,
                     self.roi_template,
-                    progress_callback=lambda c, t: self.progress.emit(c, t),
+                    progress_callback=_progress,
                 )
-                self.finished.emit(results)
+                if not self._stop:
+                    self.finished.emit(results)
             except Exception as exc:
                 self.error.emit(str(exc))

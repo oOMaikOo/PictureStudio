@@ -723,6 +723,15 @@ class SettingsPage(QWidget):
             self.api_port_spin.setEnabled(True)
         else:
             port = self.api_port_spin.value()
+            import socket as _socket
+            with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as _s:
+                if _s.connect_ex(("127.0.0.1", port)) == 0:
+                    from utils.i18n import tr as _tr
+                    QMessageBox.warning(
+                        self, _tr("common.warning"),
+                        f"Port {port} ist bereits belegt. Bitte einen anderen Port wählen."
+                    )
+                    return
             ok = self._api_server.start(port)
             if ok:
                 self.api_toggle_btn.setText(tr("settings.api_stop_btn"))

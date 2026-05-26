@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 
 log = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class EdgeExporter:
         except ImportError as exc:
             raise ImportError("torch ist nicht installiert.") from exc
 
+        output_path = str(Path(output_path).resolve())
         model = self._load_model(model_path)
         model.eval()
         dummy = torch.randn(1, 3, image_size, image_size)
@@ -79,6 +81,7 @@ class EdgeExporter:
         except ImportError as exc:
             raise ImportError("torch ist nicht installiert.") from exc
 
+        output_path = str(Path(output_path).resolve())
         model = self._load_model(model_path)
         model.eval()
         dummy = torch.randn(1, 3, image_size, image_size)

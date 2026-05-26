@@ -157,6 +157,7 @@ class Inferencer:
             with torch.no_grad():
                 probs_all = F.softmax(self.model(batch), dim=1).cpu()
             probs = probs_all.mean(dim=0).tolist()
+            del tensors, batch, probs_all
         else:
             tensor = self.transform(image).unsqueeze(0).to(self.device)
             with torch.no_grad():

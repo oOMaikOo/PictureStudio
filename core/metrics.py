@@ -138,6 +138,8 @@ def _top_k_accuracy(true_labels: List[int], probs: List[List[float]], k: int) ->
     """Return the fraction of samples where the true label appears in the top-k predictions."""
     correct = 0
     for true, prob in zip(true_labels, probs):
+        if not prob:
+            continue
         top_k = sorted(range(len(prob)), key=lambda i: prob[i], reverse=True)[:k]
         if true in top_k:
             correct += 1

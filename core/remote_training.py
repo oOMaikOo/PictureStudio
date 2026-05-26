@@ -76,6 +76,8 @@ class RemoteTrainingThread(QThread):
         remote_base = self.ssh_cfg.get("remote_path", "/tmp/ils_project")
         remote_wd   = f"{remote_base}/{run_id}"
         python_env  = self.ssh_cfg.get("python_env", "python3")
+        if not re.fullmatch(r"[a-zA-Z0-9/_.-]+", python_env):
+            raise ValueError(f"Ungültige python_env-Konfiguration: {python_env!r}")
         tmp_dir: Optional[str] = None
 
         # 1. Connect
@@ -223,6 +225,6 @@ class RemoteTrainingThread(QThread):
 def _kv(text: str) -> Dict:
     """Parse 'k1=v1 k2=v2 …' → dict (values may contain path separators)."""
     result: Dict = {}
-    for m in re.finditer(r"(\w+)=(\S+)", text):
+    for m in re.finditer(r"(\w+)=([^\s=]+)", text):
         result[m.group(1)] = m.group(2)
     return result

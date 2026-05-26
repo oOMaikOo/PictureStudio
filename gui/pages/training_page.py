@@ -1078,6 +1078,7 @@ class TrainingPage(QWidget):
         # Jump straight to Test-Ergebnisse tab
         self.tabs.setCurrentIndex(4)
         self.training_finished.emit(result)
+        self._thread = None
         QMessageBox.information(
             self, tr("training.completed_title"),
             f"{tr('training.test_accuracy')}  {test_metrics.get('accuracy',0)*100:.2f}%\n"

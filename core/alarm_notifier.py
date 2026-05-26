@@ -192,12 +192,18 @@ class AlarmNotifier:
         msg["From"] = from_addr
         msg["To"] = ", ".join(to_addrs)
 
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-            if use_tls:
-                server.starttls()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, to_addrs, msg.as_string())
+        import socket
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                if use_tls:
+                    server.starttls()
+                if smtp_user and smtp_password:
+                    server.login(smtp_user, smtp_password)
+                server.sendmail(from_addr, to_addrs, msg.as_string())
+        except socket.timeout as exc:
+            raise RuntimeError(
+                f"SMTP-Timeout beim Verbinden mit {smtp_host}:{smtp_port}"
+            ) from exc
 
     def _send_webhook(self, score, threshold, frame_path, model_name, cfg) -> None:
         """Internal: sends JSON payload via HTTP POST/GET."""

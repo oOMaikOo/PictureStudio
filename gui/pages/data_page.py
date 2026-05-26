@@ -331,6 +331,7 @@ class DataPage(QWidget):
             QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         self.progress.setVisible(True)
+        self._summary_text.setPlainText("Analysiere Datensatz …")
         self._thread = AnalysisThread(self.project)
         self._thread.finished.connect(self._on_analysis_done)
         self._thread.error.connect(self._on_error)

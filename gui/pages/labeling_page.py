@@ -149,7 +149,8 @@ class LabelingPage(QWidget):
         self._visible_count_label.hide()
         v.addWidget(self._visible_count_label)
 
-        self.thumb_list = LazyThumbnailList(thumb_size=100)
+        from utils.settings import AppSettings
+        self.thumb_list = LazyThumbnailList(thumb_size=AppSettings().get_thumbnail_size())
         self.thumb_list.image_selected.connect(self._on_image_selected)
         self.thumb_list.selection_changed.connect(self._on_selection_changed)
         self.thumb_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -799,6 +800,10 @@ class LabelingPage(QWidget):
         # click() toggles checked state AND emits clicked(bool) → _toggle_uncertain
         self._uncertain_btn.click()
 
+    def closeEvent(self, event) -> None:
+        self._stats_timer.stop()
+        super().closeEvent(event)
+
     # ------------------------------------------------------------------ project
 
     def set_project(self, project, audit=None) -> None:
@@ -811,6 +816,7 @@ class LabelingPage(QWidget):
         self.project = project
         self._audit = audit
         self._current_image = ""
+        self._pre_labeler = None
         self._undo_stack.clear()
         self._refresh_label_combos()
         self._refresh_thumb_list()
@@ -1219,8 +1225,8 @@ class LabelingPage(QWidget):
                 self.img_label_combo.blockSignals(False)
         self._update_stats()
         if label:
-            in_queue = any(e["path"] == image_path for e in self.project.active_learning_queue)
-            if in_queue:
+            al_paths = {e["path"] for e in self.project.active_learning_queue}
+            if image_path in al_paths:
                 self.project.remove_from_al_queue(image_path)
                 self.refresh_al_queue_panel()
 
@@ -1241,8 +1247,8 @@ class LabelingPage(QWidget):
             self._load_multi_label_checkboxes(image_path)
         self._update_stats()
         if labels:
-            in_queue = any(e["path"] == image_path for e in self.project.active_learning_queue)
-            if in_queue:
+            al_paths = {e["path"] for e in self.project.active_learning_queue}
+            if image_path in al_paths:
                 self.project.remove_from_al_queue(image_path)
                 self.refresh_al_queue_panel()
 
