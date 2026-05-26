@@ -96,8 +96,8 @@ class ProjectController(QObject):
         except Exception as exc:
             self.error_occurred.emit("Ladefehler", str(exc))
 
-    def save_project(self, path: str = None) -> bool:
-        """Save the current project; creates a backup first if configured."""
+    def save_project(self, path: str = None, is_autosave: bool = False) -> bool:
+        """Save the current project; creates a backup first if configured (not during autosave)."""
         if not self.project:
             return False
         if path:
@@ -105,7 +105,7 @@ class ProjectController(QObject):
         if not self.project.project_path:
             return False
         try:
-            if self._settings.get_backup_enabled() and not path:
+            if self._settings.get_backup_enabled() and not path and not is_autosave:
                 backup = self.project.create_backup()
                 if backup:
                     if self.audit:

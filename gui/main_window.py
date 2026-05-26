@@ -572,7 +572,7 @@ class MainWindow(QMainWindow):
         """Timer slot: save the project silently if autosave is enabled in settings."""
         if self.project and self._settings.get_autosave_enabled():
             self.labeling_page._save_current_rois()
-            ok = self._project_ctrl.save_project()
+            ok = self._project_ctrl.save_project(is_autosave=True)
             from datetime import datetime as _dt
             if ok:
                 self._autosave_label.setText(
