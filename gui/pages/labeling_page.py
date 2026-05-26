@@ -1839,6 +1839,7 @@ class LabelingPage(QWidget):
 
     @Slot(list)
     def _pre_on_done(self, results: list):
+        self._pre_label_thread = None
         self._pre_progress.setVisible(False)
         self._pre_run_btn.setEnabled(True)
         self._pre_suggestions = results
@@ -1855,6 +1856,7 @@ class LabelingPage(QWidget):
 
     @Slot(str)
     def _pre_on_error(self, msg: str):
+        self._pre_label_thread = None
         self._pre_progress.setVisible(False)
         self._pre_run_btn.setEnabled(True)
         self._pre_status.setText(f"Fehler: {msg}")

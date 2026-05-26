@@ -39,7 +39,10 @@ class ExportPage(QWidget):
         self.project = project
         if project and project.inference_results:
             self._results = project.inference_results
-            self.count_label.setText(f"{len(self._results)} Ergebnisse aus letzter Inferenz")  # log
+            self.count_label.setText(f"{len(self._results)} Ergebnisse aus letzter Inferenz")
+        else:
+            self._results = []
+            self.count_label.setText(tr("export.no_results"))
 
     # ------------------------------------------------------------------ UI
 

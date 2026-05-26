@@ -39,7 +39,8 @@ class DatasetStatsPage(QWidget):
             self._update_size_stats()
             self._update_label_rate()
             self._dup_list.clear()
-            self._dup_status_lbl.setText("Duplikate noch nicht gesucht.")
+            from utils.i18n import tr as _tr
+            self._dup_status_lbl.setText(_tr("dataset_stats.dups_not_searched"))
         except Exception as exc:
             log.error("Fehler in DatasetStatsPage.refresh: %s", exc)
 
@@ -107,7 +108,7 @@ class DatasetStatsPage(QWidget):
         dup_btn_row.addWidget(self._dup_btn)
         dup_btn_row.addStretch()
         dv.addLayout(dup_btn_row)
-        self._dup_status_lbl = QLabel("Duplikate noch nicht gesucht.")
+        self._dup_status_lbl = QLabel(tr("dataset_stats.dups_not_searched"))
         self._dup_status_lbl.setStyleSheet("color: #8B949E; font-size: 11px;")
         dv.addWidget(self._dup_status_lbl)
         self._dup_list = QListWidget()

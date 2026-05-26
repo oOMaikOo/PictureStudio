@@ -137,6 +137,9 @@ class TrainingPage(QWidget):
             self._al_thread.request_stop()
             self._al_thread.quit()
             self._al_thread.wait(3000)
+        if self._hpt_thread and self._hpt_thread.isRunning():
+            self._hpt_thread.quit()
+            self._hpt_thread.wait(3000)
         super().closeEvent(event)
 
     # ------------------------------------------------------------------ UI
@@ -695,6 +698,7 @@ class TrainingPage(QWidget):
         self._al_thread.start()
 
     def _on_al_finished(self, candidates: list) -> None:
+        self._al_thread = None
         self._al_progress.hide()
         self._al_scan_btn.setEnabled(True)
 
@@ -725,6 +729,7 @@ class TrainingPage(QWidget):
             self.al_queue_updated.emit()
 
     def _on_al_error(self, msg: str) -> None:
+        self._al_thread = None
         self._al_progress.hide()
         self._al_scan_btn.setEnabled(True)
         self._al_status.setText(f"Fehler: {msg}")
@@ -1100,6 +1105,7 @@ class TrainingPage(QWidget):
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         """Re-enable the start button and show a critical dialog on training error."""
+        self._thread = None
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.log_text.append(f"FEHLER: {msg}")

@@ -350,6 +350,7 @@ class DataPage(QWidget):
     def _on_analysis_done(self, result: dict) -> None:
         """Populate all result tabs with the finished analysis data."""
         from utils.i18n import tr
+        self._thread = None
         self.progress.setVisible(False)
         self._analysis = result
 
@@ -409,6 +410,7 @@ class DataPage(QWidget):
     def _on_error(self, msg: str) -> None:
         """Show a critical dialog when the analysis thread reports an error."""
         from utils.i18n import tr
+        self._thread = None
         self.progress.setVisible(False)
         QMessageBox.critical(self, tr("common.error"), msg)
 

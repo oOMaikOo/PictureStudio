@@ -342,22 +342,16 @@ class DashboardPage(QWidget):
         # Warnings
         warns = []
         if data["unlabeled_images"] > 0:
-            warns.append(f"⚠ {data['unlabeled_images']} Bild(er) noch nicht gelabelt.")
+            warns.append(tr("dashboard.warn.unlabeled", n=data["unlabeled_images"]))
         counts = list(label_counts.values())
         if len(counts) >= 2 and min(counts) > 0:
             ratio = max(counts) / min(counts)
             if ratio > 5:
-                warns.append(
-                    f"⚠ Klassenungleichgewicht: Ratio {ratio:.1f}:1 — "
-                    "'Klassenausgleich' im Training aktivieren."
-                )
+                warns.append(tr("dashboard.warn.imbalance", ratio=f"{ratio:.1f}"))
         from utils.config import MIN_IMAGES_PER_CLASS
         for lbl, cnt in label_counts.items():
             if 0 < cnt < MIN_IMAGES_PER_CLASS:
-                warns.append(
-                    f"⚠ Klasse '{lbl}' hat nur {cnt} Bilder "
-                    f"(Mindestens {MIN_IMAGES_PER_CLASS} empfohlen)."
-                )
+                warns.append(tr("dashboard.warn.few_samples", lbl=lbl, cnt=cnt, min=MIN_IMAGES_PER_CLASS))
 
         self._warn_label.setText("\n".join(warns) if warns else "✓ " + tr("dashboard.no_warnings"))
         self._warn_label.setStyleSheet("color: #D29922;" if warns else "color: #3FB950;")

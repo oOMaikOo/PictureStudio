@@ -127,6 +127,9 @@ STRINGS: dict = {
     "dashboard.warnings_group":     "Warnungen / Hinweise",
     "dashboard.no_warnings":        "Keine Warnungen.",
     "dashboard.navigate_label_hint":"Klick: Beschriftungsseite auf '{lbl}' filtern",
+    "dashboard.warn.unlabeled":     "⚠ {n} Bild(er) noch nicht gelabelt.",
+    "dashboard.warn.imbalance":     "⚠ Klassenungleichgewicht: Ratio {ratio}:1 — 'Klassenausgleich' im Training aktivieren.",
+    "dashboard.warn.few_samples":   "⚠ Klasse '{lbl}' hat nur {cnt} Bilder (Mindestens {min} empfohlen).",
     "dashboard.quickstart_group":   "Schnellstart-Pfade",
     "dashboard.qs.image_title":     "Bildklassifikation",
     "dashboard.qs.image_steps":     "① Projekt erstellen\n② Bilder importieren\n③ Labels vergeben\n④ Modell trainieren\n⑤ Neue Bilder klassifizieren",
@@ -625,6 +628,7 @@ STRINGS: dict = {
     "dataset_stats.dups_found":         "{groups} Duplikat-Gruppe(n), {images} Bilder betroffen.",
     "dataset_stats.not_readable":       "Nicht lesbar",
     "dataset_stats.imagehash_missing":  "imagehash nicht installiert (pip install imagehash)",
+    "dataset_stats.dups_not_searched":  "Duplikate noch nicht gesucht.",
 
     # ------------------------------------------------------------------ Video-Annotation
     "videoannotation.title":            "🎬 Video-Annotation",

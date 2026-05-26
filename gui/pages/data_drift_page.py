@@ -264,15 +264,23 @@ class DataDriftPage(QWidget):
         self._btn_build.setEnabled(False)
         self._btn_build_folder.setEnabled(False)
 
-        t = DriftBaselineThread(self._detector, paths, self)
-        t.progress.connect(lambda c, tot: self._baseline_prog.setValue(c))
-        t.finished.connect(self._on_baseline_done)
-        t.error.connect(self._on_baseline_error)
-        self._baseline_thread = t
-        t.start()
+        try:
+            t = DriftBaselineThread(self._detector, paths, self)
+            t.progress.connect(lambda c, tot: self._baseline_prog.setValue(c))
+            t.finished.connect(self._on_baseline_done)
+            t.error.connect(self._on_baseline_error)
+            self._baseline_thread = t
+            t.start()
+        except Exception as exc:
+            self._baseline_prog.setVisible(False)
+            self._btn_build.setEnabled(True)
+            self._btn_build_folder.setEnabled(True)
+            from utils.i18n import tr
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     @Slot(dict)
     def _on_baseline_done(self, stats: dict):
+        self._baseline_thread = None
         self._baseline_prog.setVisible(False)
         self._btn_build.setEnabled(True)
         self._btn_build_folder.setEnabled(True)
@@ -288,6 +296,7 @@ class DataDriftPage(QWidget):
 
     @Slot(str)
     def _on_baseline_error(self, msg: str):
+        self._baseline_thread = None
         from utils.i18n import tr
         self._baseline_prog.setVisible(False)
         self._btn_build.setEnabled(True)
@@ -354,23 +363,30 @@ class DataDriftPage(QWidget):
         self._btn_score.setEnabled(False)
         self._score_summary.setText("")
 
-        t = DriftScoringThread(
-            self._detector, folder,
-            recursive=self._recursive_cb.isChecked(),
-            threshold=self._thr_spin.value(),
-            parent=self,
-        )
-        t.progress.connect(lambda c, tot: (
-            self._score_prog.setMaximum(tot),
-            self._score_prog.setValue(c),
-        ))
-        t.finished.connect(self._on_scoring_done)
-        t.error.connect(self._on_scoring_error)
-        self._scoring_thread = t
-        t.start()
+        try:
+            t = DriftScoringThread(
+                self._detector, folder,
+                recursive=self._recursive_cb.isChecked(),
+                threshold=self._thr_spin.value(),
+                parent=self,
+            )
+            t.progress.connect(lambda c, tot: (
+                self._score_prog.setMaximum(tot),
+                self._score_prog.setValue(c),
+            ))
+            t.finished.connect(self._on_scoring_done)
+            t.error.connect(self._on_scoring_error)
+            self._scoring_thread = t
+            t.start()
+        except Exception as exc:
+            self._score_prog.setVisible(False)
+            self._btn_score.setEnabled(True)
+            from utils.i18n import tr
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     @Slot(list)
     def _on_scoring_done(self, results: list):
+        self._scoring_thread = None
         self._score_prog.setVisible(False)
         self._btn_score.setEnabled(True)
         self._results = results
@@ -389,10 +405,25 @@ class DataDriftPage(QWidget):
 
     @Slot(str)
     def _on_scoring_error(self, msg: str):
+        self._scoring_thread = None
         from utils.i18n import tr
         self._score_prog.setVisible(False)
         self._btn_score.setEnabled(True)
         QMessageBox.critical(self, tr("common.error"), msg)
+
+    def hideEvent(self, event) -> None:
+        for t in (self._baseline_thread, self._scoring_thread):
+            if t and t.isRunning():
+                t.quit()
+                t.wait(2000)
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        for t in (self._baseline_thread, self._scoring_thread):
+            if t and t.isRunning():
+                t.quit()
+                t.wait(2000)
+        super().closeEvent(event)
 
     def _populate_table(self, results: list):
         threshold = self._thr_spin.value()

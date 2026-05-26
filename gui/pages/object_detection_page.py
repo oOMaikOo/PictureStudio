@@ -372,7 +372,13 @@ class ObjectDetectionPage(QWidget):
         self._log_edit.clear()
         self._log(f"Starte Training: {self._model_combo.currentData()}, "
                   f"{self._epochs_spin.value()} Epochen")
-        self._train_thread.start()
+        try:
+            self._train_thread.start()
+        except Exception as exc:
+            self._train_thread = None
+            self._train_btn.setEnabled(True)
+            self._stop_btn.setEnabled(False)
+            QMessageBox.critical(self, "Fehler", str(exc))
 
     def _stop_training(self):
         if self._train_thread:
@@ -391,6 +397,7 @@ class ObjectDetectionPage(QWidget):
     @Slot(str)
     def _on_train_finished(self, best_path: str):
         from utils.i18n import tr
+        self._train_thread = None
         self._train_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
         self._train_progress.setValue(100)
@@ -408,6 +415,7 @@ class ObjectDetectionPage(QWidget):
     @Slot(str)
     def _on_train_error(self, msg: str):
         from utils.i18n import tr
+        self._train_thread = None
         self._train_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
         self._train_status.setText(tr("training.error_title"))
@@ -529,17 +537,42 @@ class ObjectDetectionPage(QWidget):
             lambda c, t: self._infer_progress.setValue(int(c / t * 100) if t else 0)
         )
         self._infer_thread.finished.connect(self._on_infer_finished)
-        self._infer_thread.error.connect(lambda e: QMessageBox.critical(self, "Fehler", e))
+        self._infer_thread.error.connect(self._on_infer_error)
         self._infer_btn.setEnabled(False)
         self._infer_progress.setValue(0)
         self._infer_thread.start()
 
     @Slot(list)
     def _on_infer_finished(self, results: List[Dict]):
+        self._infer_thread = None
         self._all_results = results
         self._infer_btn.setEnabled(True)
         self._infer_progress.setValue(100)
         self._populate_table(results)
+
+    @Slot(str)
+    def _on_infer_error(self, msg: str):
+        from utils.i18n import tr
+        self._infer_thread = None
+        self._infer_btn.setEnabled(True)
+        QMessageBox.critical(self, tr("common.error"), msg)
+
+    def hideEvent(self, event) -> None:
+        for t in (self._train_thread, self._infer_thread):
+            if t and t.isRunning():
+                t.quit()
+                t.wait(2000)
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        if self._train_thread and self._train_thread.isRunning():
+            self._train_thread.stop()
+            self._train_thread.quit()
+            self._train_thread.wait(5000)
+        if self._infer_thread and self._infer_thread.isRunning():
+            self._infer_thread.quit()
+            self._infer_thread.wait(2000)
+        super().closeEvent(event)
 
     def _populate_table(self, results: List[Dict]):
         self._table.setRowCount(0)
