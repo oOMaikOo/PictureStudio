@@ -187,9 +187,16 @@ class Project:
 
         project.images = data.get("images", [])
         project.labels = data.get("labels", {})
-        project.image_labels = data.get("image_labels", {})
-        project.image_multi_labels = data.get("image_multi_labels", {})
-        project.rois = data.get("rois", {})
+        image_set = set(project.images)
+        project.image_labels = {
+            k: v for k, v in data.get("image_labels", {}).items() if k in image_set
+        }
+        project.image_multi_labels = {
+            k: v for k, v in data.get("image_multi_labels", {}).items() if k in image_set
+        }
+        project.rois = {
+            k: v for k, v in data.get("rois", {}).items() if k in image_set
+        }
         project.training_runs = data.get("training_runs", [])
         project.current_model_path = data.get("current_model_path", "")
         project.training_config = {**DEFAULT_TRAIN_CONFIG, **data.get("training_config", {})}
@@ -198,7 +205,9 @@ class Project:
         project.dataset_splits = data.get("dataset_splits", {})
         project.roi_templates = data.get("roi_templates", [])
         project.active_learning_queue = data.get("active_learning_queue", [])
-        project.image_label_flags = data.get("image_label_flags", {})
+        project.image_label_flags = {
+            k: v for k, v in data.get("image_label_flags", {}).items() if k in image_set
+        }
         project._index.rebuild(project)
         return project
 

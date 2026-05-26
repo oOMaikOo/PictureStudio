@@ -381,9 +381,17 @@ class BatchInferencePage(QWidget):
         self._progress.setValue(current)
         self._status_lbl.setText(f"Verarbeite {current} / {total} Bilder …")
 
+    def hideEvent(self, event) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.cancel()
+            self._thread.quit()
+            self._thread.wait(2000)
+        super().hideEvent(event)
+
     @Slot(list)
     def _on_finished(self, results: List[Dict]) -> None:
         """Store results, restore buttons, and populate the results table."""
+        self._thread = None
         self._results = results
         self._progress.setVisible(False)
         self._run_btn.setVisible(True)
@@ -393,6 +401,7 @@ class BatchInferencePage(QWidget):
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         """Show a critical dialog and restore the UI after a batch error."""
+        self._thread = None
         self._progress.setVisible(False)
         self._run_btn.setVisible(True)
         self._cancel_btn.setVisible(False)

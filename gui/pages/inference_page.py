@@ -535,9 +535,16 @@ class InferencePage(QWidget):
         self._thread.error.connect(self._on_error)
         self._thread.start()
 
+    def hideEvent(self, event) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait(2000)
+        super().hideEvent(event)
+
     @Slot(list)
     def _on_finished(self, results: List[Dict]) -> None:
         """Store results, update label-filter combo, and apply the current filter."""
+        self._thread = None
         self.classify_btn.setEnabled(True)
         self.progress_bar.setValue(100)
         self._all_results = results
@@ -561,6 +568,7 @@ class InferencePage(QWidget):
     @Slot(str)
     def _on_error(self, msg: str) -> None:
         """Re-enable the classify button and show the error in a critical dialog."""
+        self._thread = None
         self.classify_btn.setEnabled(True)
         QMessageBox.critical(self, tr("common.error"), msg)
 

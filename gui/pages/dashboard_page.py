@@ -297,10 +297,10 @@ class DashboardPage(QWidget):
         self._last_labels["current_model"].setText(data.get("current_model", "") or "–")
 
         # Class distribution bars (with percentage)
-        for i in reversed(range(self._class_layout.count())):
-            w = self._class_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
+        while self._class_layout.count():
+            item = self._class_layout.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
 
         label_counts = data.get("label_counts", {})
         total_labeled = sum(label_counts.values()) or 1

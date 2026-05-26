@@ -224,34 +224,38 @@ class _CameraThread(threading.Thread):
             warmup_limit = 3 if self._is_video else 60
             t_next = time.perf_counter()
 
-            while self._running:
-                now = time.perf_counter()
-                if now < t_next:
-                    time.sleep(0.005)
-                    continue
-                t_next = now + delay
+            try:
+                while self._running:
+                    now = time.perf_counter()
+                    if now < t_next:
+                        time.sleep(0.005)
+                        continue
+                    t_next = now + delay
 
-                ret, frame = cap.read()
-                if ret and frame is not None:
-                    if first_frame:
-                        first_frame = False
-                        src_label = self._source if isinstance(self._source, str) else f"Index {self._source}"
-                        print(f"[Kamera] Erster Frame von {src_label} empfangen "
-                              f"({frame.shape[1]}×{frame.shape[0]})")
-                    consec_fail = 0
-                    try:
-                        self._callback(frame)
-                    except Exception:
-                        pass
-                else:
-                    consec_fail += 1
-                    if consec_fail >= warmup_limit:
-                        print(f"[Kamera] Quelle {self._source}: {consec_fail} "
-                              f"aufeinanderfolgende Fehler — trenne Verbindung.")
-                        break
-                    time.sleep(0.1)
-
-            cap.release()
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        if first_frame:
+                            first_frame = False
+                            src_label = self._source if isinstance(self._source, str) else f"Index {self._source}"
+                            print(f"[Kamera] Erster Frame von {src_label} empfangen "
+                                  f"({frame.shape[1]}×{frame.shape[0]})")
+                        consec_fail = 0
+                        try:
+                            self._callback(frame)
+                        except Exception as _cb_exc:
+                            import logging as _logging
+                            _logging.getLogger(__name__).warning(
+                                "Frame-Callback-Fehler: %s", _cb_exc
+                            )
+                    else:
+                        consec_fail += 1
+                        if consec_fail >= warmup_limit:
+                            print(f"[Kamera] Quelle {self._source}: {consec_fail} "
+                                  f"aufeinanderfolgende Fehler — trenne Verbindung.")
+                            break
+                        time.sleep(0.1)
+            finally:
+                cap.release()
 
             if not self._running:
                 break

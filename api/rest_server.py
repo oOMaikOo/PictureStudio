@@ -343,7 +343,11 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             except ValueError:
                 self._err("'channel' must be an integer", 400)
                 return
-            limit = int(qs.get("limit", ["120"])[0])
+            try:
+                limit = max(1, min(int(qs.get("limit", ["120"])[0]), 2000))
+            except (ValueError, TypeError):
+                self._err("'limit' muss eine positive Ganzzahl sein", 400)
+                return
             channels = _ProjectHandler.mc_channels
             if channel < 0 or channel >= len(channels):
                 self._err(f"Channel {channel} not found", 404)
@@ -368,10 +372,17 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 
         self._err("Endpoint not found", 404)
 
+    _MAX_EVENT_LOG_BYTES: int = 10 * 1024 * 1024  # 10 MB
+
     def _read_event_log(self, limit: int) -> list:
         path = _ProjectHandler.event_log_path
         if not path or not os.path.isfile(path):
             return []
+        try:
+            if os.path.getsize(path) > self._MAX_EVENT_LOG_BYTES:
+                log.warning("Event-Log zu groß (>10 MB), nur letzte %d Zeilen werden gelesen", limit)
+        except OSError:
+            pass
         import csv as csv_mod
         rows = []
         try:
@@ -379,6 +390,8 @@ class _ProjectHandler(BaseHTTPRequestHandler):
                 reader = csv_mod.DictReader(f)
                 for row in reader:
                     rows.append(dict(row))
+                    if len(rows) > 10_000:
+                        rows = rows[-limit:]
         except Exception as exc:
             log.warning("Event-Log konnte nicht gelesen werden (%s): %s", path, exc)
             return []
@@ -504,8 +517,8 @@ class _ProjectHandler(BaseHTTPRequestHandler):
                 suffix = ".png" if img_bytes[:4] == b'\x89PNG' else ".jpg"
                 try:
                     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                        tmp_path = f.name  # set before write so finally can clean up
                         f.write(img_bytes)
-                        tmp_path = f.name
                     img_path = tmp_path
                 except Exception as exc:
                     self._err(f"Temp-Datei konnte nicht erstellt werden: {exc}", 500)

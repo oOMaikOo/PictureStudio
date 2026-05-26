@@ -85,8 +85,9 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(400, self._maybe_show_wizard)
 
         # Periodic status update
-        QTimer(self).timeout.connect(self._update_status)
-        self.findChild(QTimer).start(8000) if self.findChild(QTimer) else None
+        self._status_timer = QTimer(self)
+        self._status_timer.timeout.connect(self._update_status)
+        self._status_timer.start(8000)
 
     # ------------------------------------------------------------------ UI
 
@@ -571,7 +572,10 @@ class MainWindow(QMainWindow):
     def _autosave(self) -> None:
         """Timer slot: save the project silently if autosave is enabled in settings."""
         if self.project and self._settings.get_autosave_enabled():
-            self.labeling_page._save_current_rois()
+            try:
+                self.labeling_page._save_current_rois()
+            except Exception as exc:
+                log.warning("Autosave: ROI-Speichern fehlgeschlagen: %s", exc)
             ok = self._project_ctrl.save_project(is_autosave=True)
             from datetime import datetime as _dt
             if ok:
@@ -901,10 +905,21 @@ class MainWindow(QMainWindow):
             if reply == QMessageBox.Yes:
                 self._save_project()
 
+        # Stop timers immediately so they can't fire during shutdown.
+        self._autosave_timer.stop()
+        self._status_timer.stop()
+
         # Stop background threads before the Qt event loop exits.
         # camera_page and multi_camera_page each own CameraFrameThreads.
         self.camera_page._stop_stream()
         self.multi_camera_page._on_stop_all()
+
+        # Inference/batch-inference threads.
+        for page in (self.inference_page, self.batch_page):
+            t = getattr(page, "_thread", None)
+            if t and t.isRunning():
+                t.quit()
+                t.wait(2000)
 
         # Training thread: request graceful stop, then wait up to 3 s.
         t = getattr(self.training_page, "_thread", None)
