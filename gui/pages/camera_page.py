@@ -7,6 +7,7 @@ Datei → Kamera aufnehmen… (CameraCaptureDialog).
 from __future__ import annotations
 
 import csv
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -31,10 +32,11 @@ from PySide6.QtWidgets import (
     QSlider, QFormLayout,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, Slot
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 
 from utils.i18n import tr
 
+log = logging.getLogger(__name__)
 
 _SMOOTH_DEFAULT = 5
 _DEDUP_DEFAULT  = 30   # seconds
@@ -103,6 +105,9 @@ class CameraPage(QWidget):
 
         self._build_ui()
         self._scan_cameras()
+        QShortcut(QKeySequence(Qt.Key_Space), self,
+                  activated=lambda: self._scoring_btn.toggle()
+                  if self._scoring_btn.isEnabled() else None)
 
     # ── project ───────────────────────────────────────────────────────────────
 
@@ -235,7 +240,7 @@ class CameraPage(QWidget):
         cam_row.addWidget(QLabel(tr("camera.cam_label")))
         self._cam_combo = QComboBox()
         self._cam_combo.setMinimumWidth(200)
-        self._cam_combo.addItem("Suche läuft…")
+        self._cam_combo.addItem(tr("camera.search_running"))
         cam_row.addWidget(self._cam_combo)
 
         self._refresh_btn = QPushButton(tr("camera.refresh_btn"))
@@ -464,6 +469,19 @@ class CameraPage(QWidget):
         ev.addWidget(self._log_btn)
         lv.addWidget(ev_grp)
 
+        # Alarm statistics
+        stats_grp = QGroupBox(tr("camera.stats_group"))
+        stats_layout = QVBoxLayout(stats_grp)
+        self._stats_session_lbl = QLabel(tr("camera.stats_session", n=0))
+        self._stats_session_lbl.setStyleSheet("color:#7F8C8D; font-size:11px;")
+        self._stats_today_lbl = QLabel(tr("camera.stats_today", n="–"))
+        self._stats_today_lbl.setStyleSheet("color:#7F8C8D; font-size:11px;")
+        self._stats_week_lbl = QLabel(tr("camera.stats_week", n="–"))
+        self._stats_week_lbl.setStyleSheet("color:#7F8C8D; font-size:11px;")
+        for lbl in (self._stats_session_lbl, self._stats_today_lbl, self._stats_week_lbl):
+            stats_layout.addWidget(lbl)
+        lv.addWidget(stats_grp)
+
         # Score chart (optional widget)
         self._score_chart = None
         try:
@@ -574,7 +592,7 @@ class CameraPage(QWidget):
         """Start a background ``_ScanThread`` to enumerate available cameras."""
         self._prev_cam = self._cam_combo.currentData()  # save BEFORE clearing
         self._cam_combo.clear()
-        self._cam_combo.addItem("Suche läuft…")
+        self._cam_combo.addItem(tr("camera.search_running"))
         self._refresh_btn.setEnabled(False)
         self._scan_thread = _ScanThread(self)
         self._scan_thread.done.connect(self._on_scan_done)
@@ -936,6 +954,7 @@ class CameraPage(QWidget):
                 self._event_count += 1
                 plural = "e" if self._event_count != 1 else ""
                 self._event_lbl.setText(f"{self._event_count} Alarm{plural} in dieser Sitzung")
+                self._stats_session_lbl.setText(tr("camera.stats_session", n=self._event_count))
                 self._write_event(score, thr)
                 # USP 2 — auto-retrain suggestion
                 self._session_alarm_count += 1
@@ -1311,6 +1330,39 @@ class CameraPage(QWidget):
             self._camera_thread.set_cam_props(defaults)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._refresh_alarm_stats()
+
+    def _refresh_alarm_stats(self) -> None:
+        """Read the alarm CSV and update the today/7-day stat labels."""
+        if not self._log_path or not os.path.isfile(self._log_path):
+            return
+        from utils.i18n import tr
+        today_count = 0
+        week_count = 0
+        now = datetime.now(timezone.utc)
+        try:
+            with open(self._log_path, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    ts_str = row.get("timestamp", "")
+                    if not ts_str:
+                        continue
+                    try:
+                        ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                        delta = now - ts
+                        if delta.days < 1:
+                            today_count += 1
+                        if delta.days < 7:
+                            week_count += 1
+                    except ValueError:
+                        continue
+        except Exception:
+            return
+        self._stats_today_lbl.setText(tr("camera.stats_today", n=today_count))
+        self._stats_week_lbl.setText(tr("camera.stats_week", n=week_count))
 
     def hideEvent(self, event) -> None:
         if self._camera_thread:

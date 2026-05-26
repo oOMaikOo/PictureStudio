@@ -3,8 +3,11 @@ Batch inference page: classify or anomaly-score an entire folder in one run.
 Results shown in a sortable table; exportable as CSV.
 """
 import csv
+import logging
 import os
 from typing import List, Dict, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,

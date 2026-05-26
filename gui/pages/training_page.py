@@ -1,8 +1,11 @@
 """
 Training page: config, live progress, metrics, curves, confusion matrix.
 """
+import logging
 import os
 from typing import Dict, List, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
@@ -11,7 +14,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QLineEdit,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 
 from models.classifier import get_available_models
 from utils.config import DEFAULT_TRAIN_CONFIG
@@ -103,6 +106,8 @@ class TrainingPage(QWidget):
         self._last_class_names: List[str] = []
         self._last_model_path: str = ""
         self._build_ui()
+        QShortcut(QKeySequence("Ctrl+R"), self, activated=self._start)
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=self._stop_training)
 
     def set_project(self, project, audit=None) -> None:
         """Accept a new project, update the model save directory, and reload saved config."""

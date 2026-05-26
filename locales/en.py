@@ -153,6 +153,8 @@ STRINGS: dict = {
     "dashboard.qs.video_title":     "Video Analysis & Anomaly",
     "dashboard.qs.video_steps":     "① Create video project\n② Capture normal frames\n③ Train detector\n④ Start live monitoring",
     "dashboard.qs.open_wizard":     "Open Wizard…",
+    "dashboard.notes_group":        "Project Notes",
+    "dashboard.notes_placeholder":  "Notes, observations, tasks…",
 
     # ------------------------------------------------------------------ New Project Dialog
     "new_project.title":            "Create New Project",
@@ -212,6 +214,10 @@ STRINGS: dict = {
     "data.camera_captured_title":   "Captures Added",
     "data.paths_updated_title":     "Path Update",
     "data.no_project_hint":         "No project open. Please load or create a project first.",
+    "data.confirm_remove_title":    "Remove Images",
+    "data.confirm_remove_msg":      "Remove {n} image(s) from the project?",
+    "data.remove_missing_btn":      "Remove Missing",
+    "data.remove_missing_tip":      "Remove all image paths that no longer exist on disk from the project",
 
     # ------------------------------------------------------------------ Labeling Page
     "labeling.title":               "Labeling",
@@ -375,6 +381,8 @@ STRINGS: dict = {
     "models.docker_success":        "Docker deployment created",
     "models.ts_success":            "TorchScript Exported",
     "models.file_not_found":        "Model file not found:\n{path}",
+    "models.no_project":            "No project loaded.",
+    "models.search_placeholder":    "Search models…",
 
     # ------------------------------------------------------------------ Inference Page
     "inference.title":              "Classification",
@@ -515,9 +523,23 @@ STRINGS: dict = {
     "camera.shadow_load_btn":       "Load shadow model…",
     "camera.shadow_no_model":       "No shadow model  –  A/B comparison inactive",
     "camera.shadow_load_title":     "Load shadow model",
+    "camera.search_running":        "Scanning…",
+    "camera.ready":                 "Ready",
+    "camera.reconnect_attempt":     "Reconnecting… (attempt {n})",
+    "camera.connection_restored":   "Connection restored.",
+    "camera.shadow_loaded":         "Shadow model loaded: {name}",
+    # Alarm statistics
+    "camera.stats_group":           "Alarm Statistics",
+    "camera.stats_session":         "Session: {n}",
+    "camera.stats_today":           "Today: {n}",
+    "camera.stats_week":            "7 days: {n}",
 
     # ------------------------------------------------------------------ Settings Page
     "settings.title":               "Settings",
+    "settings.tab.general":         "General",
+    "settings.tab.notifications":   "Notifications",
+    "settings.tab.integration":     "Integration",
+    "settings.tab.remote":          "Remote",
     "settings.lang.group":          "Language / Sprache",
     "settings.lang.label":          "Language:",
     "settings.lang.hint":           "Change takes effect after restarting the app",
@@ -597,6 +619,7 @@ STRINGS: dict = {
     "multicam.title":               "Multi-Camera Monitoring",
     "multicam.channels_label":      "Channels:",
     "multicam.start_all_btn":       "Start All",
+    "multicam.pause_all_btn":       "Pause All",
     "multicam.stop_all_btn":        "Stop All",
     "multicam.configure_btn":       "Configure",
     "multicam.not_configured":      "Not configured",
@@ -628,6 +651,8 @@ STRINGS: dict = {
     "clustering.done":              "Clustering complete: {clusters} clusters, {images} images.",
     "clustering.failed":            "No images found or clustering failed.",
     "clustering.export_success":    "CSV saved successfully:\n{path}",
+    "clustering.project_loaded":    "Project loaded. Start clustering to group images.",
+    "clustering.no_project_loaded": "No project loaded.",
 
     # ------------------------------------------------------------------ Dataset Statistics
     "dataset_stats.title":              "📊 Dataset Analysis",
@@ -646,6 +671,7 @@ STRINGS: dict = {
     "dataset_stats.not_readable":       "Not readable",
     "dataset_stats.imagehash_missing":  "imagehash not installed (pip install imagehash)",
     "dataset_stats.dups_not_searched":  "No duplicate search performed yet.",
+    "dataset_stats.search_running":     "Searching…",
 
     # ------------------------------------------------------------------ Video Annotation
     "videoannotation.title":            "🎬 Video Annotation",
@@ -701,6 +727,14 @@ STRINGS: dict = {
     "fleet.deploy_success":         "Model deployed successfully.\nPath on device: {path}",
     "fleet.deploy_failed":          "Deployment failed: {msg}",
     "fleet.no_channel_msg":         "Please select a channel in the table.",
+    "fleet.training_running":       "Training in progress…",
+    "fleet.tip.add":                "Add a new edge device",
+    "fleet.tip.refresh":            "Query status of all devices",
+    "fleet.tip.auto_refresh":       "Automatic status poll every 30 seconds",
+    "fleet.tip.dashboard":          "Open monitor dashboard in browser",
+    "fleet.tip.setup":              "Configure camera, ROI and threshold in browser",
+    "fleet.tip.training":           "Download frames and train anomaly model locally",
+    "fleet.tip.delete":             "Remove device from list",
 
     # ------------------------------------------------------------------ Object Detection
     "objdetect.title":              "🎯 Object Detection (YOLOv8)",
@@ -730,6 +764,7 @@ STRINGS: dict = {
     "objdetect.col.error":          "Error",
     "objdetect.export_csv_btn":     "Export CSV",
     "objdetect.missing_dataset_msg":"Dataset not yet prepared. Prepare now?",
+    "objdetect.training_running":   "Training in progress…",
     "objdetect.training_complete":  "Training Complete",
     "objdetect.load_model_question":"Training successful.\nLoad model?\n{path}",
     "objdetect.ultralytics_missing":"⚠ ultralytics not installed.\nPlease run:\n  pip install ultralytics",

@@ -9,8 +9,11 @@ Workflow:
 from __future__ import annotations
 
 import csv
+import logging
 import os
 from typing import List, Dict, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
@@ -220,7 +223,7 @@ class DataDriftPage(QWidget):
 
     # ------------------------------------------------------------------ project
 
-    def set_project(self, project):
+    def set_project(self, project, audit=None) -> None:
         self.project = project
         n = len(getattr(project, "images", []))
         self._baseline_lbl.setText(

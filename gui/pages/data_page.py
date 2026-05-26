@@ -1,8 +1,11 @@
 """
 Dataset management page: analysis, validation, COCO/YOLO/CSV export.
 """
+import logging
 import os
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
@@ -69,7 +72,7 @@ class DataPage(QWidget):
         self._drop_filter = ImageDropFilter(self)
         self._drop_filter.files_dropped.connect(self._on_files_dropped)
 
-    def set_project(self, project) -> None:
+    def set_project(self, project, audit=None) -> None:
         """Accept a new project and clear the previous analysis results."""
         self.project = project
         has_project = project is not None
@@ -182,6 +185,11 @@ class DataPage(QWidget):
         )
         fix_btn.clicked.connect(self._fix_paths)
         vg.addWidget(fix_btn)
+
+        remove_missing_btn = QPushButton(tr("data.remove_missing_btn"))
+        remove_missing_btn.setToolTip(tr("data.remove_missing_tip"))
+        remove_missing_btn.clicked.connect(self._remove_missing_files)
+        vg.addWidget(remove_missing_btn)
         cv.addWidget(valid_group)
         cv.addStretch()
         splitter.addWidget(ctrl)
@@ -474,6 +482,31 @@ class DataPage(QWidget):
             if len(missing) > 10:
                 msg += f"\n... und {len(missing)-10} weitere"
         QMessageBox.information(self, "Datei-Prüfung", msg)
+
+    def _remove_missing_files(self) -> None:
+        """Remove all image paths that no longer exist on disk after user confirmation."""
+        from utils.i18n import tr
+        if not self._check_project():
+            return
+        missing = [p for p in self.project.images if not os.path.isfile(p)]
+        if not missing:
+            QMessageBox.information(self, tr("common.info"), "Keine fehlenden Dateien.")
+            return
+        reply = QMessageBox.question(
+            self, tr("data.confirm_remove_title"),
+            tr("data.confirm_remove_msg", n=len(missing)),
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        for p in missing:
+            if p in self.project.images:
+                self.project.images.remove(p)
+        self.project.save()
+        QMessageBox.information(
+            self, tr("data.confirm_remove_title"),
+            f"{len(missing)} Einträge entfernt.",
+        )
 
     def _fix_paths(self) -> None:
         """Prompt for an old/new path prefix pair and relocate all matching image paths."""

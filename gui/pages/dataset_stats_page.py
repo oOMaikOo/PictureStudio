@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QSplitter, QFormLayout, QMessageBox,
 )
 from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence, QShortcut
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ class DatasetStatsPage(QWidget):
         super().__init__(parent)
         self.project = None
         self._build_ui()
+        QShortcut(QKeySequence("F5"), self, activated=self.refresh)
 
     def set_project(self, project, audit=None) -> None:
         self.project = project
@@ -229,7 +230,7 @@ class DatasetStatsPage(QWidget):
             self._dup_btn.setEnabled(False)
             return
 
-        self._dup_status_lbl.setText("Suche läuft…")
+        self._dup_status_lbl.setText(tr("dataset_stats.search_running"))
         hash_map: dict = {}
         for p in self.project.images:
             if not os.path.isfile(p):

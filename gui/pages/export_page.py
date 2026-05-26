@@ -1,8 +1,11 @@
 """
 Excel export page: custom column mapping, append/overwrite, sheet selection.
 """
+import logging
 import os
 from typing import List, Dict
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
@@ -34,7 +37,7 @@ class ExportPage(QWidget):
         self._col_defs: List[Dict] = [dict(c) for c in DEFAULT_COLUMNS]
         self._build_ui()
 
-    def set_project(self, project) -> None:
+    def set_project(self, project, audit=None) -> None:
         """Accept the active project and pre-fill the result count if results exist."""
         self.project = project
         if project and project.inference_results:

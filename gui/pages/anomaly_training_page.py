@@ -6,8 +6,11 @@ CameraCaptureDialog zum Sammeln von Frames und Trainieren des Autoencoders.
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,

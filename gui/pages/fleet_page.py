@@ -1,9 +1,12 @@
 from __future__ import annotations
 import io
 import json
+import logging
 import urllib.request
 import urllib.error
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -395,8 +398,9 @@ class _RemoteTrainDialog(QDialog):
         if self._detector is None:
             return
         epochs = self._epoch_spin.value()
+        from utils.i18n import tr
         self._train_btn.setEnabled(False)
-        self._train_status_label.setText("Training läuft…")
+        self._train_status_label.setText(tr("fleet.training_running"))
         self._train_thread = _LocalTrainThread(self._detector, epochs, parent=self)
         self._train_thread.progress.connect(self._on_train_progress)
         self._train_thread.finished.connect(self._on_train_finished)
@@ -517,15 +521,18 @@ class FleetPage(QWidget):
         top = QHBoxLayout()
         add_btn = QPushButton(tr("fleet.add_device_btn"))
         add_btn.setStyleSheet("background: #238636; color: white; border-radius: 4px; padding: 5px 12px; font-weight: bold;")
+        add_btn.setToolTip(tr("fleet.tip.add"))
         add_btn.clicked.connect(self._add_device)
         top.addWidget(add_btn)
 
         refresh_btn = QPushButton(tr("fleet.refresh_all_btn"))
         refresh_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 4px; padding: 5px 12px;")
+        refresh_btn.setToolTip(tr("fleet.tip.refresh"))
         refresh_btn.clicked.connect(self._poll_all)
         top.addWidget(refresh_btn)
 
         self._auto_cb = QCheckBox(tr("fleet.auto_refresh_cb"))
+        self._auto_cb.setToolTip(tr("fleet.tip.auto_refresh"))
         self._auto_cb.toggled.connect(self._on_auto_toggled)
         top.addWidget(self._auto_cb)
         top.addStretch()
@@ -627,24 +634,28 @@ class FleetPage(QWidget):
             dash_btn = QPushButton("Dashboard")
             dash_btn.setFixedHeight(22)
             dash_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
+            dash_btn.setToolTip(tr("fleet.tip.dashboard"))
             dash_btn.clicked.connect(lambda _, u=url: self._open_dashboard(u))
             btn_layout.addWidget(dash_btn)
 
             setup_btn = QPushButton(tr("fleet.action_setup"))
             setup_btn.setFixedHeight(22)
             setup_btn.setStyleSheet("background: #6C3483; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
+            setup_btn.setToolTip(tr("fleet.tip.setup"))
             setup_btn.clicked.connect(lambda _, u=url: self._open_setup(u))
             btn_layout.addWidget(setup_btn)
 
             train_btn = QPushButton(tr("fleet.action_training"))
             train_btn.setFixedHeight(22)
             train_btn.setStyleSheet("background: #1A5276; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
+            train_btn.setToolTip(tr("fleet.tip.training"))
             train_btn.clicked.connect(lambda _, d=dict(dev): self._open_remote_training(d))
             btn_layout.addWidget(train_btn)
 
             del_btn = QPushButton(tr("fleet.action_delete"))
             del_btn.setFixedHeight(22)
             del_btn.setStyleSheet("background: #6E2C2C; color: white; border-radius: 3px; font-size: 10px; padding: 0 6px;")
+            del_btn.setToolTip(tr("fleet.tip.delete"))
             del_btn.clicked.connect(lambda _, r=row: self._remove_device(r))
             btn_layout.addWidget(del_btn)
 

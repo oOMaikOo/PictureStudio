@@ -153,6 +153,8 @@ STRINGS: dict = {
     "dashboard.qs.video_title":     "Videoanalyse & Anomalie",
     "dashboard.qs.video_steps":     "① Videoprojekt erstellen\n② Gut-Bilder aufnehmen\n③ Detektor trainieren\n④ Live-Monitoring starten",
     "dashboard.qs.open_wizard":     "Assistenten öffnen…",
+    "dashboard.notes_group":        "Projektnotizen",
+    "dashboard.notes_placeholder":  "Notizen, Beobachtungen, Aufgaben…",
 
     # ------------------------------------------------------------------ Neues Projekt Dialog
     "new_project.title":            "Neues Projekt erstellen",
@@ -212,6 +214,10 @@ STRINGS: dict = {
     "data.camera_captured_title":   "Aufnahmen hinzugefügt",
     "data.paths_updated_title":     "Pfadkorrektur",
     "data.no_project_hint":         "Kein Projekt geöffnet. Bitte zuerst ein Projekt laden oder erstellen.",
+    "data.confirm_remove_title":    "Bilder entfernen",
+    "data.confirm_remove_msg":      "{n} Bild(er) wirklich aus dem Projekt entfernen?",
+    "data.remove_missing_btn":      "Fehlende entfernen",
+    "data.remove_missing_tip":      "Alle Bildpfade die nicht mehr auf Disk existieren aus dem Projekt entfernen",
 
     # ------------------------------------------------------------------ Labeling-Seite
     "labeling.title":               "Labeling",
@@ -375,6 +381,8 @@ STRINGS: dict = {
     "models.docker_success":        "Docker-Deployment erstellt",
     "models.ts_success":            "TorchScript exportiert",
     "models.file_not_found":        "Modelldatei nicht gefunden:\n{path}",
+    "models.no_project":            "Kein Projekt geladen.",
+    "models.search_placeholder":    "Modell suchen…",
 
     # ------------------------------------------------------------------ Inferenz-Seite
     "inference.title":              "Klassifikation",
@@ -515,9 +523,23 @@ STRINGS: dict = {
     "camera.shadow_load_btn":       "Shadow-Modell laden…",
     "camera.shadow_no_model":       "Kein Shadow-Modell  –  A/B-Vergleich inaktiv",
     "camera.shadow_load_title":     "Shadow-Modell laden",
+    "camera.search_running":        "Suche läuft…",
+    "camera.ready":                 "Bereit",
+    "camera.reconnect_attempt":     "Verbinde erneut… (Versuch {n})",
+    "camera.connection_restored":   "Verbindung wiederhergestellt.",
+    "camera.shadow_loaded":         "Shadow-Modell geladen: {name}",
+    # Alarm-Statistiken
+    "camera.stats_group":           "Alarm-Statistiken",
+    "camera.stats_session":         "Session: {n}",
+    "camera.stats_today":           "Heute: {n}",
+    "camera.stats_week":            "7 Tage: {n}",
 
     # ------------------------------------------------------------------ Einstellungen-Seite
     "settings.title":               "Einstellungen",
+    "settings.tab.general":         "Allgemein",
+    "settings.tab.notifications":   "Benachrichtigung",
+    "settings.tab.integration":     "Integration",
+    "settings.tab.remote":          "Remote",
     "settings.lang.group":          "Sprache / Language",
     "settings.lang.label":          "Sprache:",
     "settings.lang.hint":           "Änderung wirkt nach Neustart der App",
@@ -597,6 +619,7 @@ STRINGS: dict = {
     "multicam.title":               "Multi-Kamera-Monitoring",
     "multicam.channels_label":      "Kanäle:",
     "multicam.start_all_btn":       "Alle starten",
+    "multicam.pause_all_btn":       "Alle pausieren",
     "multicam.stop_all_btn":        "Alle stoppen",
     "multicam.configure_btn":       "Konfigurieren",
     "multicam.not_configured":      "Nicht konfiguriert",
@@ -628,6 +651,8 @@ STRINGS: dict = {
     "clustering.done":              "Clustering abgeschlossen: {clusters} Cluster, {images} Bilder.",
     "clustering.failed":            "Keine Bilder gefunden oder Clustering fehlgeschlagen.",
     "clustering.export_success":    "CSV erfolgreich gespeichert:\n{path}",
+    "clustering.project_loaded":    "Projekt geladen. Clustering starten, um Bilder zu gruppieren.",
+    "clustering.no_project_loaded": "Kein Projekt geladen.",
 
     # ------------------------------------------------------------------ Datensatz-Statistiken
     "dataset_stats.title":              "📊 Datensatz-Analyse",
@@ -646,6 +671,7 @@ STRINGS: dict = {
     "dataset_stats.not_readable":       "Nicht lesbar",
     "dataset_stats.imagehash_missing":  "imagehash nicht installiert (pip install imagehash)",
     "dataset_stats.dups_not_searched":  "Duplikate noch nicht gesucht.",
+    "dataset_stats.search_running":     "Suche läuft…",
 
     # ------------------------------------------------------------------ Video-Annotation
     "videoannotation.title":            "🎬 Video-Annotation",
@@ -701,6 +727,14 @@ STRINGS: dict = {
     "fleet.deploy_success":         "Modell erfolgreich deployt.\nPfad auf Gerät: {path}",
     "fleet.deploy_failed":          "Deploy fehlgeschlagen: {msg}",
     "fleet.no_channel_msg":         "Bitte einen Kanal in der Tabelle auswählen.",
+    "fleet.training_running":       "Training läuft…",
+    "fleet.tip.add":                "Neues Edge-Gerät hinzufügen",
+    "fleet.tip.refresh":            "Status aller Geräte abfragen",
+    "fleet.tip.auto_refresh":       "Automatische Statusabfrage alle 30 Sekunden",
+    "fleet.tip.dashboard":          "Monitor-Dashboard im Browser öffnen",
+    "fleet.tip.setup":              "Kamera, ROI und Schwellwert im Browser konfigurieren",
+    "fleet.tip.training":           "Frames herunterladen und Anomalie-Modell lokal trainieren",
+    "fleet.tip.delete":             "Gerät aus der Liste entfernen",
 
     # ------------------------------------------------------------------ Objekterkennung
     "objdetect.title":              "🎯 Objekterkennung (YOLOv8)",
@@ -730,6 +764,7 @@ STRINGS: dict = {
     "objdetect.col.error":          "Fehler",
     "objdetect.export_csv_btn":     "CSV exportieren",
     "objdetect.missing_dataset_msg":"Dataset noch nicht vorbereitet. Jetzt vorbereiten?",
+    "objdetect.training_running":   "Training läuft…",
     "objdetect.training_complete":  "Training abgeschlossen",
     "objdetect.load_model_question":"Training erfolgreich.\nModell laden?\n{path}",
     "objdetect.ultralytics_missing":"⚠ ultralytics nicht installiert.\nBitte ausführen:\n  pip install ultralytics",

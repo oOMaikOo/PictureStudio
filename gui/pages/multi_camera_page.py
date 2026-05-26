@@ -4,10 +4,13 @@ Jeder Kanal hat eine eigene Kamera-Quelle und ein eigenes Anomalie-Modell.
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from datetime import datetime, timezone
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 import cv2
 import numpy as np
@@ -378,6 +381,7 @@ class MultiCameraPage(QWidget):
         self._current_page: int = 0
         self._alarm_output_dir: str = "monitor_logs/multi_cam"
 
+        self._scoring_paused: bool = False
         self._frame_signal.connect(self._on_frame_ui)
         self._build_ui()
         self._apply_channel_count(2)
@@ -533,6 +537,16 @@ class MultiCameraPage(QWidget):
         )
         self._start_all_btn.clicked.connect(self._on_start_all)
         top_bar.addWidget(self._start_all_btn)
+
+        self._pause_all_btn = QPushButton(tr("multicam.pause_all_btn"))
+        self._pause_all_btn.setStyleSheet(
+            "QPushButton { background: #D4AC0D; color: white; border-radius: 5px;"
+            "  padding: 6px 16px; font-weight: bold; }"
+            "QPushButton:hover { background: #F1C40F; }"
+        )
+        self._pause_all_btn.setCheckable(True)
+        self._pause_all_btn.toggled.connect(self._on_pause_all_toggled)
+        top_bar.addWidget(self._pause_all_btn)
 
         self._stop_all_btn = QPushButton(tr("multicam.stop_all_btn"))
         self._stop_all_btn.setStyleSheet(
@@ -713,6 +727,14 @@ class MultiCameraPage(QWidget):
         state.running = False
         self._widgets[channel_idx].set_running(False)
 
+    def _on_pause_all_toggled(self, paused: bool) -> None:
+        """Pause or resume anomaly scoring on all channels (cameras keep running)."""
+        from utils.i18n import tr
+        self._scoring_paused = paused
+        self._pause_all_btn.setText(
+            tr("multicam.start_all_btn") if paused else tr("multicam.pause_all_btn")
+        )
+
     def _on_start_all(self) -> None:
         """Start all configured (but not yet running) channels."""
         for i in range(self._num_channels):
@@ -736,6 +758,10 @@ class MultiCameraPage(QWidget):
         """
         state = self._channels[channel_idx]
         if not state.running or state.detector is None:
+            return
+
+        if self._scoring_paused:
+            self._frame_signal.emit(channel_idx, frame, state.score, state.is_anomaly)
             return
 
         state.frame_counter += 1

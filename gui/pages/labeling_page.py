@@ -2,8 +2,11 @@
 Labeling page: image list + ROI editor + label assignment.
 Uses the enhanced ROI editor (v2) and lazy thumbnail list.
 """
+import logging
 import os
 from typing import Optional, List, Dict
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,

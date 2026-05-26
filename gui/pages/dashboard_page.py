@@ -1,8 +1,11 @@
 """
 Dashboard page: project overview with statistics cards.
 """
+import logging
 import os
 from typing import Optional, List
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
@@ -183,6 +186,21 @@ class DashboardPage(QWidget):
         self._warn_layout.addWidget(self._warn_label)
         layout.addWidget(self._warn_group)
 
+        # Project notes
+        from PySide6.QtWidgets import QTextEdit as _QTextEdit
+        notes_group = QGroupBox(tr("dashboard.notes_group"))
+        notes_layout = QVBoxLayout(notes_group)
+        self._notes_edit = _QTextEdit()
+        self._notes_edit.setPlaceholderText(tr("dashboard.notes_placeholder"))
+        self._notes_edit.setMaximumHeight(120)
+        self._notes_edit.setStyleSheet(
+            "QTextEdit { background: #161B22; border: 1px solid #30363D; border-radius: 4px;"
+            " color: #ADBAC7; font-size: 11px; }"
+        )
+        self._notes_edit.textChanged.connect(self._on_notes_changed)
+        notes_layout.addWidget(self._notes_edit)
+        layout.addWidget(notes_group)
+
         layout.addStretch()
 
     def _build_quickstart_group(self) -> QGroupBox:
@@ -235,7 +253,7 @@ class DashboardPage(QWidget):
 
         return group
 
-    def set_project(self, project) -> None:
+    def set_project(self, project, audit=None) -> None:
         """Accept a new (or newly-loaded) project and refresh the display."""
         self.project = project
         self.refresh()
@@ -355,3 +373,13 @@ class DashboardPage(QWidget):
 
         self._warn_label.setText("\n".join(warns) if warns else "✓ " + tr("dashboard.no_warnings"))
         self._warn_label.setStyleSheet("color: #D29922;" if warns else "color: #3FB950;")
+
+        # Notes — block signals to avoid triggering a save during refresh
+        self._notes_edit.blockSignals(True)
+        self._notes_edit.setPlainText(getattr(self.project, "notes", ""))
+        self._notes_edit.blockSignals(False)
+
+    def _on_notes_changed(self) -> None:
+        """Save project notes to the project model whenever the text changes."""
+        if self.project:
+            self.project.notes = self._notes_edit.toPlainText()

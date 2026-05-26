@@ -1,17 +1,21 @@
 """
 Settings page: theme, autosave, inference defaults, SSH profiles.
 """
+import logging
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QGroupBox, QPushButton,
     QLabel, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
     QListWidget, QListWidgetItem, QHBoxLayout, QMessageBox,
-    QLineEdit, QApplication, QScrollArea, QFrame,
+    QLineEdit, QApplication, QScrollArea, QFrame, QTabWidget,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette, QColor
 
 from core.alarm_notifier import AlarmNotifier
 from core.industrial_notifier import IndustrialNotifier
+
+log = logging.getLogger(__name__)
 
 
 class SettingsPage(QWidget):
@@ -65,18 +69,35 @@ class SettingsPage(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        scroll.setWidget(container)
-        outer.addWidget(scroll)
+        outer.setContentsMargins(0, 0, 0, 0)
 
         from utils.i18n import tr
-        title = QLabel(tr("settings.title"))
-        title.setStyleSheet("font-size:20px;font-weight:bold;color:#3498DB;")
-        layout.addWidget(title)
+
+        def _make_tab() -> tuple[QWidget, QVBoxLayout]:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            container = QWidget()
+            lay = QVBoxLayout(container)
+            lay.setSpacing(8)
+            scroll.setWidget(container)
+            return scroll, lay
+
+        tabs = QTabWidget()
+        outer.addWidget(tabs)
+
+        scroll_gen, layout_gen = _make_tab()
+        scroll_not, layout_not = _make_tab()
+        scroll_int, layout_int = _make_tab()
+        scroll_rem, layout_rem = _make_tab()
+
+        tabs.addTab(scroll_gen, tr("settings.tab.general"))
+        tabs.addTab(scroll_not, tr("settings.tab.notifications"))
+        tabs.addTab(scroll_int, tr("settings.tab.integration"))
+        tabs.addTab(scroll_rem, tr("settings.tab.remote"))
+
+        # alias: 'layout' was the old single-layout; now split into tab layouts
+        layout = layout_gen  # used for groups that go into "Allgemein"
 
         # Language
         lang_group = QGroupBox(tr("settings.lang.group"))
@@ -233,7 +254,7 @@ class SettingsPage(QWidget):
         api_hint.setStyleSheet("color:#666; padding:4px;")
         api_hint.setWordWrap(True)
         ag.addWidget(api_hint)
-        layout.addWidget(api_group)
+        layout_int.addWidget(api_group)
 
         # MQTT
         mqtt_group = QGroupBox(tr("settings.mqtt_group"))
@@ -265,7 +286,7 @@ class SettingsPage(QWidget):
         mqtt_hint.setStyleSheet("color:#7F8C8D;")
         mqtt_hint.setWordWrap(True)
         mf.addRow(mqtt_hint)
-        layout.addWidget(mqtt_group)
+        layout_int.addWidget(mqtt_group)
 
         # Alarm notifier (E-Mail & Webhook)
         alarm_group = QGroupBox(tr("settings.alarm_group"))
@@ -334,7 +355,7 @@ class SettingsPage(QWidget):
         self._notify_cooldown_spin.setSuffix(" s")
         af2.addRow(tr("settings.cooldown_label"), self._notify_cooldown_spin)
 
-        layout.addWidget(alarm_group)
+        layout_not.addWidget(alarm_group)
 
         # Industrieanbindung (OPC-UA & Modbus)
         industrial_group = QGroupBox(tr("settings.industrial_group"))
@@ -389,7 +410,7 @@ class SettingsPage(QWidget):
         self._test_modbus_btn.clicked.connect(self._test_modbus_connection)
         ind_f.addRow("", self._test_modbus_btn)
 
-        layout.addWidget(industrial_group)
+        layout_int.addWidget(industrial_group)
 
         # Connect live-save signals for industrial widgets
         self._opcua_enabled_cb.toggled.connect(self._save_industrial_settings)
@@ -427,16 +448,15 @@ class SettingsPage(QWidget):
         ssh_btn_row.addWidget(add_ssh)
         ssh_btn_row.addWidget(del_ssh)
         ssh_v.addLayout(ssh_btn_row)
-        layout.addWidget(ssh_group)
+        layout_rem.addWidget(ssh_group)
 
-        # Save
-        from utils.i18n import tr as _tr
-        save_btn = QPushButton(_tr("settings.save_btn"))
-        save_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
-        save_btn.clicked.connect(self._save)
-        layout.addWidget(save_btn)
-
-        layout.addStretch()
+        # Save button on each tab
+        for lay in (layout_gen, layout_not, layout_int, layout_rem):
+            save_btn = QPushButton(tr("settings.save_btn"))
+            save_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
+            save_btn.clicked.connect(self._save)
+            lay.addWidget(save_btn)
+            lay.addStretch()
 
     def _load_values(self) -> None:
         """Populate all form widgets from the current ``AppSettings`` values."""

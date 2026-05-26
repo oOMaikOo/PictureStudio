@@ -7,8 +7,11 @@ der Cluster-Zuordnungen.
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Dict, List, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -140,6 +143,7 @@ class AnomalyClusteringPage(QWidget):
 
     def set_project(self, project, audit=None) -> None:
         """Accept a Project instance and reset the clustering state."""
+        from utils.i18n import tr
         self.project = project
         self._clustering = None
         self._cluster_cards.clear()
@@ -147,7 +151,7 @@ class AnomalyClusteringPage(QWidget):
         self._alarm_paths_cache = None
         self._clear_cards()
         self._clear_image_list()
-        self._status_lbl.setText("Projekt geladen. Clustering starten, um Bilder zu gruppieren.")
+        self._status_lbl.setText(tr("clustering.project_loaded"))
         self.btn_export.setEnabled(False)
         self._update_image_count_label()
 
@@ -470,8 +474,9 @@ class AnomalyClusteringPage(QWidget):
     # ------------------------------------------------------------------ helpers
 
     def _update_image_count_label(self) -> None:
+        from utils.i18n import tr
         if not self.project:
-            self._img_count_lbl.setText("Kein Projekt geladen.")
+            self._img_count_lbl.setText(tr("clustering.no_project_loaded"))
             return
         total = len(self.project.images)
         alarm_count = len(self._get_alarm_paths())

@@ -1,8 +1,11 @@
 """
 Inference page: batch classification, top-3, confidence filter, low-confidence marking.
 """
+import logging
 import os
 from typing import List, Dict, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
@@ -12,7 +15,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QObject
-from PySide6.QtGui import QColor, QFont, QPixmap
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPixmap, QShortcut
 
 from utils.i18n import tr
 
@@ -95,6 +98,7 @@ class InferencePage(QWidget):
         self.inferencer = Inferencer()
         self._ensemble_inferencers: List = []   # additional Inferencer instances
         self._build_ui()
+        QShortcut(QKeySequence("Ctrl+R"), self, activated=self._classify_folder)
 
     def set_project(self, project, audit=None) -> None:
         """Accept the active project and optional audit trail."""

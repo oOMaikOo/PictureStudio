@@ -5,9 +5,12 @@ Workflow:
   1. User annotates images with labeled ROIs in the Labeling page.
   2. Here: prepare dataset → train YOLOv8 → run detection on new images.
 """
+import logging
 import os
 import tempfile
 from typing import List, Dict, Optional
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
@@ -264,7 +267,7 @@ class ObjectDetectionPage(QWidget):
 
     # ------------------------------------------------------------------ project
 
-    def set_project(self, project) -> None:
+    def set_project(self, project, audit=None) -> None:
         self.project = project
         self._dataset_dir = None
         self._update_ds_info()
@@ -368,7 +371,7 @@ class ObjectDetectionPage(QWidget):
         self._train_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
         self._train_progress.setValue(0)
-        self._train_status.setText("Training läuft…")
+        self._train_status.setText(tr("objdetect.training_running"))
         self._log_edit.clear()
         self._log(f"Starte Training: {self._model_combo.currentData()}, "
                   f"{self._epochs_spin.value()} Epochen")

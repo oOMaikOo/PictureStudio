@@ -1,17 +1,20 @@
 """
 Model library page: list, compare, export, delete trained models.
 """
+import logging
 import os
 from typing import Optional, List
+
+log = logging.getLogger(__name__)
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QGroupBox,
     QPushButton, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QMessageBox, QTextEdit, QFileDialog, QInputDialog,
-    QTabWidget,
+    QTabWidget, QLineEdit,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen, QBrush
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPen, QBrush, QShortcut
 
 from utils.i18n import tr
 
@@ -147,8 +150,9 @@ class ModelsPage(QWidget):
         self.project = None
         self._manager = None
         self._build_ui()
+        QShortcut(QKeySequence(Qt.Key_Delete), self, activated=self._delete_model)
 
-    def set_project(self, project) -> None:
+    def set_project(self, project, audit=None) -> None:
         """Accept a project, initialise the ``ModelManager``, and refresh the view."""
         self.project = project
         self._init_manager()
@@ -185,6 +189,11 @@ class ModelsPage(QWidget):
         # Left: table
         left = QGroupBox(tr("models.library_group"))
         lv = QVBoxLayout(left)
+
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText(tr("models.search_placeholder"))
+        self._search_edit.textChanged.connect(self._filter_table)
+        lv.addWidget(self._search_edit)
 
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels([
@@ -416,6 +425,14 @@ class ModelsPage(QWidget):
             return None
         return self._manager.get_by_id(mid)
 
+    def _filter_table(self, text: str) -> None:
+        """Hide rows whose name column doesn't match the search text."""
+        text = text.lower()
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            name = item.text().lower() if item else ""
+            self.table.setRowHidden(row, bool(text) and text not in name)
+
     def _on_selection_changed(self) -> None:
         """Slot for ``itemSelectionChanged``; delegates to ``_on_row_selected``."""
         self._on_row_selected(self.table.currentRow())
@@ -570,7 +587,7 @@ class ModelsPage(QWidget):
             QMessageBox.warning(self, tr("models.calibrate_btn"), "Modelldatei nicht gefunden.")
             return
         if not self.project:
-            QMessageBox.warning(self, tr("models.calibrate_btn"), "Kein Projekt geladen.")
+            QMessageBox.warning(self, tr("models.calibrate_btn"), tr("models.no_project"))
             return
         try:
             from core.calibration import TemperatureScaler

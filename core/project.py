@@ -76,6 +76,9 @@ class Project:
         # Quality-assurance flags per image: {img_path: {uncertain, comment}}
         self.image_label_flags: Dict[str, Dict] = {}
 
+        # Free-text project notes (visible on Dashboard)
+        self.notes: str = ""
+
         # Fast SQL query index — rebuilt after load/save, invalidated on mutations
         self._index = ProjectSearchIndex()
 
@@ -120,6 +123,7 @@ class Project:
                 "roi_templates": self.roi_templates,
                 "active_learning_queue": self.active_learning_queue,
                 "image_label_flags": self.image_label_flags,
+                "notes": self.notes,
             }
 
             os.makedirs(os.path.dirname(os.path.abspath(self.project_path)), exist_ok=True)
@@ -208,6 +212,7 @@ class Project:
         project.image_label_flags = {
             k: v for k, v in data.get("image_label_flags", {}).items() if k in image_set
         }
+        project.notes = data.get("notes", "")
         project._index.rebuild(project)
         return project
 
