@@ -129,8 +129,9 @@ class MainWindow(QMainWindow):
         from gui.pages.dataset_stats_page      import DatasetStatsPage
         from gui.pages.video_annotation_page   import VideoAnnotationPage
         from gui.pages.fleet_page              import FleetPage
-        from gui.pages.object_detection_page  import ObjectDetectionPage
-        from gui.pages.data_drift_page        import DataDriftPage
+        from gui.pages.object_detection_page   import ObjectDetectionPage
+        from gui.pages.data_drift_page         import DataDriftPage
+        from gui.pages.anomaly_training_page   import AnomalyTrainingPage
 
         self.dashboard_page          = DashboardPage()
         self.data_page               = DataPage()
@@ -149,6 +150,7 @@ class MainWindow(QMainWindow):
         self.fleet_page              = FleetPage()
         self.object_detection_page   = ObjectDetectionPage()
         self.data_drift_page         = DataDriftPage()
+        self.anomaly_training_page   = AnomalyTrainingPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
@@ -162,6 +164,7 @@ class MainWindow(QMainWindow):
             self.fleet_page,                # index 14
             self.object_detection_page,     # index 15
             self.data_drift_page,           # index 16
+            self.anomaly_training_page,     # index 17
         ]:
             self.stack.addWidget(page)
 
@@ -205,6 +208,12 @@ class MainWindow(QMainWindow):
         self.settings_page.autosave_changed.connect(self._on_autosave_changed)
         self.settings_page.alarm_notifier_config_changed.connect(self._on_notifier_config_changed)
         self.settings_page.industrial_config_changed.connect(self._on_industrial_config_changed)
+
+        # Anomalie-Training-Seite: CameraPage injizieren + Signal verdrahten
+        self.anomaly_training_page.set_camera_page(self.camera_page)
+        self.anomaly_training_page.open_capture_requested.connect(
+            self._open_anomaly_capture_dialog
+        )
 
         # Active Learning: inference/training → labeling queue → retrain
         self.inference_page.al_queue_updated.connect(self._on_al_queue_updated)
@@ -391,6 +400,11 @@ class MainWindow(QMainWindow):
             f"{added} Bild(er) per Drag & Drop hinzugefügt  |  {n} Bilder im Projekt"
         )
 
+    def _open_anomaly_capture_dialog(self) -> None:
+        """Navigate to CameraPage and immediately open the capture/training dialog."""
+        self._switch_page(8)
+        self.camera_page._open_capture_dialog()
+
     def _on_al_queue_updated(self) -> None:
         """Refresh labeling page queue panel and notify user."""
         self.labeling_page.refresh_al_queue_panel()
@@ -480,6 +494,7 @@ class MainWindow(QMainWindow):
         self.fleet_page.set_project(project)
         self.object_detection_page.set_project(project)
         self.data_drift_page.set_project(project)
+        self.anomaly_training_page.set_project(project)
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)
