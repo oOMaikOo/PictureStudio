@@ -238,50 +238,50 @@ _VIDEO_STEPS = [
     },
     {
         "icon": "📷",
-        "title_de":  "Schritt 2 — Gut-Bilder aufnehmen",
+        "title_de":  "Schritt 2 — Gut-Bilder aufnehmen & Detektor trainieren",
         "desc_de": (
             "Trainiere den Detektor mit 'normalen' Bildern (ohne Fehler).\n\n"
-            "• Wechsle zur Seite 'Live & Anomalie'\n"
-            "• Klicke '⚙ Training & Aufnahme…'\n"
-            "• Verbinde deine Kamera und klicke 'Frames sammeln'\n"
-            "• Sammle mindestens 150 Bilder des normalen Zustands\n\n"
+            "• Wechsle zur Seite '🧠 Training' in der Seitenleiste\n"
+            "• Klicke '🎬 Frames aufnehmen & Trainieren'\n"
+            "• Verbinde deine Kamera und sammle mindestens 150 Bilder\n"
+            "• Klicke 'Training starten' — dauert 2–5 Minuten\n\n"
             "Tipp: Achte auf konstante Beleuchtung — das verbessert die Ergebnisse erheblich."
         ),
-        "title_en":  "Step 2 — Capture Normal Images",
+        "title_en":  "Step 2 — Capture Normal Images & Train",
         "desc_en": (
             "Train the detector with 'normal' images (no defects).\n\n"
-            "• Switch to the 'Live & Anomaly' page\n"
-            "• Click '⚙ Training & Capture…'\n"
-            "• Connect your camera and click 'Collect Frames'\n"
-            "• Collect at least 150 images of the normal state\n\n"
+            "• Switch to the '🧠 Training' page in the sidebar\n"
+            "• Click '🎬 Capture Frames & Train'\n"
+            "• Connect your camera and collect at least 150 images\n"
+            "• Click 'Start Training' — takes 2–5 minutes\n\n"
             "Tip: Consistent lighting greatly improves detection accuracy."
         ),
-        "action_de":  "→ Zur Kamera-Seite",
-        "action_en":  "→ Go to Camera Page",
-        "stack_idx":  8,
+        "action_de":  "→ Zur Training-Seite",
+        "action_en":  "→ Go to Training Page",
+        "stack_idx":  17,
         "action_type": "navigate",
     },
     {
         "icon": "🧠",
-        "title_de":  "Schritt 3 — Anomalie-Detektor trainieren",
+        "title_de":  "Schritt 3 — Modell prüfen",
         "desc_de": (
-            "Trainiere den Autoencoder auf deinen Gut-Bildern.\n\n"
-            "• Im selben Dialog ('Training & Aufnahme'): klicke 'Training starten'\n"
-            "• Das Training dauert 2–5 Minuten\n"
-            "• Nach dem Training wird das Modell automatisch geladen\n\n"
-            "Der Detektor lernt, wie 'normal' aussieht, und schlägt Alarm bei Abweichungen."
+            "Nach dem Training wird das Modell automatisch geladen.\n\n"
+            "Die Training-Seite zeigt dir:\n"
+            "• Den Modellnamen und den automatisch gesetzten Schwellwert\n"
+            "• 'Bestehendes Modell laden' um ein bereits trainiertes Modell wiederzuverwenden\n\n"
+            "Der Detektor lernt, wie 'normal' aussieht, und schlägt bei Abweichungen Alarm."
         ),
-        "title_en":  "Step 3 — Train the Anomaly Detector",
+        "title_en":  "Step 3 — Check the Model",
         "desc_en": (
-            "Train the autoencoder on your normal images.\n\n"
-            "• In the same dialog ('Training & Capture'): click 'Start Training'\n"
-            "• Training takes 2–5 minutes\n"
-            "• After training the model is loaded automatically\n\n"
+            "After training the model is loaded automatically.\n\n"
+            "The Training page shows you:\n"
+            "• The model name and the automatically set threshold\n"
+            "• 'Load Existing Model' to reuse a previously trained model\n\n"
             "The detector learns what 'normal' looks like and alerts on deviations."
         ),
-        "action_de":  "→ Zur Kamera-Seite",
-        "action_en":  "→ Go to Camera Page",
-        "stack_idx":  8,
+        "action_de":  "→ Zur Training-Seite",
+        "action_en":  "→ Go to Training Page",
+        "stack_idx":  17,
         "action_type": "navigate",
     },
     {

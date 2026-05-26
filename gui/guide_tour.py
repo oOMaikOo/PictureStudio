@@ -12,7 +12,9 @@ from PySide6.QtGui import QFont, QColor
 # ---------------------------------------------------------------------------
 # Tour steps per page index (0–9)
 # 0=Dashboard, 1=Daten, 2=Labeling, 3=Training, 4=Modelle,
-# 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch
+# 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch,
+# 10=Multi-Kamera, 11=Clustering, 12=Datensatz, 13=VideoAnnotation,
+# 14=Fleet, 15=Objekterkennung, 16=DataDrift, 17=AnomalieTraining
 # Each step: (title, description, button_text_to_highlight | None)
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
@@ -994,6 +996,53 @@ TOUR_STEPS = {
          "4. Neu trainieren\n\n"
          "Baseline speichern ('💾') für\n"
          "spätere Vergleiche.",
+         None),
+    ],
+
+    17: [  # Anomalie-Training (Video-Modus)
+        ("🧠 Anomalie-Training – Überblick",
+         "Diese Seite ist der Einstieg ins\n"
+         "Anomalie-Tracking im Video-Modus.\n\n"
+         "Der 3-Schritt-Workflow:\n"
+         "1. Normale Frames sammeln\n"
+         "2. Autoencoder trainieren\n"
+         "3. Live-Monitoring starten\n\n"
+         "Kein gelabelter Datensatz nötig —\n"
+         "nur Bilder des Normalzustands.",
+         None),
+        ("Schritt 1 – Frames aufnehmen",
+         "Klicke '🎬 Frames aufnehmen\n"
+         "& Trainieren'.\n\n"
+         "Im Dialog:\n"
+         "• Kamera verbinden (USB / IP)\n"
+         "• Optional: ROI-Bereich ziehen\n"
+         "• 'Frames sammeln' starten\n"
+         "• 50–200 Frames des Normal-\n"
+         "  zustands aufnehmen\n\n"
+         "Konstante Beleuchtung = bessere\n"
+         "Erkennung.",
+         "🎬  Frames aufnehmen & Trainieren"),
+        ("Schritt 2 – Training starten",
+         "Im selben Dialog:\n\n"
+         "• Epochen: 30–50 für erste Tests\n"
+         "• 'Training starten' klicken\n"
+         "• Fortschrittsbalken zeigt\n"
+         "  den Trainingsverlauf\n\n"
+         "Nach dem Training:\n"
+         "• Modell wird automatisch geladen\n"
+         "• Schwellwert wird gesetzt\n"
+         "• Status-Karte aktualisiert sich",
+         None),
+        ("Schritt 3 – Live-Monitoring",
+         "Das Modell ist geladen —\n"
+         "jetzt zur Kamera-Seite wechseln.\n\n"
+         "• '🎥 Live & Anomalie' anklicken\n"
+         "• Kamera verbinden\n"
+         "• 'Scoring aktivieren'\n\n"
+         "Normales Teil → niedriger Score\n"
+         "Fehler / Fremdkörper → Alarm 🔴\n\n"
+         "Schwellwert feinjustieren bis\n"
+         "False-Positive-Rate akzeptabel.",
          None),
     ],
 }

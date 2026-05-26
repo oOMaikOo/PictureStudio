@@ -37,6 +37,7 @@ SECTIONS = [
     ("🎯", "Objekterkennung"),        # 21
     ("📉", "Data Drift"),             # 22
     ("🔄", "Active Learning"),        # 23
+    ("🧠", "Anomalie-Training"),      # 24
 ]
 
 # Map sidebar page index → section index
@@ -44,7 +45,7 @@ PAGE_TO_SECTION = {
     0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
     10: 14, 11: 15,
     12: 16, 13: 17, 14: 18,
-    15: 21, 16: 22,
+    15: 21, 16: 22, 17: 24,
 }
 
 # ---------------------------------------------------------------------------
@@ -1618,6 +1619,56 @@ für eine deutliche Qualitätssteigerung.
 <b>ROI-Support:</b> Wenn das Projekt einen ROI enthält, wird beim Scan automatisch
 der erste Projekt-ROI als Ausschnitt-Template verwendet — genau wie beim Training.
 </div>
+"""),
+
+# ── 24  Anomalie-Training ────────────────────────────────────────────────────
+24: page("""
+<h1>🧠 Anomalie-Training (Video-Modus)</h1>
+<p>Der direkte Einstieg ins Anomalie-Tracking — kein gelabelter Datensatz nötig,
+nur Bilder des Normalzustands.</p>
+<hr>
+
+<h2>3-Schritt-Workflow</h2>
+
+<div class="step"><b><span class="num">1</span>Normale Frames sammeln</b><br>
+Klicke <i>🎬 Frames aufnehmen &amp; Trainieren</i>. Im Dialog:<br>
+• Kamera verbinden (USB, IP-Kamera, RTSP-Stream oder Video-Datei)<br>
+• Optional: ROI-Bereich im Vorschaubild aufziehen — nur dieser Bereich wird trainiert<br>
+• <i>Frames sammeln</i> starten und mindestens <b>150 Frames</b> des Normalzustands aufnehmen<br><br>
+<b>Tipp:</b> Konstante Beleuchtung ist wichtiger als die Anzahl der Frames.</div>
+
+<div class="step"><b><span class="num">2</span>Autoencoder trainieren</b><br>
+Im selben Dialog:<br>
+• Epochen: <b>30–50</b> für erste Tests, bis zu 150 für Produktionseinsatz<br>
+• <i>Training starten</i> — dauert 2–5 Minuten auf CPU, unter 1 Minute auf GPU<br>
+• Nach dem Training wird das Modell automatisch geladen und der Schwellwert gesetzt<br>
+• Die Status-Karte auf dieser Seite zeigt Modellname und Schwellwert</div>
+
+<div class="step"><b><span class="num">3</span>Live-Monitoring starten</b><br>
+Wechsle zur Seite <b>🎥 Live &amp; Anomalie</b>:<br>
+• Kamera verbinden → <i>Scoring aktivieren</i><br>
+• Normales Teil → niedriger Anomalie-Score<br>
+• Defekt / Fremdkörper → hoher Score + roter Alarm-Banner<br>
+• Schwellwert feinjustieren bis die False-Positive-Rate akzeptabel ist</div>
+
+<hr>
+<h2>Bestehendes Modell laden</h2>
+<p>Klicke <i>📂 Bestehendes Modell laden</i> um ein bereits trainiertes <code>.pth</code>-Modell
+zu laden — z.&nbsp;B. von einem anderen Rechner oder nach einem Neustart.
+Das Modell wird direkt in die Kamera-Seite geladen.</p>
+
+<h2>Modell-Status</h2>
+<p>Die Status-Karte unten zeigt, ob ein Modell geladen ist (grüner Text mit Name und Schwellwert)
+oder nicht (grauer Hinweistext). Sie aktualisiert sich automatisch nach jedem Training oder Laden.</p>
+
+<div class="tip"><b>Hyperparameter-Suche (optional)</b><br>
+Im Training-Dialog gibt es auch einen HPT-Button — Optuna sucht automatisch nach optimaler
+Architektur (<code>base_ch</code>), Lernrate und Batch-Größe. Erfordert <code>pip install optuna</code>.</div>
+
+<div class="tip"><b>Shadow Mode</b><br>
+Auf der Kamera-Seite kannst du ein zweites <i>Shadow-Modell</i> laden, das parallel läuft.
+Wenn beide Modelle sich nicht einig sind (Divergenz), wird das als <code>⚡ Divergenz</code> angezeigt
+und in eine CSV-Datei geloggt — ideal für A/B-Vergleiche nach einem Re-Training.</div>
 """),
 
 }

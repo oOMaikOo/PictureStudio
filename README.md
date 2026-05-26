@@ -670,7 +670,7 @@ python monitor.py --channels kanäle.json
 | 1 | Daten | beide |
 | 2 | Labeling | Bild |
 | 3 | Training | Bild |
-| 4 | Modelle | beide |
+| 4 | Modelle | Bild |
 | 5 | Klassifikation | Bild |
 | 6 | Export | beide |
 | 7 | Einstellungen | beide |
@@ -683,6 +683,7 @@ python monitor.py --channels kanäle.json
 | 14 | Fleet | Video |
 | 15 | Objekterkennung | Bild |
 | 16 | Data Drift | Bild |
+| 17 | Anomalie-Training | Video |
 
 > **Active Learning** ist kein eigener Stack-Index — der AL-Scan-Tab befindet sich auf der Training-Seite (Index 3); das AL-Review-Panel ist in die Labeling-Seite (Index 2) integriert.
 
