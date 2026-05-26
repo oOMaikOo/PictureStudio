@@ -36,7 +36,7 @@ class _PollThread(QThread):
                 if api_key:
                     req.add_header("X-Api-Key", api_key)
                 req.add_header("Accept", "application/json")
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 self.result.emit(url, data)
             except urllib.error.HTTPError as exc:
@@ -334,7 +334,7 @@ class _RemoteTrainDialog(QDialog):
             req = urllib.request.Request(f"{self._device_url}/api/status")
             if self._api_key:
                 req.add_header("X-Api-Key", self._api_key)
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
             fc    = data.get("frame_count", 0)
             model = data.get("model_name", "—")

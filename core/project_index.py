@@ -13,6 +13,7 @@ Usage:
     unlabeled = idx.get_unlabeled()
 """
 import sqlite3
+import threading
 from typing import Optional
 
 
@@ -22,6 +23,7 @@ class ProjectSearchIndex:
     def __init__(self) -> None:
         self._conn: Optional[sqlite3.Connection] = None
         self._dirty = True
+        self._lock = threading.Lock()   # guards _conn replacement in rebuild()
 
     # ── lifecycle ──────────────────────────────────────────────────────────────
 
@@ -66,84 +68,97 @@ class ProjectSearchIndex:
             conn.executemany("INSERT INTO multi_labels VALUES (?,?)", multi_rows)
         conn.commit()
 
-        if self._conn:
-            self._conn.close()
-        self._conn = conn
-        self._dirty = False
+        with self._lock:
+            old = self._conn
+            self._conn = conn
+            self._dirty = False
+        if old:
+            old.close()
 
     def invalidate(self) -> None:
-        """Mark index as stale (call before rebuild after project mutations)."""
-        self._dirty = True
+        """Mark index as stale (call after project mutations)."""
+        with self._lock:
+            self._dirty = True
 
     @property
     def is_ready(self) -> bool:
-        return self._conn is not None and not self._dirty
+        with self._lock:
+            return self._conn is not None and not self._dirty
 
     # ── queries ────────────────────────────────────────────────────────────────
 
     def get_label_counts(self) -> dict:
         """Return {label: count} for all labeled images (excludes unlabeled)."""
-        if not self.is_ready:
-            return {}
-        rows = self._conn.execute(
-            "SELECT label, COUNT(*) FROM images WHERE labeled=1 GROUP BY label"
-        ).fetchall()
+        with self._lock:
+            if self._conn is None or self._dirty:
+                return {}
+            rows = self._conn.execute(
+                "SELECT label, COUNT(*) FROM images WHERE labeled=1 GROUP BY label"
+            ).fetchall()
         return {row[0]: row[1] for row in rows if row[0]}
 
     def get_images_by_label(self, label: str) -> list:
         """Return all image paths with the given primary label."""
-        if not self.is_ready:
-            return []
-        return [
-            r[0] for r in self._conn.execute(
-                "SELECT path FROM images WHERE label=?", (label,)
-            ).fetchall()
-        ]
+        with self._lock:
+            if self._conn is None or self._dirty:
+                return []
+            return [
+                r[0] for r in self._conn.execute(
+                    "SELECT path FROM images WHERE label=?", (label,)
+                ).fetchall()
+            ]
 
     def get_unlabeled(self) -> list:
         """Return all image paths that have no label assigned."""
-        if not self.is_ready:
-            return []
-        return [
-            r[0] for r in self._conn.execute(
-                "SELECT path FROM images WHERE labeled=0"
-            ).fetchall()
-        ]
+        with self._lock:
+            if self._conn is None or self._dirty:
+                return []
+            return [
+                r[0] for r in self._conn.execute(
+                    "SELECT path FROM images WHERE labeled=0"
+                ).fetchall()
+            ]
 
     def get_labeled_count(self) -> int:
-        if not self.is_ready:
-            return 0
-        return self._conn.execute(
-            "SELECT COUNT(*) FROM images WHERE labeled=1"
-        ).fetchone()[0]
+        with self._lock:
+            if self._conn is None or self._dirty:
+                return 0
+            return self._conn.execute(
+                "SELECT COUNT(*) FROM images WHERE labeled=1"
+            ).fetchone()[0]
 
     def get_images_with_any_label(self, labels: list) -> list:
         """Return image paths that have at least one of the given labels."""
-        if not self.is_ready or not labels:
-            return []
-        placeholders = ",".join("?" * len(labels))
-        return [
-            r[0] for r in self._conn.execute(
-                f"SELECT DISTINCT image_path FROM multi_labels WHERE label IN ({placeholders})",
-                labels,
-            ).fetchall()
-        ] or [
-            r[0] for r in self._conn.execute(
-                f"SELECT path FROM images WHERE label IN ({placeholders})",
-                labels,
-            ).fetchall()
-        ]
+        with self._lock:
+            if self._conn is None or self._dirty or not labels:
+                return []
+            placeholders = ",".join("?" * len(labels))
+            multi = [
+                r[0] for r in self._conn.execute(
+                    f"SELECT DISTINCT image_path FROM multi_labels WHERE label IN ({placeholders})",
+                    labels,
+                ).fetchall()
+            ]
+            if multi:
+                return multi
+            return [
+                r[0] for r in self._conn.execute(
+                    f"SELECT path FROM images WHERE label IN ({placeholders})",
+                    labels,
+                ).fetchall()
+            ]
 
     def search_paths(self, query: str) -> list:
         """Return image paths whose filename contains *query* (case-insensitive)."""
-        if not self.is_ready:
-            return []
-        q = f"%{query.lower()}%"
-        return [
-            r[0] for r in self._conn.execute(
-                "SELECT path FROM images WHERE LOWER(path) LIKE ?", (q,)
-            ).fetchall()
-        ]
+        with self._lock:
+            if self._conn is None or self._dirty:
+                return []
+            q = f"%{query.lower()}%"
+            return [
+                r[0] for r in self._conn.execute(
+                    "SELECT path FROM images WHERE LOWER(path) LIKE ?", (q,)
+                ).fetchall()
+            ]
 
     def close(self) -> None:
         if self._conn:

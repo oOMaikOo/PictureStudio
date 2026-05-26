@@ -1315,4 +1315,15 @@ class CameraPage(QWidget):
     def hideEvent(self, event) -> None:
         if self._camera_thread:
             self._stop_stream()
+        if self._scan_thread and self._scan_thread.isRunning():
+            self._scan_thread.wait(2000)
         super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        self._reconnect_timer.stop()
+        if self._camera_thread:
+            self._camera_thread.stop()
+            self._camera_thread = None
+        if self._scan_thread and self._scan_thread.isRunning():
+            self._scan_thread.wait(2000)
+        super().closeEvent(event)

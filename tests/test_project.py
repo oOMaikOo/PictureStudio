@@ -395,3 +395,72 @@ class TestQAFlags:
         sample_project.set_label_flag(path, uncertain=True, comment="x")
         sample_project.set_label_flag(path, uncertain=False, comment="")
         assert path not in sample_project.image_label_flags
+
+
+# ---------------------------------------------------------------------------
+# Crash recovery
+# ---------------------------------------------------------------------------
+
+class TestCrashRecovery:
+    """Tests for Project.check_tmp_recovery — covers all branch conditions."""
+
+    def test_no_tmp_file_returns_false(self, tmp_dir):
+        from core.project import Project
+        proj_path = os.path.join(tmp_dir, "proj.json")
+        available, tmp_path = Project.check_tmp_recovery(proj_path)
+        assert not available
+        assert tmp_path == proj_path + ".tmp"
+
+    def test_newer_tmp_is_detected(self, tmp_dir):
+        import time
+        from core.project import Project
+        proj_path = os.path.join(tmp_dir, "proj.json")
+        # Write main file first
+        with open(proj_path, "w") as f:
+            f.write("{}")
+        time.sleep(0.05)
+        # Write tmp file slightly later with valid JSON
+        tmp_path = proj_path + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump({"format_version": 1, "config": {}, "images": []}, f)
+        available, returned_tmp = Project.check_tmp_recovery(proj_path)
+        assert available
+        assert returned_tmp == tmp_path
+
+    def test_older_tmp_is_ignored(self, tmp_dir):
+        import time
+        from core.project import Project
+        proj_path = os.path.join(tmp_dir, "proj.json")
+        tmp_path = proj_path + ".tmp"
+        # Write tmp first, then main — tmp is older
+        with open(tmp_path, "w") as f:
+            json.dump({"format_version": 1}, f)
+        time.sleep(0.05)
+        with open(proj_path, "w") as f:
+            f.write("{}")
+        available, _ = Project.check_tmp_recovery(proj_path)
+        assert not available
+
+    def test_invalid_json_tmp_is_ignored(self, tmp_dir):
+        import time
+        from core.project import Project
+        proj_path = os.path.join(tmp_dir, "proj.json")
+        with open(proj_path, "w") as f:
+            f.write("{}")
+        time.sleep(0.05)
+        tmp_path = proj_path + ".tmp"
+        with open(tmp_path, "w") as f:
+            f.write("NOT VALID JSON {{{")
+        available, _ = Project.check_tmp_recovery(proj_path)
+        assert not available
+
+    def test_tmp_without_main_file_is_detected(self, tmp_dir):
+        from core.project import Project
+        proj_path = os.path.join(tmp_dir, "proj_new.json")
+        tmp_path = proj_path + ".tmp"
+        with open(tmp_path, "w") as f:
+            json.dump({"format_version": 1, "config": {}, "images": []}, f)
+        # No main file exists yet
+        available, returned_tmp = Project.check_tmp_recovery(proj_path)
+        assert available
+        assert returned_tmp == tmp_path

@@ -8,6 +8,7 @@ import logging
 import os
 import random
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple
 
 log = logging.getLogger("ImageLabelingStudio.dataset")
@@ -36,6 +37,43 @@ log = get_logger()
 # ================================================================== Dataset
 
 
+def _build_transform_pipeline(image_size: int, augment: bool = False,
+                               aug_cfg: dict = None) -> "transforms.Compose":
+    """Build a torchvision transform pipeline shared by all dataset classes."""
+    aug_cfg = aug_cfg or {}
+    ops = []
+    if augment:
+        if aug_cfg.get("flip", True):
+            ops.append(transforms.RandomHorizontalFlip())
+            ops.append(transforms.RandomVerticalFlip(p=0.1))
+        if aug_cfg.get("rotation", True):
+            deg = float(aug_cfg.get("rotation_degrees", 15))
+            ops.append(transforms.RandomRotation(deg))
+        if aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True):
+            bri = float(aug_cfg.get("brightness_strength", 0.3))
+            ops.append(transforms.ColorJitter(
+                brightness=bri if aug_cfg.get("brightness") else 0,
+                contrast=bri if aug_cfg.get("contrast") else 0,
+                saturation=0.1,
+            ))
+        if aug_cfg.get("blur", False):
+            radius = int(aug_cfg.get("blur_radius", 3))
+            radius = radius if radius % 2 == 1 else radius + 1
+            ops.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
+        if aug_cfg.get("scale", False):
+            scale_lo = float(aug_cfg.get("scale_min", 0.8))
+            ops.append(transforms.RandomResizedCrop(image_size, scale=(scale_lo, 1.0)))
+        else:
+            ops.append(transforms.Resize((image_size, image_size)))
+    else:
+        ops.append(transforms.Resize((image_size, image_size)))
+    ops += [
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ]
+    return transforms.Compose(ops)
+
+
 class ImageROIDataset(Dataset if HAS_TORCH else object):
     """
     PyTorch Dataset for single-label classification.
@@ -61,48 +99,18 @@ class ImageROIDataset(Dataset if HAS_TORCH else object):
         contrast, brightness_strength, blur, blur_radius, scale, scale_min.
         """
         self.samples = samples
-        aug_cfg = augmentation_cfg or {}
-        aug_transforms = []
-        if augment:
-            if aug_cfg.get("flip", True):
-                aug_transforms.append(transforms.RandomHorizontalFlip())
-                aug_transforms.append(transforms.RandomVerticalFlip(p=0.1))
-            if aug_cfg.get("rotation", True):
-                deg = float(aug_cfg.get("rotation_degrees", 15))
-                aug_transforms.append(transforms.RandomRotation(deg))
-            if aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True):
-                bri = float(aug_cfg.get("brightness_strength", 0.3))
-                aug_transforms.append(transforms.ColorJitter(
-                    brightness=bri if aug_cfg.get("brightness") else 0,
-                    contrast=bri if aug_cfg.get("contrast") else 0,
-                    saturation=0.1,
-                ))
-            if aug_cfg.get("blur", False):
-                radius = int(aug_cfg.get("blur_radius", 3))
-                radius = radius if radius % 2 == 1 else radius + 1
-                aug_transforms.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
-            if aug_cfg.get("scale", False):
-                scale_lo = float(aug_cfg.get("scale_min", 0.8))
-                aug_transforms.append(
-                    transforms.RandomResizedCrop(image_size, scale=(scale_lo, 1.0))
-                )
-            else:
-                aug_transforms.append(transforms.Resize((image_size, image_size)))
-        else:
-            aug_transforms.append(transforms.Resize((image_size, image_size)))
-
-        aug_transforms += [
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-        self.transform = transforms.Compose(aug_transforms)
+        self.transform = _build_transform_pipeline(image_size, augment, augmentation_cfg)
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int):
         img_path, roi, class_idx = self.samples[idx]
-        image = PILImage.open(img_path).convert("RGB")
+        try:
+            image = PILImage.open(img_path).convert("RGB")
+        except Exception:
+            log.warning("Korruptes Bild übersprungen: %s", img_path)
+            image = PILImage.new("RGB", (32, 32))
         if roi is not None:
             x, y, w, h = int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"])
             iw, ih = image.size
@@ -132,48 +140,18 @@ class MultiLabelImageDataset(Dataset if HAS_TORCH else object):
     ):
         self.samples = samples
         self.num_classes = num_classes
-        aug_cfg = augmentation_cfg or {}
-        aug_transforms = []
-        if augment:
-            if aug_cfg.get("flip", True):
-                aug_transforms.append(transforms.RandomHorizontalFlip())
-                aug_transforms.append(transforms.RandomVerticalFlip(p=0.1))
-            if aug_cfg.get("rotation", True):
-                deg = float(aug_cfg.get("rotation_degrees", 15))
-                aug_transforms.append(transforms.RandomRotation(deg))
-            if aug_cfg.get("brightness", True) or aug_cfg.get("contrast", True):
-                bri = float(aug_cfg.get("brightness_strength", 0.3))
-                aug_transforms.append(transforms.ColorJitter(
-                    brightness=bri if aug_cfg.get("brightness") else 0,
-                    contrast=bri if aug_cfg.get("contrast") else 0,
-                    saturation=0.1,
-                ))
-            if aug_cfg.get("blur", False):
-                radius = int(aug_cfg.get("blur_radius", 3))
-                radius = radius if radius % 2 == 1 else radius + 1
-                aug_transforms.append(transforms.GaussianBlur(radius, sigma=(0.1, 2.0)))
-            if aug_cfg.get("scale", False):
-                scale_lo = float(aug_cfg.get("scale_min", 0.8))
-                aug_transforms.append(
-                    transforms.RandomResizedCrop(image_size, scale=(scale_lo, 1.0))
-                )
-            else:
-                aug_transforms.append(transforms.Resize((image_size, image_size)))
-        else:
-            aug_transforms.append(transforms.Resize((image_size, image_size)))
-
-        aug_transforms += [
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-        self.transform = transforms.Compose(aug_transforms)
+        self.transform = _build_transform_pipeline(image_size, augment, augmentation_cfg)
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int):
         img_path, roi, class_indices = self.samples[idx]
-        image = PILImage.open(img_path).convert("RGB")
+        try:
+            image = PILImage.open(img_path).convert("RGB")
+        except Exception:
+            log.warning("Korruptes Bild übersprungen: %s", img_path)
+            image = PILImage.new("RGB", (32, 32))
         if roi is not None:
             x, y, w, h = int(roi["x"]), int(roi["y"]), int(roi["w"]), int(roi["h"])
             iw, ih = image.size
@@ -364,36 +342,55 @@ def analyze_dataset(project) -> Dict:
         "warnings": [],
     }
 
-    seen_hashes = {}
-    for img_path in project.images:
-        ext = os.path.splitext(img_path)[1].lower()
-        result["formats"][ext] += 1
-
+    def _inspect_image(img_path: str):
+        """Return (digest_or_None, size_or_None, is_missing, is_corrupt)."""
         if not os.path.exists(img_path):
-            result["missing_files"].append(img_path)
-            continue
-
-        # Check hash for duplicates (fast: use first 64kB)
+            return None, None, True, False
+        digest = None
         try:
             h = hashlib.md5()
             with open(img_path, "rb") as fh:
                 h.update(fh.read(65536))
             digest = h.hexdigest()
+        except OSError:
+            return None, None, False, True
+        size = None
+        if HAS_PIL:
+            try:
+                with PILImage.open(img_path) as im:
+                    size = im.size
+            except Exception:
+                return digest, None, False, True
+        return digest, size, False, False
+
+    # Parallel I/O for MD5 + PIL open (4 workers keep disk busy without overwhelming it)
+    inspected: dict = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(_inspect_image, p): p for p in project.images}
+        for fut in as_completed(futures):
+            inspected[futures[fut]] = fut.result()
+
+    seen_hashes = {}
+    for img_path in project.images:
+        ext = os.path.splitext(img_path)[1].lower()
+        result["formats"][ext] += 1
+
+        digest, size, is_missing, is_corrupt = inspected.get(img_path, (None, None, True, False))
+
+        if is_missing:
+            result["missing_files"].append(img_path)
+            continue
+        if is_corrupt:
+            result["corrupt_files"].append(img_path)
+            continue
+
+        if digest:
             if digest in seen_hashes:
                 result["duplicates"].append((img_path, seen_hashes[digest]))
             else:
                 seen_hashes[digest] = img_path
-        except OSError:
-            result["corrupt_files"].append(img_path)
-            continue
-
-        # Image size
-        if HAS_PIL:
-            try:
-                with PILImage.open(img_path) as im:
-                    result["sizes"].append(im.size)
-            except Exception:
-                result["corrupt_files"].append(img_path)
+        if size:
+            result["sizes"].append(size)
 
     # Class balance warning
     counts = [v for v in result["label_counts"].values() if v > 0]
@@ -528,9 +525,10 @@ def export_yolo(project, output_dir: str) -> None:
             if lbl not in label_to_idx:
                 continue
             rx, ry, rw, rh = roi.get("x", 0), roi.get("y", 0), roi.get("w", 0), roi.get("h", 0)
-            cx = (rx + rw / 2) / w
-            cy = (ry + rh / 2) / h
-            nw, nh = rw / w, rh / h
+            cx = max(0.0, min(1.0, (rx + rw / 2) / w))
+            cy = max(0.0, min(1.0, (ry + rh / 2) / h))
+            nw = max(0.0, min(1.0, rw / w))
+            nh = max(0.0, min(1.0, rh / h))
             lines.append(f"{label_to_idx[lbl]} {cx:.6f} {cy:.6f} {nw:.6f} {nh:.6f}")
 
         if lines:

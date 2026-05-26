@@ -159,7 +159,8 @@ class AnomalyDetector:
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        data = torch.tensor(np.stack(self._train_frames), dtype=torch.float32)
+        # from_numpy shares memory with the numpy array (avoids a second copy)
+        data = torch.from_numpy(np.stack(self._train_frames)).float()
         loader = DataLoader(TensorDataset(data), batch_size=batch_size, shuffle=True, drop_last=False)
 
         self._model.to(self._device)
@@ -193,6 +194,12 @@ class AnomalyDetector:
         arr = np.array(errors)
         self._threshold = float(arr.mean() + 2.5 * arr.std())
         self._trained = True
+
+        # Free GPU memory after training; harmless on CPU
+        import gc
+        gc.collect()
+        if self._device.type == "cuda":
+            torch.cuda.empty_cache()
 
         # Record training provenance — preserves user-set fields (camera_source etc.)
         self._metadata.update({

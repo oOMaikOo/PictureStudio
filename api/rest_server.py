@@ -540,7 +540,9 @@ class _ProjectHandler(BaseHTTPRequestHandler):
 # ── Dashboard HTML ─────────────────────────────────────────────────────────
 
 def _build_dashboard_html(api_key: str = "") -> str:
-    _key_js = f"'{api_key}'" if api_key else "''"
+    # json.dumps produces a valid JS string literal with proper escaping for
+    # quotes, backslashes, and control characters — prevents XSS via the key.
+    _key_js = json.dumps(api_key) if api_key else '""'
     _html = """<!DOCTYPE html>
 <html lang="de">
 <head>
