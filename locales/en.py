@@ -255,6 +255,7 @@ STRINGS: dict = {
     "labeling.bulk_label_btn":      "Label all visible…",
     "labeling.prelabel_btn":        "🤖 Pre-Label…",
     "labeling.prelabel_tooltip":    "Load model predictions as label suggestions",
+    "labeling.pre_no_images":       "No images to analyse.",
 
     # ------------------------------------------------------------------ Training Page
     "training.title":               "Training",
@@ -338,6 +339,8 @@ STRINGS: dict = {
     "training.best_model":          "Best Model:",
     "training.no_test_data_title":  "No Data",
     "training.no_test_data_msg":    "Please complete a training run with a test set first.",
+    "training.start_btn_tip":       "Start training (Ctrl+R)",
+    "training.stop_btn_tip":        "Stop training (Ctrl+S)",
 
     # ------------------------------------------------------------------ Models Page
     "models.tab.library":           "📦 Model Library",
@@ -383,6 +386,7 @@ STRINGS: dict = {
     "models.file_not_found":        "Model file not found:\n{path}",
     "models.no_project":            "No project loaded.",
     "models.search_placeholder":    "Search models…",
+    "models.delete_btn_tip":        "Permanently delete model — cannot be undone (Del)",
 
     # ------------------------------------------------------------------ Inference Page
     "inference.title":              "Classification",
@@ -423,6 +427,9 @@ STRINGS: dict = {
     "inference.gradcam_btn":        "Show Grad-CAM",
     "inference.no_folder_msg":      "Please select a valid folder.",
     "inference.no_project_msg":     "Please open a project first.",
+    "inference.no_uncertain_text":  "No uncertain predictions.",
+    "inference.no_uncertain_al":    "No uncertain predictions found.",
+    "inference.classify_btn_tip":   "Classify all images (Ctrl+R)",
 
     # ------------------------------------------------------------------ Export Page
     "export.title":                 "Export",
@@ -533,6 +540,7 @@ STRINGS: dict = {
     "camera.stats_session":         "Session: {n}",
     "camera.stats_today":           "Today: {n}",
     "camera.stats_week":            "7 days: {n}",
+    "camera.scoring_btn_tip":       "Pause/resume scoring (Space)",
 
     # ------------------------------------------------------------------ Settings Page
     "settings.title":               "Settings",
@@ -619,7 +627,8 @@ STRINGS: dict = {
     "multicam.title":               "Multi-Camera Monitoring",
     "multicam.channels_label":      "Channels:",
     "multicam.start_all_btn":       "Start All",
-    "multicam.pause_all_btn":       "Pause All",
+    "multicam.pause_all_btn":       "⏸ Pause Scoring",
+    "multicam.resume_scoring_btn":  "▶ Resume Scoring",
     "multicam.stop_all_btn":        "Stop All",
     "multicam.configure_btn":       "Configure",
     "multicam.not_configured":      "Not configured",
@@ -672,6 +681,7 @@ STRINGS: dict = {
     "dataset_stats.imagehash_missing":  "imagehash not installed (pip install imagehash)",
     "dataset_stats.dups_not_searched":  "No duplicate search performed yet.",
     "dataset_stats.search_running":     "Searching…",
+    "dataset_stats.refresh_tip":        "Reload statistics (F5)",
 
     # ------------------------------------------------------------------ Video Annotation
     "videoannotation.title":            "🎬 Video Annotation",
@@ -768,6 +778,7 @@ STRINGS: dict = {
     "objdetect.training_complete":  "Training Complete",
     "objdetect.load_model_question":"Training successful.\nLoad model?\n{path}",
     "objdetect.ultralytics_missing":"⚠ ultralytics not installed.\nPlease run:\n  pip install ultralytics",
+    "objdetect.yaml_not_found":     "data.yaml not found.",
 
     # ------------------------------------------------------------------ Data Drift Page
     "datadrift.title":              "📉 Data Drift Detection",

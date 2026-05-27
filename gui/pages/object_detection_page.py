@@ -345,7 +345,8 @@ class ObjectDetectionPage(QWidget):
 
         yaml_path = os.path.join(self._dataset_dir, "data.yaml")
         if not os.path.exists(yaml_path):
-            QMessageBox.warning(self, "Fehler", "data.yaml nicht gefunden.")
+            from utils.i18n import tr
+            QMessageBox.warning(self, tr("common.error"), tr("objdetect.yaml_not_found"))
             return
 
         proj_dir = (

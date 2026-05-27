@@ -572,6 +572,7 @@ class FleetPage(QWidget):
         try:
             self._devices = json.loads(raw) if isinstance(raw, str) else list(raw or [])
         except Exception:
+            log.warning("Failed to parse fleet device list from QSettings, resetting")
             self._devices = []
         self._rebuild_table()
 

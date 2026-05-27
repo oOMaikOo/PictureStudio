@@ -385,7 +385,7 @@ class CameraPage(QWidget):
         self._scoring_btn.setCheckable(True)
         self._scoring_btn.setEnabled(False)
         self._scoring_btn.setToolTip(
-            "Anomalie-Scoring aktivieren.\n"
+            tr("camera.scoring_btn_tip") + "\n"
             "Voraussetzung: Modell geladen + Kamera verbunden."
         )
         self._scoring_btn.setStyleSheet(
@@ -490,7 +490,7 @@ class CameraPage(QWidget):
             self._score_chart.setToolTip("Live-Verlauf der Anomalie-Scores")
             lv.addWidget(self._score_chart)
         except Exception:
-            pass
+            log.debug("ScoreChart not available, skipping")
 
         # ── Camera settings ───────────────────────────────────────────────────
         cam_settings_grp = QGroupBox(tr("camera.settings_group"))
@@ -859,7 +859,7 @@ class CameraPage(QWidget):
                 try:
                     display = compute_gradcam_anomaly(self._detector, display)
                 except Exception:
-                    pass
+                    log.warning("Grad-CAM computation failed")
             self._update_score(score)
 
             # USP 3 — shadow model comparison (same ROI-cropped input for fair comparison)
@@ -988,6 +988,7 @@ class CameraPage(QWidget):
                 if self._rest_server:
                     self._rest_server.push_latest_alarm(frame_path, score, threshold)
             except Exception:
+                log.warning("Failed to save alarm frame to %s", frame_path)
                 frame_filename = ""
 
         if self._notifier and frame_filename:
@@ -1015,7 +1016,7 @@ class CameraPage(QWidget):
                 ])
             self._log_btn.setEnabled(True)
         except Exception:
-            pass
+            log.warning("Failed to write alarm event to CSV %s", self._log_path)
 
     # ── USP 2: Auto-retrain suggestion ───────────────────────────────────────
 
@@ -1119,7 +1120,7 @@ class CameraPage(QWidget):
                     os.path.basename(self._shadow_model_path) if self._shadow_model_path else "",
                 ])
         except Exception:
-            pass
+            log.warning("Failed to write shadow divergence to CSV")
 
     # ── Frame display ─────────────────────────────────────────────────────────
 

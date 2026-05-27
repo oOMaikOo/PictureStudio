@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QGroupBox, QPushButton, QScrollArea, QFrame,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QColor
 
 
@@ -83,6 +83,10 @@ class DashboardPage(QWidget):
         super().__init__(parent)
         self.project = None
         self._recent_projects: List[str] = []
+        self._notes_save_timer = QTimer(self)
+        self._notes_save_timer.setSingleShot(True)
+        self._notes_save_timer.setInterval(2000)
+        self._notes_save_timer.timeout.connect(self._flush_notes_to_disk)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -383,3 +387,11 @@ class DashboardPage(QWidget):
         """Save project notes to the project model whenever the text changes."""
         if self.project:
             self.project.notes = self._notes_edit.toPlainText()
+            self._notes_save_timer.start()
+
+    def _flush_notes_to_disk(self) -> None:
+        if self.project and self.project.project_path:
+            try:
+                self.project.save(self.project.project_path)
+            except Exception:
+                log.warning("Failed to save project notes to disk")

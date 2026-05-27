@@ -58,6 +58,7 @@ class DatasetStatsPage(QWidget):
         btn_row = QHBoxLayout()
         refresh_btn = QPushButton(tr("common.refresh"))
         refresh_btn.setStyleSheet("background: #1F6FEB; color: white; border-radius: 4px; padding: 5px 12px;")
+        refresh_btn.setToolTip(tr("dataset_stats.refresh_tip"))
         refresh_btn.clicked.connect(self.refresh)
         btn_row.addWidget(refresh_btn)
         btn_row.addStretch()
@@ -198,7 +199,7 @@ class DatasetStatsPage(QWidget):
                 widths.append(w)
                 heights.append(h)
             except Exception:
-                pass
+                log.debug("Could not read image dimensions for %s", p)
         if widths:
             self._size_lbl.setText(
                 f"Ø {sum(widths)//len(widths)} × {sum(heights)//len(heights)} px "
@@ -240,7 +241,7 @@ class DatasetStatsPage(QWidget):
                     h = str(imagehash.average_hash(img))
                 hash_map.setdefault(h, []).append(p)
             except Exception:
-                pass
+                log.debug("Could not hash image %s", p)
 
         groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
         self._dup_list.clear()

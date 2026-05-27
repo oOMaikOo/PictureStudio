@@ -250,7 +250,7 @@ class ModelsPage(QWidget):
             ),
             tr("models.rename_btn"): "Modell-Alias im Projekt umbenennen (Dateiname bleibt gleich).",
             tr("models.archive_btn"): "Modell in Unterordner 'archive' verschieben — bleibt erhalten aber\nerscheint nicht mehr in der Hauptliste.",
-            tr("models.delete_btn"): "Modell dauerhaft löschen (kann nicht rückgängig gemacht werden).",
+            tr("models.delete_btn"): tr("models.delete_btn_tip"),
         }
         for label, slot in [
             (tr("models.export_onnx_btn"), self._export_onnx),

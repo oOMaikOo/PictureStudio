@@ -1175,7 +1175,7 @@ class LabelingPage(QWidget):
                 pix.fill(QColor(color))
                 action.setIcon(QIcon(pix))
             except Exception:
-                pass
+                log.debug("Failed to set icon for label context menu action")
         menu.addSeparator()
         menu.addAction("(kein Label)").setData((image_path, ""))
         menu.addSeparator()
@@ -1446,7 +1446,7 @@ class LabelingPage(QWidget):
                 pix.fill(QColor(color))
                 action.setIcon(QIcon(pix))
             except Exception:
-                pass
+                log.debug("Failed to set icon for bulk label context menu action")
         menu.addSeparator()
         menu.addAction("(kein Label)").setData("")
         menu.addSeparator()
@@ -1806,7 +1806,8 @@ class LabelingPage(QWidget):
         else:
             candidates = list(self.project.images)
         if not candidates:
-            self._pre_status.setText("Keine Bilder zum Analysieren.")
+            from utils.i18n import tr
+            self._pre_status.setText(tr("labeling.pre_no_images"))
             return
 
         self._pre_suggestions = []

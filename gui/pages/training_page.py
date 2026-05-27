@@ -491,12 +491,14 @@ class TrainingPage(QWidget):
 
         self.start_btn = QPushButton(tr("training.start_btn"))
         self.start_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")
+        self.start_btn.setToolTip(tr("training.start_btn_tip"))
         self.start_btn.clicked.connect(self._start)
         form.addRow(self.start_btn)
 
         self.stop_btn = QPushButton(tr("training.stop_btn"))
         self.stop_btn.setStyleSheet("background:#E74C3C;color:white;padding:8px;")
         self.stop_btn.setEnabled(False)
+        self.stop_btn.setToolTip(tr("training.stop_btn_tip"))
         self.stop_btn.clicked.connect(self._stop_training)
         form.addRow(self.stop_btn)
 

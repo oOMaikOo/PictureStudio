@@ -23,6 +23,8 @@ from core.industrial_notifier import IndustrialNotifier
 try:
     from core.onnx_anomaly_scorer import OnnxAnomalyScorer, HAS_ORT
 except Exception:
+    import logging as _logging
+    _logging.getLogger(__name__).debug("OnnxAnomalyScorer not available")
     OnnxAnomalyScorer = None  # type: ignore[assignment,misc]
     HAS_ORT = False
 
@@ -200,7 +202,7 @@ class _ChannelWidget(QGroupBox):
             else:
                 self._video_lbl.setPixmap(pix)
         except Exception:
-            pass
+            log.debug("Pixmap display failed in channel widget")
 
         # Score bar
         bar_pct = int(min(score / max(3.0 * threshold, 1e-9), 1.0) * 100)
@@ -403,7 +405,7 @@ class MultiCameraPage(QWidget):
             try:
                 server.set_mc_channel_count(self._num_channels)
             except Exception:
-                pass
+                log.warning("Failed to register channel count with REST server")
 
     # ── Camera count + pagination ─────────────────────────────────────────────
 
@@ -444,7 +446,7 @@ class MultiCameraPage(QWidget):
             try:
                 self._rest_server.set_mc_channel_count(count)
             except Exception:
-                pass
+                log.warning("Failed to update channel count in REST server")
 
         self._refresh_page_view()
 
@@ -660,6 +662,7 @@ class MultiCameraPage(QWidget):
                 det.load(model_path)
                 detector = det
         except Exception:
+            log.warning("Primary loader failed for %s, trying fallback", model_path)
             # Fallback: try the other loader
             try:
                 if OnnxAnomalyScorer is not None and HAS_ORT:
@@ -669,6 +672,7 @@ class MultiCameraPage(QWidget):
                     det.load(model_path)
                     detector = det
             except Exception:
+                log.warning("Fallback loader also failed for %s", model_path)
                 detector = None
 
         if detector is None:
@@ -680,6 +684,7 @@ class MultiCameraPage(QWidget):
             roi = meta.get("roi")          # [x1,y1,x2,y2] normalised, or None
             threshold = float(detector.threshold)
         except Exception:
+            log.warning("Failed to read metadata from detector, using defaults")
             roi = None
             threshold = 0.001
 
@@ -732,7 +737,7 @@ class MultiCameraPage(QWidget):
         from utils.i18n import tr
         self._scoring_paused = paused
         self._pause_all_btn.setText(
-            tr("multicam.start_all_btn") if paused else tr("multicam.pause_all_btn")
+            tr("multicam.resume_scoring_btn") if paused else tr("multicam.pause_all_btn")
         )
 
     def _on_start_all(self) -> None:
@@ -779,14 +784,14 @@ class MultiCameraPage(QWidget):
                 state.score = score
                 state.is_anomaly = is_anomaly
             except Exception:
-                pass
+                log.warning("score_detailed failed on channel %d", channel_idx)
 
         # Push score to REST API (every scored frame)
         if self._rest_server is not None and state.frame_counter % 3 == 0:
             try:
                 self._rest_server.push_mc_score(channel_idx, score, state.threshold)
             except Exception:
-                pass
+                log.warning("Failed to push score to REST server for channel %d", channel_idx)
 
         # Fire alarm if anomaly and cooldown has expired
         if is_anomaly:
@@ -813,7 +818,7 @@ class MultiCameraPage(QWidget):
                             channel_idx, score, thr, fname
                         )
                     except Exception:
-                        pass
+                        log.warning("Failed to push alarm to REST server for channel %d", channel_idx)
 
                 # Dispatch log + notifier call via signal (reaches UI thread)
                 self._frame_signal.emit(
@@ -830,13 +835,13 @@ class MultiCameraPage(QWidget):
                             model_name=model_name,
                         )
                     except Exception:
-                        pass
+                        log.warning("AlarmNotifier failed for channel %d", channel_idx)
                 # Industrial protocol (OPC-UA / Modbus TCP)
                 if self._industrial_notifier is not None:
                     try:
                         self._industrial_notifier.on_alarm(True, score, thr)
                     except Exception:
-                        pass
+                        log.warning("IndustrialNotifier failed for channel %d", channel_idx)
                 # We already emitted the signal above; return to avoid double emit
                 QMetaObject.invokeMethod(
                     self._alarm_log,
@@ -880,9 +885,10 @@ class MultiCameraPage(QWidget):
                 try:
                     self._rest_server.set_alarm_frame_dir(self._alarm_output_dir)
                 except Exception:
-                    pass
+                    log.warning("Failed to register alarm frame dir with REST server")
             return fname
         except Exception:
+            log.warning("Failed to save alarm frame for channel %d", channel_idx)
             return ""
 
     @staticmethod

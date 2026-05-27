@@ -197,6 +197,7 @@ class InferencePage(QWidget):
         iv.addWidget(self._recursive_cb)
         self.classify_btn = QPushButton(tr("inference.classify_folder_btn"))
         self.classify_btn.setStyleSheet("background:#3498DB;color:white;font-weight:bold;padding:6px;")
+        self.classify_btn.setToolTip(tr("inference.classify_btn_tip"))
         self.classify_btn.clicked.connect(self._classify_folder)
         iv.addWidget(self.classify_btn)
         self.progress_bar = QProgressBar()
@@ -636,7 +637,7 @@ class InferencePage(QWidget):
             f"Modell: {os.path.basename(self.inferencer.model_path)}"
         )
         self.low_conf_text.setPlainText(
-            "\n".join(low_conf_lines) if low_conf_lines else "Keine unsicheren Vorhersagen."
+            "\n".join(low_conf_lines) if low_conf_lines else tr("inference.no_uncertain_text")
         )
 
     def _on_table_select(self, row: int) -> None:
@@ -665,7 +666,7 @@ class InferencePage(QWidget):
             if r.get("low_confidence") and not r.get("error") and os.path.isfile(r.get("path", ""))
         ]
         if not candidates:
-            self._al_status.setText("Keine unsicheren Vorhersagen vorhanden.")
+            self._al_status.setText(tr("inference.no_uncertain_al"))
             return
         added = 0
         skipped = 0
