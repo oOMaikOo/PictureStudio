@@ -86,13 +86,13 @@ class LabelingPage(QWidget):
         box = QGroupBox(tr("labeling.images_group"))
         v = QVBoxLayout(box)
 
-        load_btn = QPushButton("Ordner laden…")
+        load_btn = QPushButton(tr("labeling.load_folder_btn"))
         load_btn.clicked.connect(self._load_folder)
         v.addWidget(load_btn)
 
         filter_row = QHBoxLayout()
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("Suchen…")
+        self.search_edit.setPlaceholderText(tr("labeling.search_placeholder"))
         self.search_edit.textChanged.connect(self._filter_list)
         filter_row.addWidget(self.search_edit)
         v.addLayout(filter_row)
@@ -129,7 +129,7 @@ class LabelingPage(QWidget):
         self.unlabeled_only_cb.toggled.connect(self._filter_list)
         filter_cb_row.addWidget(self.unlabeled_only_cb)
 
-        self.roi_only_cb = QCheckBox("Nur mit ROIs")
+        self.roi_only_cb = QCheckBox(tr("labeling.roi_only_cb"))
         self.roi_only_cb.toggled.connect(self._filter_list)
         filter_cb_row.addWidget(self.roi_only_cb)
 
@@ -319,7 +319,8 @@ class LabelingPage(QWidget):
 
     def _build_center_panel(self) -> QGroupBox:
         """Build the center column: draw-mode toolbar, ROI editor and mask editor tabs."""
-        box = QGroupBox("Bildansicht & ROI-Editor")
+        from utils.i18n import tr
+        box = QGroupBox(tr("labeling.view_group"))
         v = QVBoxLayout(box)
 
         # Draw mode toolbar
@@ -341,25 +342,25 @@ class LabelingPage(QWidget):
         self._mode_group.buttons()[0].setChecked(True)
 
         toolbar.addSeparator_() if hasattr(toolbar, 'addSeparator_') else toolbar.addSpacing(10)
-        del_btn = QPushButton("Löschen (Del)")
+        del_btn = QPushButton(tr("labeling.delete_roi_btn"))
         del_btn.clicked.connect(self.roi_editor.delete_selected if hasattr(self, 'roi_editor') else lambda: None)
         toolbar.addWidget(del_btn)
 
-        zoom_reset_btn = QPushButton("Zoom zurücksetzen")
+        zoom_reset_btn = QPushButton(tr("labeling.zoom_reset_btn"))
         zoom_reset_btn.clicked.connect(lambda: self.roi_editor.reset_zoom())
         toolbar.addWidget(zoom_reset_btn)
         toolbar.addStretch()
 
         # Undo / Redo buttons wired to the undo stack
-        self._undo_btn = QPushButton("↩ Rückgängig")
+        self._undo_btn = QPushButton("↩ " + tr("labeling.undo_btn"))
         self._undo_btn.setEnabled(False)
-        self._undo_btn.setToolTip("Rückgängig (Strg+Z)")
+        self._undo_btn.setToolTip(tr("labeling.undo_btn") + " (Strg+Z)")
         self._undo_btn.clicked.connect(self._undo_stack.undo)
         toolbar.addWidget(self._undo_btn)
 
-        self._redo_btn = QPushButton("↪ Wiederholen")
+        self._redo_btn = QPushButton("↪ " + tr("labeling.redo_btn"))
         self._redo_btn.setEnabled(False)
-        self._redo_btn.setToolTip("Wiederholen (Strg+Y)")
+        self._redo_btn.setToolTip(tr("labeling.redo_btn") + " (Strg+Y)")
         self._redo_btn.clicked.connect(self._undo_stack.redo)
         toolbar.addWidget(self._redo_btn)
 

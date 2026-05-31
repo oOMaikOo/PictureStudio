@@ -335,7 +335,10 @@ class BatchInferencePage(QWidget):
 
     def _set_folder(self, folder: str) -> None:
         """Scan *folder* for supported image files and store their paths."""
+        from PySide6.QtWidgets import QApplication
         exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
+        log.debug("Scanne Ordner für Batch-Inferenz: %s", folder)
+        QApplication.processEvents()
         paths = [
             os.path.join(folder, f)
             for f in sorted(os.listdir(folder))

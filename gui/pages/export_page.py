@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
     QLabel, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
-    QComboBox, QCheckBox, QLineEdit, QMessageBox, QTextEdit,
+    QComboBox, QCheckBox, QLineEdit, QMessageBox, QTextEdit, QProgressBar,
 )
 from PySide6.QtCore import Qt
 
@@ -125,6 +125,12 @@ class ExportPage(QWidget):
         exp_btn.clicked.connect(self._export)
         layout.addWidget(exp_btn)
 
+        # Export progress bar (indeterminate; shown only during export)
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setMaximum(0)   # indeterminate mode
+        self._progress_bar.setVisible(False)
+        layout.addWidget(self._progress_bar)
+
         # Protocol
         proto_group = QGroupBox(tr("export.protocol_group"))
         pv = QVBoxLayout(proto_group)
@@ -224,6 +230,9 @@ class ExportPage(QWidget):
         model_name = os.path.basename(self.project.current_model_path) if self.project else ""
         fmt = self.fmt_combo.currentIndex()
 
+        self._progress_bar.setVisible(True)
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
         try:
             if fmt == 1:
                 from core.export import export_results_to_csv
@@ -255,3 +264,5 @@ class ExportPage(QWidget):
             err = f"Exportfehler: {exc}"
             self.proto_text.append(err)
             QMessageBox.critical(self, tr("common.error"), str(exc))
+        finally:
+            self._progress_bar.setVisible(False)

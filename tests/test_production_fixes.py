@@ -93,7 +93,7 @@ class TestAutoReconnectState:
 
     def test_on_frame_restores_green_status_after_reconnect(self):
         src = self._get_source("_on_frame")
-        assert "Verbunden" in src
+        assert "camera.connected" in src
 
     def test_reconnect_state_machine_logic(self):
         """Pure logic simulation: reconnect only for live streams, not video files."""

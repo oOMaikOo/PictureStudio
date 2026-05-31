@@ -906,19 +906,54 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         """Save window geometry, stop background threads/servers, optionally save project."""
+        from utils.i18n import tr
         self._settings.save_window_geometry(self.saveGeometry())
 
-        if self.project:
+        # Warn if a background process is still running
+        _running = (
+            (getattr(self.training_page, "_thread", None) and
+             self.training_page._thread.isRunning())
+            or
+            (getattr(self.inference_page, "_thread", None) and
+             self.inference_page._thread.isRunning())
+            or
+            (getattr(self.batch_page, "_thread", None) and
+             self.batch_page._thread.isRunning())
+        )
+        if _running:
             reply = QMessageBox.question(
-                self, "Beenden",
-                "Projekt vor dem Beenden speichern?",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                self,
+                tr("app.close_running_title"),
+                tr("app.close_running_msg"),
+                QMessageBox.Yes | QMessageBox.Cancel,
             )
-            if reply == QMessageBox.Cancel:
+            if reply != QMessageBox.Yes:
                 event.ignore()
                 return
-            if reply == QMessageBox.Yes:
-                self._save_project()
+
+        if self.project:
+            if self.project.project_path is None:
+                # Never saved — ask before discarding
+                reply = QMessageBox.question(
+                    self,
+                    tr("app.close_unsaved_title"),
+                    tr("app.close_unsaved_msg"),
+                    QMessageBox.Yes | QMessageBox.Cancel,
+                )
+                if reply != QMessageBox.Yes:
+                    event.ignore()
+                    return
+            else:
+                reply = QMessageBox.question(
+                    self, "Beenden",
+                    "Projekt vor dem Beenden speichern?",
+                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                )
+                if reply == QMessageBox.Cancel:
+                    event.ignore()
+                    return
+                if reply == QMessageBox.Yes:
+                    self._save_project()
 
         # Stop timers immediately so they can't fire during shutdown.
         self._autosave_timer.stop()

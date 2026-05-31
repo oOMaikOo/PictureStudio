@@ -154,10 +154,7 @@ class CameraPage(QWidget):
         title_row.addWidget(title)
         title_row.addStretch()
         open_dlg_btn = QPushButton(tr("camera.open_dialog_btn"))
-        open_dlg_btn.setToolTip(
-            "Vollständigen Kamera-Dialog öffnen:\n"
-            "Frames sammeln · Autoencoder trainieren · Batch-Analyse · Aufnehmen"
-        )
+        open_dlg_btn.setToolTip(tr("camera.tip.open_dialog"))
         open_dlg_btn.setStyleSheet(
             "QPushButton{background:#2E7D32;color:white;border-radius:6px;"
             "padding:5px 14px;font-weight:bold;}"
@@ -175,7 +172,7 @@ class CameraPage(QWidget):
             "background:#1565C0;color:white;padding:5px 10px;"
             "border-radius:4px;font-weight:bold;"
         )
-        model_load_btn.setToolTip("Trainierten Autoencoder (.pth) laden")
+        model_load_btn.setToolTip(tr("camera.tip.model_load"))
         model_load_btn.clicked.connect(self._load_model)
         model_row.addWidget(model_load_btn)
 
@@ -186,15 +183,13 @@ class CameraPage(QWidget):
         self._model_info_btn = QPushButton("ℹ")
         self._model_info_btn.setFixedWidth(28)
         self._model_info_btn.setEnabled(False)
-        self._model_info_btn.setToolTip("Modell-Metadaten anzeigen (Trainingszeit, Frames, SHA256 …)")
+        self._model_info_btn.setToolTip(tr("camera.tip.model_info"))
         self._model_info_btn.clicked.connect(self._show_model_info)
         model_row.addWidget(self._model_info_btn)
 
         self._onnx_export_btn = QPushButton(tr("camera.onnx_export_btn"))
         self._onnx_export_btn.setEnabled(False)
-        self._onnx_export_btn.setToolTip(
-            "Trainiertes Modell als ONNX exportieren (.onnx + .meta.json)"
-        )
+        self._onnx_export_btn.setToolTip(tr("camera.tip.onnx_export"))
         self._onnx_export_btn.setStyleSheet(
             "QPushButton{background:#6A1B9A;color:white;padding:5px 10px;"
             "border-radius:4px;font-weight:bold;}"
@@ -214,10 +209,7 @@ class CameraPage(QWidget):
             "background:#7D3C98;color:white;padding:5px 10px;"
             "border-radius:4px;font-weight:bold;"
         )
-        shadow_load_btn.setToolTip(
-            "Zweites Anomalie-Modell (Shadow) laden.\n"
-            "Beide Modelle laufen parallel — Abweichungen werden geloggt."
-        )
+        shadow_load_btn.setToolTip(tr("camera.tip.shadow_load"))
         shadow_load_btn.clicked.connect(self._load_shadow_model)
         shadow_row.addWidget(shadow_load_btn)
 
@@ -228,7 +220,7 @@ class CameraPage(QWidget):
         self._shadow_clear_btn = QPushButton("✕")
         self._shadow_clear_btn.setFixedWidth(28)
         self._shadow_clear_btn.setEnabled(False)
-        self._shadow_clear_btn.setToolTip("Shadow-Modell entfernen")
+        self._shadow_clear_btn.setToolTip(tr("camera.tip.shadow_clear"))
         self._shadow_clear_btn.clicked.connect(self._clear_shadow_model)
         shadow_row.addWidget(self._shadow_clear_btn)
 
@@ -263,10 +255,10 @@ class CameraPage(QWidget):
         cam_row.addWidget(self._connect_btn)
 
         self._ts_cb = QCheckBox(tr("camera.timestamp_cb"))
-        self._ts_cb.setToolTip("Datum/Uhrzeit ins Vorschaubild einblenden")
+        self._ts_cb.setToolTip(tr("camera.tip.timestamp"))
         cam_row.addWidget(self._ts_cb)
 
-        self._conn_status_lbl = QLabel("Nicht verbunden")
+        self._conn_status_lbl = QLabel(tr("camera.not_connected"))
         self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
         cam_row.addWidget(self._conn_status_lbl)
         cam_row.addStretch()
@@ -304,7 +296,7 @@ class CameraPage(QWidget):
         rb_lay.addWidget(retrain_go_btn)
         retrain_dismiss_btn = QPushButton("✕")
         retrain_dismiss_btn.setFixedWidth(24)
-        retrain_dismiss_btn.setToolTip("Banner schließen (Zähler zurücksetzen)")
+        retrain_dismiss_btn.setToolTip(tr("camera.tip.retrain_dismiss"))
         retrain_dismiss_btn.clicked.connect(self._dismiss_retrain_banner)
         rb_lay.addWidget(retrain_dismiss_btn)
         self._retrain_banner.setVisible(False)
@@ -340,7 +332,7 @@ class CameraPage(QWidget):
         )
         sg.addWidget(self._score_bar)
 
-        self._score_lbl = QLabel("Score: –")
+        self._score_lbl = QLabel(tr("camera.score_none"))
         self._score_lbl.setAlignment(Qt.AlignCenter)
         self._score_lbl.setStyleSheet(
             "font-weight:bold;font-size:18px;padding:6px;"
@@ -384,10 +376,7 @@ class CameraPage(QWidget):
         self._scoring_btn = QPushButton(tr("camera.scoring_btn"))
         self._scoring_btn.setCheckable(True)
         self._scoring_btn.setEnabled(False)
-        self._scoring_btn.setToolTip(
-            tr("camera.scoring_btn_tip") + "\n"
-            "Voraussetzung: Modell geladen + Kamera verbunden."
-        )
+        self._scoring_btn.setToolTip(tr("camera.scoring_btn_tip"))
         self._scoring_btn.setStyleSheet(
             "QPushButton{background:#2C3E50;color:#BDC3C7;border:1px solid #34495E;"
             "border-radius:4px;padding:6px;font-weight:bold;}"
@@ -399,17 +388,11 @@ class CameraPage(QWidget):
         df.addWidget(self._scoring_btn)
 
         self._heatmap_cb = QCheckBox(tr("camera.heatmap_cb"))
-        self._heatmap_cb.setToolTip(
-            "Überlagert das Live-Bild mit einer Fehlerwärmekarte.\n"
-            "Rot = hoher Rekonstruktionsfehler = potenzielle Anomalie."
-        )
+        self._heatmap_cb.setToolTip(tr("camera.tip.heatmap"))
         df.addWidget(self._heatmap_cb)
 
         self._gradcam_cb = QCheckBox(tr("camera.gradcam_cb"))
-        self._gradcam_cb.setToolTip(
-            "Grad-CAM: zeigt welche Bildregionen den Anomalie-Score verursachen.\n"
-            "Langsamer als Heatmap — deaktiviert Heatmap automatisch wenn aktiv."
-        )
+        self._gradcam_cb.setToolTip(tr("camera.tip.gradcam"))
         df.addWidget(self._gradcam_cb)
 
         thr_row = QHBoxLayout()
@@ -420,10 +403,7 @@ class CameraPage(QWidget):
         self._thr_spin.setSingleStep(0.001)
         self._thr_spin.setValue(0.02)
         self._thr_spin.setEnabled(False)
-        self._thr_spin.setToolTip(
-            "Automatisch gesetzt beim Laden des Modells.\n"
-            "Erhöhen = weniger sensitiv · Senken = sensitiver."
-        )
+        self._thr_spin.setToolTip(tr("camera.tip.threshold"))
         self._thr_spin.valueChanged.connect(self._on_threshold_changed)
         thr_row.addWidget(self._thr_spin)
         df.addLayout(thr_row)
@@ -434,10 +414,7 @@ class CameraPage(QWidget):
         self._smooth_spin.setRange(1, 20)
         self._smooth_spin.setValue(_SMOOTH_DEFAULT)
         self._smooth_spin.setSuffix(" Fr.")
-        self._smooth_spin.setToolTip(
-            "Alarm erst nach N aufeinanderfolgenden Frames über dem Schwellwert.\n"
-            "Verhindert Fehlalarme durch kurze Störungen."
-        )
+        self._smooth_spin.setToolTip(tr("camera.tip.smooth"))
         smooth_row.addWidget(self._smooth_spin)
         df.addLayout(smooth_row)
 
@@ -447,10 +424,7 @@ class CameraPage(QWidget):
         self._dedup_spin.setRange(0, 3600)
         self._dedup_spin.setValue(_DEDUP_DEFAULT)
         self._dedup_spin.setSuffix(" s")
-        self._dedup_spin.setToolTip(
-            "Mindestabstand in Sekunden zwischen zwei protokollierten Alarm-Events.\n"
-            "0 = alle Frames loggen."
-        )
+        self._dedup_spin.setToolTip(tr("camera.tip.dedup"))
         dedup_row.addWidget(self._dedup_spin)
         df.addLayout(dedup_row)
 
@@ -464,7 +438,7 @@ class CameraPage(QWidget):
         ev.addWidget(self._event_lbl)
         self._log_btn = QPushButton(tr("camera.log_btn"))
         self._log_btn.setEnabled(False)
-        self._log_btn.setToolTip("CSV-Ereignislog öffnen")
+        self._log_btn.setToolTip(tr("camera.tip.log_btn"))
         self._log_btn.clicked.connect(self._open_log)
         ev.addWidget(self._log_btn)
         lv.addWidget(ev_grp)
@@ -487,7 +461,7 @@ class CameraPage(QWidget):
         try:
             from gui.widgets.score_chart import ScoreChart
             self._score_chart = ScoreChart()
-            self._score_chart.setToolTip("Live-Verlauf der Anomalie-Scores")
+            self._score_chart.setToolTip(tr("camera.tip.score_chart"))
             lv.addWidget(self._score_chart)
         except Exception:
             log.debug("ScoreChart not available, skipping")
@@ -568,12 +542,7 @@ class CameraPage(QWidget):
         self._preview.setStyleSheet(
             "background:#111; border-radius:8px; color:#555; font-size:14px;"
         )
-        self._preview.setText(
-            "Kein Signal\n\n"
-            "① Modell laden (.pth)\n"
-            "② Kamera wählen → Verbinden\n"
-            "③ Scoring aktivieren"
-        )
+        self._preview.setText(tr("camera.no_signal"))
         splitter.addWidget(self._preview)
         splitter.setSizes([290, 720])
         splitter.setStretchFactor(0, 0)
@@ -647,12 +616,7 @@ class CameraPage(QWidget):
             if not any(source.lower().startswith(s) for s in _valid_schemes):
                 QMessageBox.warning(
                     self, tr("camera.invalid_url_title"),
-                    "Die URL hat kein unterstütztes Schema.\n\n"
-                    "Erlaubte Formate:\n"
-                    "  rtsp://user:pass@192.168.1.100:554/stream\n"
-                    "  http://192.168.1.100:8080/video\n"
-                    "  https://...\n\n"
-                    "Bitte URL korrigieren und erneut versuchen."
+                    tr("camera.invalid_url_msg"),
                 )
                 self._connect_btn.setChecked(False)
                 return
@@ -699,14 +663,14 @@ class CameraPage(QWidget):
         self._connect_btn.setText(tr("camera.disconnect_btn"))
         if is_video:
             fname = os.path.basename(source)
-            self._conn_status_lbl.setText(f"Wiedergabe: {fname}")
+            self._conn_status_lbl.setText(tr("camera.playback", fname=fname))
             self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
-            self._status_bar.setText(f"Video: {source}  ({fps:.1f} fps)")
+            self._status_bar.setText(tr("camera.status_video", source=source, fps=fps))
         else:
-            self._conn_status_lbl.setText("Verbunden")
+            self._conn_status_lbl.setText(tr("camera.connected"))
             self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
             cam_name = self._cam_combo.currentText()
-            self._status_bar.setText(f"Verbunden: {cam_name}")
+            self._status_bar.setText(tr("camera.status_connected", cam_name=cam_name))
 
         # Enable scoring if model already loaded
         if self._detector and self._detector.trained:
@@ -726,16 +690,11 @@ class CameraPage(QWidget):
             self._camera_thread = None
         self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setChecked(False)
-        self._conn_status_lbl.setText("Nicht verbunden")
+        self._conn_status_lbl.setText(tr("camera.not_connected"))
         self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
         self._preview.setPixmap(QPixmap())
-        self._preview.setText(
-            "Kein Signal\n\n"
-            "① Modell laden (.pth)\n"
-            "② Kamera wählen → Verbinden\n"
-            "③ Scoring aktivieren"
-        )
-        self._score_lbl.setText("Score: –")
+        self._preview.setText(tr("camera.no_signal"))
+        self._score_lbl.setText(tr("camera.score_none"))
         self._score_lbl.setStyleSheet(
             "font-weight:bold;font-size:18px;padding:6px;"
             "border-radius:5px;background:#1A252F;color:#7F8C8D;"
@@ -747,7 +706,7 @@ class CameraPage(QWidget):
         self._shadow_bar.setValue(0)
         self._shadow_score_lbl.setText("")
         self._divergence_lbl.setText("")
-        self._status_bar.setText("Bereit")
+        self._status_bar.setText(tr("camera.status_ready_short"))
 
     @Slot(str)
     def _on_camera_error(self, msg: str) -> None:
@@ -760,14 +719,14 @@ class CameraPage(QWidget):
         if self._reconnect_source is not None and not self._is_video_file:
             self._conn_status_lbl.setText(tr("camera.reconnecting"))
             self._conn_status_lbl.setStyleSheet("color:#D29922;")
-            self._status_bar.setText(f"Kamera-Fehler: {msg} — Reconnect läuft…")
+            self._status_bar.setText(tr("camera.status_cam_error", msg=msg))
             self._reconnect_timer.start(5000)
         else:
-            label = "Video beendet" if self._is_video_file else "Fehler"
+            label = tr("camera.video_ended") if self._is_video_file else tr("camera.error")
             self._conn_status_lbl.setText(label)
             self._conn_status_lbl.setStyleSheet("color:#E74C3C;")
             self._status_bar.setText(
-                "Video abgespielt." if self._is_video_file else f"Kamera-Fehler: {msg}"
+                tr("camera.status_video_done") if self._is_video_file else tr("camera.status_cam_error_short", msg=msg)
             )
 
     def _try_reconnect(self) -> None:
@@ -776,9 +735,9 @@ class CameraPage(QWidget):
         if source is None:
             return
         self._reconnect_attempts += 1
-        self._conn_status_lbl.setText(f"Reconnect #{self._reconnect_attempts}…")
+        self._conn_status_lbl.setText(tr("camera.reconnect_status", n=self._reconnect_attempts))
         self._conn_status_lbl.setStyleSheet("color:#D29922;")
-        self._status_bar.setText(f"Verbinde erneut… (Versuch {self._reconnect_attempts})")
+        self._status_bar.setText(tr("camera.reconnect_attempt", n=self._reconnect_attempts))
 
         if self._camera_thread:
             self._camera_thread.stop()
@@ -798,12 +757,12 @@ class CameraPage(QWidget):
 
     def _on_scoring_toggled(self, active: bool) -> None:
         """Reset score history and update button text when scoring is toggled."""
-        self._scoring_btn.setText("Scoring aktiv  ●" if active else "Scoring aktivieren")
+        self._scoring_btn.setText(tr("camera.scoring_active") if active else tr("camera.scoring_btn"))
         self._smooth_buf.clear()
         self._score_history.clear()
         if not active:
             self._alarm_banner.setVisible(False)
-            self._score_lbl.setText("Score: –")
+            self._score_lbl.setText(tr("camera.score_none"))
             self._score_lbl.setStyleSheet(
                 "font-weight:bold;font-size:18px;padding:6px;"
                 "border-radius:5px;background:#1A252F;color:#7F8C8D;"
@@ -832,9 +791,9 @@ class CameraPage(QWidget):
         # First frame after reconnect — restore green status
         if self._reconnect_attempts > 0:
             self._reconnect_attempts = 0
-            self._conn_status_lbl.setText("Verbunden")
+            self._conn_status_lbl.setText(tr("camera.connected"))
             self._conn_status_lbl.setStyleSheet("color:#2ECC71;")
-            self._status_bar.setText("Verbindung wiederhergestellt.")
+            self._status_bar.setText(tr("camera.connection_restored"))
             if self._detector and self._detector.trained:
                 self._scoring_btn.setEnabled(True)
 
@@ -953,15 +912,14 @@ class CameraPage(QWidget):
                 self._last_alarm_t = now
                 self._event_count += 1
                 plural = "e" if self._event_count != 1 else ""
-                self._event_lbl.setText(f"{self._event_count} Alarm{plural} in dieser Sitzung")
+                self._event_lbl.setText(tr("camera.event_count", n=self._event_count, plural=plural))
                 self._stats_session_lbl.setText(tr("camera.stats_session", n=self._event_count))
                 self._write_event(score, thr)
                 # USP 2 — auto-retrain suggestion
                 self._session_alarm_count += 1
                 if self._session_alarm_count >= _RETRAIN_THRESHOLD:
                     self._retrain_lbl.setText(
-                        f"⚠  {self._session_alarm_count} Alarme in dieser Sitzung  —  "
-                        "Retraining empfohlen"
+                        tr("camera.retrain_banner_text", n=self._session_alarm_count)
                     )
                     self._retrain_banner.setVisible(True)
 
@@ -1056,7 +1014,7 @@ class CameraPage(QWidget):
         self._shadow_bar.setVisible(True)
         self._shadow_score_lbl.setVisible(True)
         self._divergence_lbl.setVisible(True)
-        self._status_bar.setText(f"Shadow-Modell geladen: {name}")
+        self._status_bar.setText(tr("camera.shadow_loaded", name=name))
 
     def _clear_shadow_model(self) -> None:
         """Unload the shadow model and hide comparison widgets."""
@@ -1140,7 +1098,7 @@ class CameraPage(QWidget):
     def _load_model(self) -> None:
         """Open a file chooser to select and load an autoencoder .pth checkpoint."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Autoencoder-Modell laden", "", "PyTorch-Modell (*.pth)"
+            self, tr("camera.load_model_dlg"), "", "PyTorch-Modell (*.pth)"
         )
         if not path:
             return
@@ -1155,8 +1113,8 @@ class CameraPage(QWidget):
         self._model_path = path
         self._roi = det.metadata.get("roi")  # [x1,y1,x2,y2] normalized, or None
         name = os.path.basename(path)
-        roi_tag = "  ·  ROI aktiv" if self._roi else ""
-        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f}{roi_tag})")
+        roi_tag = tr("camera.roi_active_tag") if self._roi else ""
+        self._model_lbl.setText(tr("camera.model_loaded_lbl", name=name, thr=det.threshold, roi_tag=roi_tag))
         self._model_lbl.setStyleSheet("color:#2ECC71;")
         self._thr_spin.blockSignals(True)
         self._thr_spin.setValue(det.threshold)
@@ -1170,7 +1128,7 @@ class CameraPage(QWidget):
             self._scoring_btn.setEnabled(True)
 
         self._status_bar.setText(
-            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}{roi_tag}"
+            tr("camera.status_model_loaded", name=name, thr=det.threshold, roi_tag=roi_tag)
         )
 
     def _show_model_info(self) -> None:
@@ -1187,17 +1145,17 @@ class CameraPage(QWidget):
             "<style>body{font-family:-apple-system,sans-serif;font-size:12px;"
             "background:#0D1117;color:#E0E0E0;}</style>"
             f"<table>{rows}</table>"
-        ) if rows else "<p style='color:#aaa'>Keine Metadaten gespeichert.</p>"
+        ) if rows else f"<p style='color:#aaa'>{tr('camera.model_no_meta')}</p>"
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("Modell-Informationen")
+        dlg.setWindowTitle(tr("camera.model_info_title"))
         dlg.resize(500, 380)
         dv = QVBoxLayout(dlg)
         tb = QTextBrowser()
         tb.setHtml(html)
         tb.setStyleSheet("background:#0D1117; border:none;")
         dv.addWidget(tb)
-        close_btn = QPushButton("Schließen")
+        close_btn = QPushButton(tr("common.close"))
         close_btn.clicked.connect(dlg.accept)
         dv.addWidget(close_btn)
         dlg.exec()
@@ -1275,8 +1233,8 @@ class CameraPage(QWidget):
         self._model_path = path
         self._roi = det.metadata.get("roi")  # [x1,y1,x2,y2] normalized, or None
         name = os.path.basename(path)
-        roi_tag = "  ·  ROI aktiv" if self._roi else ""
-        self._model_lbl.setText(f"{name}  (Schwellwert: {det.threshold:.5f}{roi_tag})")
+        roi_tag = tr("camera.roi_active_tag") if self._roi else ""
+        self._model_lbl.setText(tr("camera.model_loaded_lbl", name=name, thr=det.threshold, roi_tag=roi_tag))
         self._model_lbl.setStyleSheet("color:#2ECC71;")
         self._thr_spin.blockSignals(True)
         self._thr_spin.setValue(det.threshold)
@@ -1287,7 +1245,7 @@ class CameraPage(QWidget):
         if self._camera_thread:
             self._scoring_btn.setEnabled(True)
         self._status_bar.setText(
-            f"Modell geladen: {name}  |  Schwellwert: {det.threshold:.5f}{roi_tag}"
+            tr("camera.status_model_loaded", name=name, thr=det.threshold, roi_tag=roi_tag)
         )
 
     def _export_onnx(self) -> None:
@@ -1297,7 +1255,7 @@ class CameraPage(QWidget):
         base = os.path.splitext(self._model_path or "anomalie_modell")[0]
         default_path = base + ".onnx"
         path, _ = QFileDialog.getSaveFileName(
-            self, "ONNX exportieren", default_path, "ONNX (*.onnx)"
+            self, tr("camera.onnx_export_dlg"), default_path, "ONNX (*.onnx)"
         )
         if not path:
             return
@@ -1305,8 +1263,8 @@ class CameraPage(QWidget):
             self._detector.export_onnx_with_meta(path)
             QMessageBox.information(
                 self,
-                "ONNX exportiert",
-                f"Modell exportiert:\n{path}\n\nMetadaten:\n{path}.meta.json",
+                tr("camera.onnx_exported_title"),
+                tr("camera.onnx_exported_msg", path=path),
             )
         except Exception as exc:
             QMessageBox.critical(self, tr("common.error"), str(exc))

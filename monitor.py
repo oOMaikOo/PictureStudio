@@ -65,6 +65,10 @@ except ImportError:
 _VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.m4v', '.wmv', '.flv', '.webm', '.ts'}
 
 
+# ---------------------------------------------------------------------------
+# Section: Camera discovery + terminal UI
+# ---------------------------------------------------------------------------
+
 def _discover_cameras() -> list:
     """Scan for available USB cameras and return [(index, label)] list."""
     try:
@@ -112,7 +116,7 @@ def _terminal_camera_select(cameras: list) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Camera thread — USB index, IP/RTSP URL, or video file
+# Section: Camera thread — USB index, IP/RTSP URL, or video file
 # ---------------------------------------------------------------------------
 
 class _CameraThread(threading.Thread):
@@ -276,14 +280,28 @@ class _CameraThread(threading.Thread):
 
 
 # ---------------------------------------------------------------------------
-# Shared monitor state (thread-safe; updated by the frame callback)
+# Section: Shared monitor state + frame ring-buffer
 # ---------------------------------------------------------------------------
 
 _FRAME_BUF_MAX = 200   # max JPEG frames kept in memory (~10 MB at quality 70)
 _FRAME_BUF_INTERVAL = 0.5  # seconds between buffer pushes (≈2 fps) to limit CPU
 
 class _MonitorState:
-    """Central store for score history and alarm data used by the REST API."""
+    """Central store for score history, alarm data, and the frame ring-buffer.
+
+    All public attributes are protected by ``_lock``; the frame ring-buffer
+    has its own separate ``_frame_buf_lock`` so frame writes from the camera
+    thread never contend with JSON-serialisation of score data.
+
+    Frame ring-buffer
+    -----------------
+    push_frame(frame)   — add a JPEG-compressed copy (throttled to ~2 fps)
+    get_frames(n)       — return the n most-recent JPEG bytes
+
+    Hot-swap
+    --------
+    pending_model_path  — set by POST /api/deploy; consumed by run_monitor()
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -367,7 +385,19 @@ class _MonitorState:
 
 
 # ---------------------------------------------------------------------------
-# Mini REST API (standalone HTTP server, no Qt required)
+# Section: Monitor REST API (standalone HTTP server, no Qt required)
+#
+#   _MonitorHandler    — BaseHTTPRequestHandler with all do_GET / do_POST routes
+#   _MonitorApiServer  — wraps ThreadingHTTPServer in a daemon thread
+#
+# Endpoints:
+#   GET  /api/status        — JSON snapshot of _MonitorState (public)
+#   GET  /api/scores        — recent score buffer (auth required)
+#   GET  /api/latest_alarm  — last alarm metadata (auth required)
+#   GET  /api/frame/<name>  — alarm JPEG from disk (auth required)
+#   GET  /api/frames        — ZIP of ring-buffer frames (auth required)
+#   GET  /dashboard         — HTML dashboard (public)
+#   POST /api/deploy        — upload a new .pth model (auth required)
 # ---------------------------------------------------------------------------
 
 _MONITOR_DASHBOARD_HTML = r"""<!DOCTYPE html>
@@ -469,7 +499,16 @@ tick();setInterval(tick,3000);
 
 
 class _MonitorHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP handler for the standalone monitor REST API."""
+    """HTTP handler for the standalone monitor REST API.
+
+    ``state`` is a class-level attribute set once by ``_MonitorApiServer``
+    before the server starts serving.  All handler methods read from / write
+    to this shared ``_MonitorState`` instance.
+
+    Authentication: if ``state.api_key`` is non-empty every route except
+    ``/dashboard`` and ``/api/status`` requires the key via the
+    ``X-Api-Key`` header (or ``Authorization: Bearer <key>``).
+    """
 
     state: _MonitorState = None  # type: ignore[assignment]
 
@@ -646,7 +685,12 @@ class _MonitorHandler(BaseHTTPRequestHandler):
 
 
 class _MonitorApiServer:
-    """Runs the monitor REST API in a background daemon thread."""
+    """Runs the monitor REST API in a background daemon thread.
+
+    Binds a ``ThreadingHTTPServer`` on the given port and wires
+    ``_MonitorHandler.state`` before starting the thread so all requests
+    share the same ``_MonitorState`` instance.
+    """
 
     def __init__(self, port: int, state: _MonitorState) -> None:
         self._port = port
@@ -667,7 +711,12 @@ class _MonitorApiServer:
 
 
 # ---------------------------------------------------------------------------
-# Helpers (unchanged from v1.0)
+# Section: Frame-processing helpers
+#   find_camera_index  — resolve a camera label to a USB index
+#   apply_roi          — crop a frame to a normalised [x1,y1,x2,y2] ROI
+#   composite_overlay  — paste an ROI-sized overlay back onto the full frame
+#   draw_hud           — render score bar, status text, and alarm banner
+#   save_alarm         — write JPEG + CSV log entry for an alarm event
 # ---------------------------------------------------------------------------
 
 def find_camera_index(camera_source: Optional[str]) -> int:
@@ -777,7 +826,7 @@ def save_alarm(
 
 
 # ---------------------------------------------------------------------------
-# Main monitor loop
+# Section: Single-channel monitor loop
 # ---------------------------------------------------------------------------
 
 def run_monitor(
@@ -1097,7 +1146,24 @@ def run_monitor(
 
 
 # ---------------------------------------------------------------------------
-# Setup-Wizard — multi-channel, no training on edge device
+# Section: Setup-Wizard — multi-channel web UI (no training on edge device)
+#
+#   _SetupChannel    — one camera channel (source, ROI, model path, live frame)
+#   _SetupState      — thread-safe list of channels + wizard phase
+#   _SetupHandler    — HTTP handler for all /setup/... routes
+#   _SetupApiServer  — wraps ThreadingHTTPServer in a daemon thread
+#   run_setup()      — blocking entry point; returns list of configured channels
+#
+# Web UI routes (/setup/...):
+#   GET  /setup                       — HTML wizard page
+#   GET  /setup/cameras               — list of discovered USB cameras
+#   GET  /setup/status                — JSON snapshot of _SetupState
+#   GET  /setup/channels/{id}/frame.jpg — JPEG preview from camera thread
+#   POST /setup/channels/add          — create a new channel + start camera thread
+#   POST /setup/channels/{id}/roi     — set or clear ROI for a channel
+#   POST /setup/channels/{id}/deploy  — upload model binary for a channel
+#   POST /setup/go_live               — transition phase → 'live'; unblocks run_setup()
+#   DELETE /setup/channels/{id}       — remove a channel and stop its camera thread
 # ---------------------------------------------------------------------------
 
 _SETUP_HTML: str = r"""<!DOCTYPE html>
@@ -1897,7 +1963,7 @@ def run_setup(
 
 
 # ---------------------------------------------------------------------------
-# Multi-channel monitor loop
+# Section: Multi-channel monitor loop
 # ---------------------------------------------------------------------------
 
 def run_monitor_multi(
@@ -2093,7 +2159,7 @@ def run_monitor_multi(
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# Section: CLI — argument parser + entry point
 # ---------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:

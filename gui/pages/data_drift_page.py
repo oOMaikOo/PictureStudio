@@ -249,6 +249,9 @@ class DataDriftPage(QWidget):
         if not folder:
             return
         from core.data_drift import IMAGE_EXTS
+        from PySide6.QtWidgets import QApplication
+        log.debug("Scanne Ordner für Baseline: %s", folder)
+        QApplication.processEvents()
         paths = [
             os.path.join(folder, f)
             for f in sorted(os.listdir(folder))

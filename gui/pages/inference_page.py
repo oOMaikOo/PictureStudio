@@ -546,6 +546,12 @@ class InferencePage(QWidget):
             self._thread.wait(2000)
         super().hideEvent(event)
 
+    def closeEvent(self, event) -> None:
+        if self._thread and self._thread.isRunning():
+            self._thread.quit()
+            self._thread.wait(2000)
+        super().closeEvent(event)
+
     @Slot(list)
     def _on_finished(self, results: List[Dict]) -> None:
         """Store results, update label-filter combo, and apply the current filter."""

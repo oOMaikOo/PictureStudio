@@ -151,6 +151,7 @@ class ModelsPage(QWidget):
         self._manager = None
         self._build_ui()
         QShortcut(QKeySequence(Qt.Key_Delete), self, activated=self._delete_model)
+        self.setAcceptDrops(True)
 
     def set_project(self, project, audit=None) -> None:
         """Accept a project, initialise the ``ModelManager``, and refresh the view."""
@@ -208,6 +209,11 @@ class ModelsPage(QWidget):
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.doubleClicked.connect(self._load_selected)
         lv.addWidget(self.table)
+
+        self._drop_hint_label = QLabel(tr("models.drop_hint"))
+        self._drop_hint_label.setAlignment(Qt.AlignCenter)
+        self._drop_hint_label.setStyleSheet("color: #8B949E; font-style: italic; padding: 4px;")
+        lv.addWidget(self._drop_hint_label)
 
         btn_row = QHBoxLayout()
         _btn_tips = {
@@ -469,6 +475,55 @@ class ModelsPage(QWidget):
         for k, v in list(m.hyperparameters.items())[:10]:
             lines.append(f"  {k}: {v}")
         self.detail_text.setPlainText("\n".join(lines))
+
+    # ------------------------------------------------------------------ drag & drop
+
+    def dragEnterEvent(self, event) -> None:
+        """Accept drag events for .pth files."""
+        urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
+        if any(u.toLocalFile().lower().endswith(".pth") for u in urls):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        """Copy dropped .pth files into the project's models directory and register them."""
+        if not self.project or not self._manager:
+            QMessageBox.warning(self, tr("common.warning"), tr("models.drop_no_project"))
+            event.ignore()
+            return
+        import shutil as _shutil
+        added = []
+        errors = []
+        for url in event.mimeData().urls():
+            src = url.toLocalFile()
+            if not src.lower().endswith(".pth"):
+                continue
+            dest = os.path.join(self._manager.models_dir, os.path.basename(src))
+            try:
+                if os.path.abspath(src) != os.path.abspath(dest):
+                    _shutil.copy2(src, dest)
+                name = os.path.splitext(os.path.basename(src))[0]
+                self._manager.register({
+                    "model_type": "imported",
+                    "best_model_path": dest,
+                    "run_id": name,
+                    "class_names": [],
+                    "hyperparameters": {},
+                    "metrics": {},
+                }, name=name)
+                added.append(name)
+            except Exception as exc:
+                errors.append(f"{os.path.basename(src)}: {exc}")
+        if added:
+            self.refresh()
+            QMessageBox.information(
+                self, tr("models.loaded_title"),
+                "\n".join(tr("models.drop_success", name=n) for n in added)
+            )
+        if errors:
+            QMessageBox.warning(self, tr("common.error"), "\n".join(errors))
+        event.acceptProposedAction()
 
     # ------------------------------------------------------------------ actions
 
