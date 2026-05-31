@@ -23,7 +23,541 @@ from gui.widgets.roi_editor import ROIEditor, DRAW_RECT, DRAW_ELLIPSE, DRAW_POLY
 from utils.config import DEFAULT_COLORS
 
 
-class LabelingPage(QWidget):
+
+class _ROIMixin:
+    """ROI event handlers and mutation helpers — extracted from LabelingPage."""
+    # ------------------------------------------------------------------ ROI events
+
+    @Slot(dict)
+    def _on_roi_added(self, roi_data: dict) -> None:
+        """Receive a new ROI from the editor, stamp its label/color and push AddROICommand."""
+        if not self.project or not self._current_image:
+            return
+        roi_data["label"] = self.roi_editor.current_label
+        roi_data["color"] = self.roi_editor.current_color
+        from gui.labeling_commands import AddROICommand
+        # Remove from editor first (command redo() will re-add it)
+        self.roi_editor.delete_roi(roi_data["id"])
+        self._undo_stack.push(AddROICommand(self, self._current_image, roi_data))
+
+    def _do_add_roi(self, image_path: str, roi_data: dict) -> None:
+        """Persist a new ROI in the project and add it visually to the editor; called by AddROICommand."""
+        if not self.project:
+            return
+        self.project.add_roi(image_path, roi_data)
+        if image_path == self._current_image:
+            self.roi_editor.add_roi_item(roi_data)
+            self._refresh_roi_list()
+        if self._audit:
+            self._audit.log_roi_added(image_path, roi_data["id"], roi_data.get("type", "rect"))
+        self._update_stats()
+
+    @Slot(str)
+    def _on_roi_deleted(self, roi_id: str) -> None:
+        """Receive a delete request from the editor and push DeleteROICommand onto the undo stack."""
+        if not self.project or not self._current_image:
+            return
+        rois = self.project.get_rois(self._current_image)
+        roi_data = next((r for r in rois if r.get("id") == roi_id), None)
+        if roi_data is None:
+            return
+        from gui.labeling_commands import DeleteROICommand
+        self._undo_stack.push(DeleteROICommand(self, self._current_image, roi_data))
+
+    def _do_delete_roi(self, image_path: str, roi_id: str) -> None:
+        """Remove an ROI from the project and the editor view; called by DeleteROICommand."""
+        if not self.project:
+            return
+        self.project.remove_roi(image_path, roi_id)
+        if image_path == self._current_image:
+            self.roi_editor.delete_roi(roi_id)
+            self._refresh_roi_list()
+        if self._audit:
+            self._audit.log_roi_deleted(image_path, roi_id)
+        self._update_stats()
+
+    @Slot(str)
+    def _on_roi_selected(self, roi_id: str) -> None:
+        """Sync the ROI list widget selection when the user clicks an ROI in the editor."""
+        for i in range(self.roi_list.count()):
+            item = self.roi_list.item(i)
+            if item.data(Qt.UserRole) == roi_id:
+                self.roi_list.setCurrentRow(i)
+                break
+
+    @Slot(dict)
+    def _on_roi_moved(self, roi_data: dict) -> None:
+        """Push a MoveROICommand when the user drags an ROI to a new position."""
+        if not self.project or not self._current_image:
+            return
+        rois = self.project.get_rois(self._current_image)
+        old_data = next((r for r in rois if r.get("id") == roi_data.get("id")), None)
+        if old_data is None:
+            return
+        from gui.labeling_commands import MoveROICommand
+        self._undo_stack.push(MoveROICommand(self, self._current_image, roi_data, old_data))
+
+    def _do_move_roi(self, image_path: str, roi_data: dict) -> None:
+        """Update the ROI geometry in the project and refresh the editor; called by MoveROICommand."""
+        if not self.project:
+            return
+        self.project.update_roi(image_path, roi_data["id"], roi_data)
+        if image_path == self._current_image:
+            self.roi_editor.update_roi_geometry(roi_data)
+
+    def _on_roi_list_select(self, row: int) -> None:
+        """Sync the ROI label combo when the user selects a row in the ROI list widget."""
+        item = self.roi_list.item(row)
+        if not item or not self.project or not self._current_image:
+            return
+        roi_id = item.data(Qt.UserRole)
+        rois = self.project.get_rois(self._current_image)
+        roi = next((r for r in rois if r.get("id") == roi_id), None)
+        if roi:
+            lbl = roi.get("label", "")
+            self.roi_label_combo.blockSignals(True)
+            idx = self.roi_label_combo.findText(lbl) if lbl else 0
+            self.roi_label_combo.setCurrentIndex(max(0, idx))
+            self.roi_label_combo.blockSignals(False)
+
+    def _assign_roi_label(self) -> None:
+        """Push AssignROILabelCommand to assign the selected label to the currently chosen ROI."""
+        item = self.roi_list.currentItem()
+        if not item or not self.project or not self._current_image:
+            return
+        roi_id = item.data(Qt.UserRole)
+        new_label = self.roi_label_combo.currentText()
+        if new_label == "(kein)":
+            new_label = ""
+        new_color = self.project.get_label_color(new_label) if new_label else "#E74C3C"
+        rois = self.project.get_rois(self._current_image)
+        roi = next((r for r in rois if r.get("id") == roi_id), None)
+        if roi is None:
+            return
+        old_label = roi.get("label", "")
+        old_color = roi.get("color", "#E74C3C")
+        if old_label == new_label:
+            return
+        from gui.labeling_commands import AssignROILabelCommand
+        self._undo_stack.push(AssignROILabelCommand(
+            self, self._current_image, roi_id,
+            new_label, new_color, old_label, old_color,
+        ))
+
+    def _do_assign_roi_label(self, image_path: str, roi_id: str,
+                             label: str, color: str) -> None:
+        """Mutate the ROI label/color in the project and refresh the editor; called by AssignROILabelCommand."""
+        if not self.project:
+            return
+        rois = self.project.get_rois(image_path)
+        for roi in rois:
+            if roi.get("id") == roi_id:
+                roi["label"] = label
+                roi["color"] = color
+                break
+        if image_path == self._current_image:
+            self.roi_editor.update_roi_label(roi_id, label, color)
+            self.roi_editor.current_label = label
+            self.roi_editor.current_color = color
+            self._refresh_roi_list()
+        self._update_stats()
+
+    def _delete_roi_from_list(self) -> None:
+        """Delete the ROI currently selected in the list widget via the undo stack."""
+        item = self.roi_list.currentItem()
+        if not item or not self.project or not self._current_image:
+            return
+        roi_id = item.data(Qt.UserRole)
+        rois = self.project.get_rois(self._current_image)
+        roi_data = next((r for r in rois if r.get("id") == roi_id), None)
+        if roi_data is None:
+            return
+        from gui.labeling_commands import DeleteROICommand
+        self._undo_stack.push(DeleteROICommand(self, self._current_image, roi_data))
+
+    def _apply_roi_to_all(self) -> None:
+        """Copy the current image's ROIs to every image in the project."""
+        from utils.i18n import tr
+        if not self.project or not self._current_image:
+            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
+            return
+        self._save_current_rois()
+        src_rois = self.project.get_rois(self._current_image)
+        if not src_rois:
+            QMessageBox.warning(self, tr("common.warning"),
+                                "Das aktuelle Bild hat keine ROIs zum Kopieren.")
+            return
+        n = len(self.project.images)
+        reply = QMessageBox.question(
+            self, "ROIs übertragen",
+            f"Die {len(src_rois)} ROI(s) dieses Bildes werden auf alle "
+            f"{n} Bilder kopiert.\nVorhandene ROIs werden überschrieben.\n\n"
+            "⚠ Diese Aktion kann nicht rückgängig gemacht werden.\n\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        import copy, uuid as _uuid
+        for img_path in self.project.images:
+            if img_path == self._current_image:
+                continue
+            new_rois = []
+            for roi in src_rois:
+                r = copy.deepcopy(roi)
+                r["id"] = str(_uuid.uuid4())[:8]  # unique id per image
+                new_rois.append(r)
+            self.project.rois[img_path] = new_rois
+        QMessageBox.information(
+            self, "Fertig",
+            f"ROIs auf {n - 1} weitere Bilder übertragen."
+        )
+
+    def _apply_roi_size_to_all(self) -> None:
+        """Copy only w+h of the selected ROI to every image; per-image x/y is kept."""
+        from utils.i18n import tr
+        if not self.project or not self._current_image:
+            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
+            return
+        self._save_current_rois()
+        src_rois = self.project.get_rois(self._current_image)
+        if not src_rois:
+            QMessageBox.warning(self, tr("common.warning"),
+                                "Das aktuelle Bild hat keine ROIs.")
+            return
+
+        # Use the selected ROI if available, otherwise the first one
+        sel_items = [i for i in self.roi_editor._scene.selectedItems()
+                     if hasattr(i, "roi_data")]
+        src_roi = sel_items[0].roi_data if sel_items else src_rois[0]
+        src_w, src_h = src_roi.get("w", 0), src_roi.get("h", 0)
+        src_type     = src_roi.get("type", "rect")
+        src_label    = src_roi.get("label", "")
+        src_color    = src_roi.get("color", "#E74C3C")
+
+        n = len(self.project.images)
+        reply = QMessageBox.question(
+            self, "ROI-Größe übertragen",
+            f"Breite ({src_w:.0f} px) und Höhe ({src_h:.0f} px) des ROI werden auf alle "
+            f"{n} Bilder übertragen.\nBilder mit einem bestehenden ROI behalten ihre Position.\n"
+            "Bilder ohne ROI erhalten einen neuen ROI an der aktuellen Position.\n\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        import uuid as _uuid
+        updated = created = 0
+        for img_path in self.project.images:
+            existing = self.project.get_rois(img_path)
+            if existing:
+                # Update first ROI's size only
+                r = existing[0]
+                r["w"] = src_w
+                r["h"] = src_h
+                self.project.update_roi(img_path, r["id"], r)
+                updated += 1
+            else:
+                # No ROI yet — create one at source position with source size
+                new_roi = {
+                    "id":    str(_uuid.uuid4())[:8],
+                    "type":  src_type,
+                    "x":     src_roi.get("x", 0),
+                    "y":     src_roi.get("y", 0),
+                    "w":     src_w,
+                    "h":     src_h,
+                    "label": src_label,
+                    "color": src_color,
+                }
+                self.project.add_roi(img_path, new_roi)
+                created += 1
+
+        # Refresh editor if the current image was affected
+        self.roi_editor.load_rois(self.project.get_rois(self._current_image))
+        self._refresh_roi_list()
+        self._update_stats()
+        QMessageBox.information(
+            self, "Fertig",
+            f"Größe übertragen: {updated} ROIs aktualisiert, {created} neue ROIs erstellt."
+        )
+
+
+class _PrelabelMixin:
+    """Pre-labeling pipeline methods — extracted from LabelingPage."""
+    # ------------------------------------------------------------------ pre-labeling
+
+    @Slot()
+    def _pre_load_model(self):
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Modell laden", "", "PyTorch Checkpoint (*.pth)"
+        )
+        if not path:
+            return
+        try:
+            from core.pre_labeling import PreLabeler
+            pl = PreLabeler()
+            meta = pl.load_model(path)
+            self._pre_labeler = pl
+            classes = ", ".join(pl.class_names[:5])
+            if len(pl.class_names) > 5:
+                classes += "…"
+            self._pre_model_lbl.setText(
+                f"✅ {os.path.basename(path)}\n({len(pl.class_names)} Klassen: {classes})"
+            )
+            self._pre_run_btn.setEnabled(bool(self.project and self.project.images))
+        except Exception as exc:
+            from PySide6.QtWidgets import QMessageBox as _QMB
+            from utils.i18n import tr
+            _QMB.critical(self, tr("common.error"), str(exc))
+
+    @Slot()
+    def _pre_run(self):
+        if not self.project or not self._pre_labeler:
+            return
+        only_unlabeled = self._pre_only_unlabeled_cb.isChecked()
+        if only_unlabeled:
+            candidates = [p for p in self.project.images if not self.project.get_image_label(p)]
+        else:
+            candidates = list(self.project.images)
+        if not candidates:
+            from utils.i18n import tr
+            self._pre_status.setText(tr("labeling.pre_no_images"))
+            return
+
+        self._pre_suggestions = []
+        self._pre_progress.setMaximum(len(candidates))
+        self._pre_progress.setValue(0)
+        self._pre_progress.setVisible(True)
+        self._pre_run_btn.setEnabled(False)
+        self._pre_apply_btn.setEnabled(False)
+        self._pre_status.setText(f"Analysiere {len(candidates)} Bilder…")
+
+        from core.pre_labeling import PreLabelingThread
+        roi = None
+        if self.project.rois:
+            # Use first project ROI as crop template (same as inference page fallback)
+            for p, rois in self.project.rois.items():
+                if rois:
+                    roi = rois[0]
+                    break
+
+        t = PreLabelingThread(
+            self._pre_labeler,
+            candidates,
+            list(self.project.labels.keys()),
+            confidence_threshold=self._pre_thr_spin.value(),
+            roi=roi,
+            parent=self,
+        )
+        t.progress.connect(lambda c, tot: self._pre_progress.setValue(c))
+        t.finished.connect(self._pre_on_done)
+        t.error.connect(self._pre_on_error)
+        self._pre_label_thread = t
+        t.start()
+
+    @Slot(list)
+    def _pre_on_done(self, results: list):
+        self._pre_label_thread = None
+        self._pre_progress.setVisible(False)
+        self._pre_run_btn.setEnabled(True)
+        self._pre_suggestions = results
+        accepted = [r for r in results if not r["skip"] and not r["error"]]
+        skipped  = [r for r in results if r["skip"]]
+        errors   = [r for r in results if r["error"]]
+        thr      = self._pre_thr_spin.value()
+        self._pre_status.setText(
+            f"{len(accepted)} Vorschläge ≥ {thr:.0%}  •  "
+            f"{len(skipped)} unter Schwellwert  •  "
+            f"{len(errors)} Fehler"
+        )
+        self._pre_apply_btn.setEnabled(bool(accepted))
+
+    @Slot(str)
+    def _pre_on_error(self, msg: str):
+        self._pre_label_thread = None
+        self._pre_progress.setVisible(False)
+        self._pre_run_btn.setEnabled(True)
+        self._pre_status.setText(f"Fehler: {msg}")
+
+    @Slot()
+    def _pre_apply(self):
+        if not self.project or not hasattr(self, "_pre_suggestions"):
+            return
+        accepted = [r for r in self._pre_suggestions if not r["skip"] and not r["error"]]
+        if not accepted:
+            return
+        old_labels = {r["path"]: self.project.get_image_label(r["path"]) for r in accepted}
+        label_map  = {r["path"]: r["label"] for r in accepted}
+        from gui.labeling_commands import BulkSetImageLabelCommand
+        self._undo_stack.push(
+            BulkSetImageLabelCommand(
+                self, list(label_map.keys()), "", old_labels, label_map=label_map
+            )
+        )
+        self._pre_apply_btn.setEnabled(False)
+        self._pre_status.setText(f"✅ {len(accepted)} Labels übernommen (Undo mit Strg+Z).")
+
+
+class _ALMixin:
+    """Active Learning queue panel methods — extracted from LabelingPage."""
+    # ------------------------------------------------------------------ Active Learning Queue
+
+    def refresh_al_queue_panel(self) -> None:
+        """Refresh the AL queue panel after queue changes or project load."""
+        if not self.project:
+            self._al_panel.hide()
+            return
+        queue = self.project.get_al_queue()
+        unlabeled = self.project.get_unlabeled_al_queue()
+        if not queue:
+            self._al_panel.hide()
+            return
+        self._al_panel.show()
+        self._al_count_label.setText(
+            f"🔄 AL-Queue: {len(unlabeled)} offen / {len(queue)} gesamt"
+        )
+        # Show suggestion for current image if it's in queue
+        entry = next((e for e in queue if e["path"] == self._current_image), None)
+        if entry:
+            self._al_suggestion_label.setText(
+                f"Vorschlag: {entry['predicted_label']} "
+                f"({entry['confidence']*100:.0f}% Conf.)"
+            )
+        else:
+            self._al_suggestion_label.setText(
+                "Klicke '→ Nächstes', um das nächste ungelabelte Queue-Bild zu öffnen."
+                if unlabeled else "Alle Queue-Bilder wurden gelabelt."
+            )
+        self._al_next_btn.setEnabled(bool(unlabeled))
+        in_queue = bool(
+            self._current_image and
+            any(e["path"] == self._current_image for e in queue)
+        )
+        self._al_done_btn.setEnabled(in_queue)
+        self._al_accept_btn.setEnabled(in_queue and bool(
+            next((e for e in queue if e["path"] == self._current_image), {})
+            .get("predicted_label", "") in self.project.labels
+        ))
+
+    def _al_next_image(self) -> None:
+        """Jump to the next unlabeled image in the AL queue."""
+        if not self.project:
+            return
+        unlabeled = self.project.get_unlabeled_al_queue()
+        if not unlabeled:
+            return
+        target = unlabeled[0]["path"]
+        # Make sure the image is in the project
+        if target not in self.project.images:
+            self.project.remove_from_al_queue(target)
+            self.refresh_al_queue_panel()
+            return
+        self._save_current_rois()
+        self.thumb_list.select_path(target)
+        # Show prediction suggestion after loading
+        entry = unlabeled[0]
+        self._al_suggestion_label.setText(
+            f"Vorschlag: {entry['predicted_label']} "
+            f"({entry['confidence']*100:.0f}% Conf.)"
+        )
+        self._al_done_btn.setEnabled(True)
+
+    def _al_mark_done(self) -> None:
+        """Manually mark the current image as done and remove from queue."""
+        if not self.project or not self._current_image:
+            return
+        self.project.remove_from_al_queue(self._current_image)
+        self.refresh_al_queue_panel()
+        # Auto-advance to next queue image
+        unlabeled = self.project.get_unlabeled_al_queue()
+        if unlabeled:
+            self._al_next_image()
+        else:
+            remaining = self.project.get_al_queue()
+            if not remaining:
+                self._al_panel.hide()
+                reply = QMessageBox.question(
+                    self,
+                    "AL-Queue fertig",
+                    "Alle Queue-Bilder wurden gelabelt!\n\n"
+                    "Jetzt neu trainieren, um das Modell zu verbessern?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply == QMessageBox.Yes:
+                    self.al_retrain_requested.emit()
+
+    def _al_clear_queue(self) -> None:
+        """Remove all entries from the AL queue after user confirmation and hide the panel."""
+        if not self.project:
+            return
+        n = len(self.project.get_al_queue())
+        if n == 0:
+            return
+        reply = QMessageBox.question(
+            self, "Queue leeren",
+            f"Alle {n} Einträge aus der AL-Queue entfernen?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self.project.clear_al_queue()
+            self._al_panel.hide()
+
+    def _al_accept_suggestion(self) -> None:
+        """Apply the predicted label for the current image and advance to next."""
+        if not self.project or not self._current_image:
+            return
+        queue = self.project.get_al_queue()
+        entry = next((e for e in queue if e["path"] == self._current_image), None)
+        if not entry:
+            return
+        suggested = entry.get("predicted_label", "")
+        if suggested and suggested in self.project.labels:
+            self._assign_label_direct(self._current_image, suggested)
+        self._al_mark_done()
+
+    def _al_bulk_accept(self) -> None:
+        """Auto-label all AL queue images with confidence ≥ 80%."""
+        if not self.project:
+            return
+        queue = self.project.get_al_queue()
+        eligible = [
+            e for e in queue
+            if e.get("confidence", 0) >= 0.80
+            and e.get("predicted_label", "") in self.project.labels
+            and e.get("path", "") in self.project.images
+        ]
+        if not eligible:
+            QMessageBox.information(
+                self, "Keine Kandidaten",
+                "Keine Queue-Einträge mit Confidence ≥ 80% und bekanntem Label gefunden."
+            )
+            return
+        reply = QMessageBox.question(
+            self, "Bulk-Accept",
+            f"{len(eligible)} Bilder werden automatisch gelabelt.\nFortfahren?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        from gui.labeling_commands import SetImageLabelCommand
+        assignments = {e["path"]: e["predicted_label"] for e in eligible}
+        self._undo_stack.beginMacro(f"Bulk-Accept ({len(eligible)} Bilder)")
+        for path, label in assignments.items():
+            old = self.project.get_image_label(path)
+            self._undo_stack.push(SetImageLabelCommand(self, path, label, old))
+        self._undo_stack.endMacro()
+        for path in assignments:
+            self.project.remove_from_al_queue(path)
+        self.refresh_al_queue_panel()
+        self._do_update_stats()   # thumbnails already updated via update_label(); just refresh stats once
+        QMessageBox.information(
+            self, "Fertig",
+            f"{len(eligible)} Labels übernommen.\n"
+            "Im Labeling-Reiter zur Kontrolle prüfen."
+        )
+
+
+class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
     """Main labeling workspace for the Picture Studio application (stack index 2).
 
     Presents a three-panel layout (thumbnail list / ROI editor / controls) and
@@ -1516,374 +2050,6 @@ class LabelingPage(QWidget):
         from gui.labeling_commands import BulkSetImageLabelCommand
         self._undo_stack.push(BulkSetImageLabelCommand(self, paths, label, old_labels))
 
-    # ------------------------------------------------------------------ ROI events
-
-    @Slot(dict)
-    def _on_roi_added(self, roi_data: dict) -> None:
-        """Receive a new ROI from the editor, stamp its label/color and push AddROICommand."""
-        if not self.project or not self._current_image:
-            return
-        roi_data["label"] = self.roi_editor.current_label
-        roi_data["color"] = self.roi_editor.current_color
-        from gui.labeling_commands import AddROICommand
-        # Remove from editor first (command redo() will re-add it)
-        self.roi_editor.delete_roi(roi_data["id"])
-        self._undo_stack.push(AddROICommand(self, self._current_image, roi_data))
-
-    def _do_add_roi(self, image_path: str, roi_data: dict) -> None:
-        """Persist a new ROI in the project and add it visually to the editor; called by AddROICommand."""
-        if not self.project:
-            return
-        self.project.add_roi(image_path, roi_data)
-        if image_path == self._current_image:
-            self.roi_editor.add_roi_item(roi_data)
-            self._refresh_roi_list()
-        if self._audit:
-            self._audit.log_roi_added(image_path, roi_data["id"], roi_data.get("type", "rect"))
-        self._update_stats()
-
-    @Slot(str)
-    def _on_roi_deleted(self, roi_id: str) -> None:
-        """Receive a delete request from the editor and push DeleteROICommand onto the undo stack."""
-        if not self.project or not self._current_image:
-            return
-        rois = self.project.get_rois(self._current_image)
-        roi_data = next((r for r in rois if r.get("id") == roi_id), None)
-        if roi_data is None:
-            return
-        from gui.labeling_commands import DeleteROICommand
-        self._undo_stack.push(DeleteROICommand(self, self._current_image, roi_data))
-
-    def _do_delete_roi(self, image_path: str, roi_id: str) -> None:
-        """Remove an ROI from the project and the editor view; called by DeleteROICommand."""
-        if not self.project:
-            return
-        self.project.remove_roi(image_path, roi_id)
-        if image_path == self._current_image:
-            self.roi_editor.delete_roi(roi_id)
-            self._refresh_roi_list()
-        if self._audit:
-            self._audit.log_roi_deleted(image_path, roi_id)
-        self._update_stats()
-
-    @Slot(str)
-    def _on_roi_selected(self, roi_id: str) -> None:
-        """Sync the ROI list widget selection when the user clicks an ROI in the editor."""
-        for i in range(self.roi_list.count()):
-            item = self.roi_list.item(i)
-            if item.data(Qt.UserRole) == roi_id:
-                self.roi_list.setCurrentRow(i)
-                break
-
-    @Slot(dict)
-    def _on_roi_moved(self, roi_data: dict) -> None:
-        """Push a MoveROICommand when the user drags an ROI to a new position."""
-        if not self.project or not self._current_image:
-            return
-        rois = self.project.get_rois(self._current_image)
-        old_data = next((r for r in rois if r.get("id") == roi_data.get("id")), None)
-        if old_data is None:
-            return
-        from gui.labeling_commands import MoveROICommand
-        self._undo_stack.push(MoveROICommand(self, self._current_image, roi_data, old_data))
-
-    def _do_move_roi(self, image_path: str, roi_data: dict) -> None:
-        """Update the ROI geometry in the project and refresh the editor; called by MoveROICommand."""
-        if not self.project:
-            return
-        self.project.update_roi(image_path, roi_data["id"], roi_data)
-        if image_path == self._current_image:
-            self.roi_editor.update_roi_geometry(roi_data)
-
-    def _on_roi_list_select(self, row: int) -> None:
-        """Sync the ROI label combo when the user selects a row in the ROI list widget."""
-        item = self.roi_list.item(row)
-        if not item or not self.project or not self._current_image:
-            return
-        roi_id = item.data(Qt.UserRole)
-        rois = self.project.get_rois(self._current_image)
-        roi = next((r for r in rois if r.get("id") == roi_id), None)
-        if roi:
-            lbl = roi.get("label", "")
-            self.roi_label_combo.blockSignals(True)
-            idx = self.roi_label_combo.findText(lbl) if lbl else 0
-            self.roi_label_combo.setCurrentIndex(max(0, idx))
-            self.roi_label_combo.blockSignals(False)
-
-    def _assign_roi_label(self) -> None:
-        """Push AssignROILabelCommand to assign the selected label to the currently chosen ROI."""
-        item = self.roi_list.currentItem()
-        if not item or not self.project or not self._current_image:
-            return
-        roi_id = item.data(Qt.UserRole)
-        new_label = self.roi_label_combo.currentText()
-        if new_label == "(kein)":
-            new_label = ""
-        new_color = self.project.get_label_color(new_label) if new_label else "#E74C3C"
-        rois = self.project.get_rois(self._current_image)
-        roi = next((r for r in rois if r.get("id") == roi_id), None)
-        if roi is None:
-            return
-        old_label = roi.get("label", "")
-        old_color = roi.get("color", "#E74C3C")
-        if old_label == new_label:
-            return
-        from gui.labeling_commands import AssignROILabelCommand
-        self._undo_stack.push(AssignROILabelCommand(
-            self, self._current_image, roi_id,
-            new_label, new_color, old_label, old_color,
-        ))
-
-    def _do_assign_roi_label(self, image_path: str, roi_id: str,
-                             label: str, color: str) -> None:
-        """Mutate the ROI label/color in the project and refresh the editor; called by AssignROILabelCommand."""
-        if not self.project:
-            return
-        rois = self.project.get_rois(image_path)
-        for roi in rois:
-            if roi.get("id") == roi_id:
-                roi["label"] = label
-                roi["color"] = color
-                break
-        if image_path == self._current_image:
-            self.roi_editor.update_roi_label(roi_id, label, color)
-            self.roi_editor.current_label = label
-            self.roi_editor.current_color = color
-            self._refresh_roi_list()
-        self._update_stats()
-
-    def _delete_roi_from_list(self) -> None:
-        """Delete the ROI currently selected in the list widget via the undo stack."""
-        item = self.roi_list.currentItem()
-        if not item or not self.project or not self._current_image:
-            return
-        roi_id = item.data(Qt.UserRole)
-        rois = self.project.get_rois(self._current_image)
-        roi_data = next((r for r in rois if r.get("id") == roi_id), None)
-        if roi_data is None:
-            return
-        from gui.labeling_commands import DeleteROICommand
-        self._undo_stack.push(DeleteROICommand(self, self._current_image, roi_data))
-
-    def _apply_roi_to_all(self) -> None:
-        """Copy the current image's ROIs to every image in the project."""
-        from utils.i18n import tr
-        if not self.project or not self._current_image:
-            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
-            return
-        self._save_current_rois()
-        src_rois = self.project.get_rois(self._current_image)
-        if not src_rois:
-            QMessageBox.warning(self, tr("common.warning"),
-                                "Das aktuelle Bild hat keine ROIs zum Kopieren.")
-            return
-        n = len(self.project.images)
-        reply = QMessageBox.question(
-            self, "ROIs übertragen",
-            f"Die {len(src_rois)} ROI(s) dieses Bildes werden auf alle "
-            f"{n} Bilder kopiert.\nVorhandene ROIs werden überschrieben.\n\n"
-            "⚠ Diese Aktion kann nicht rückgängig gemacht werden.\n\nFortfahren?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-        import copy, uuid as _uuid
-        for img_path in self.project.images:
-            if img_path == self._current_image:
-                continue
-            new_rois = []
-            for roi in src_rois:
-                r = copy.deepcopy(roi)
-                r["id"] = str(_uuid.uuid4())[:8]  # unique id per image
-                new_rois.append(r)
-            self.project.rois[img_path] = new_rois
-        QMessageBox.information(
-            self, "Fertig",
-            f"ROIs auf {n - 1} weitere Bilder übertragen."
-        )
-
-    def _apply_roi_size_to_all(self) -> None:
-        """Copy only w+h of the selected ROI to every image; per-image x/y is kept."""
-        from utils.i18n import tr
-        if not self.project or not self._current_image:
-            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
-            return
-        self._save_current_rois()
-        src_rois = self.project.get_rois(self._current_image)
-        if not src_rois:
-            QMessageBox.warning(self, tr("common.warning"),
-                                "Das aktuelle Bild hat keine ROIs.")
-            return
-
-        # Use the selected ROI if available, otherwise the first one
-        sel_items = [i for i in self.roi_editor._scene.selectedItems()
-                     if hasattr(i, "roi_data")]
-        src_roi = sel_items[0].roi_data if sel_items else src_rois[0]
-        src_w, src_h = src_roi.get("w", 0), src_roi.get("h", 0)
-        src_type     = src_roi.get("type", "rect")
-        src_label    = src_roi.get("label", "")
-        src_color    = src_roi.get("color", "#E74C3C")
-
-        n = len(self.project.images)
-        reply = QMessageBox.question(
-            self, "ROI-Größe übertragen",
-            f"Breite ({src_w:.0f} px) und Höhe ({src_h:.0f} px) des ROI werden auf alle "
-            f"{n} Bilder übertragen.\nBilder mit einem bestehenden ROI behalten ihre Position.\n"
-            "Bilder ohne ROI erhalten einen neuen ROI an der aktuellen Position.\n\nFortfahren?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        import uuid as _uuid
-        updated = created = 0
-        for img_path in self.project.images:
-            existing = self.project.get_rois(img_path)
-            if existing:
-                # Update first ROI's size only
-                r = existing[0]
-                r["w"] = src_w
-                r["h"] = src_h
-                self.project.update_roi(img_path, r["id"], r)
-                updated += 1
-            else:
-                # No ROI yet — create one at source position with source size
-                new_roi = {
-                    "id":    str(_uuid.uuid4())[:8],
-                    "type":  src_type,
-                    "x":     src_roi.get("x", 0),
-                    "y":     src_roi.get("y", 0),
-                    "w":     src_w,
-                    "h":     src_h,
-                    "label": src_label,
-                    "color": src_color,
-                }
-                self.project.add_roi(img_path, new_roi)
-                created += 1
-
-        # Refresh editor if the current image was affected
-        self.roi_editor.load_rois(self.project.get_rois(self._current_image))
-        self._refresh_roi_list()
-        self._update_stats()
-        QMessageBox.information(
-            self, "Fertig",
-            f"Größe übertragen: {updated} ROIs aktualisiert, {created} neue ROIs erstellt."
-        )
-
-    # ------------------------------------------------------------------ pre-labeling
-
-    @Slot()
-    def _pre_load_model(self):
-        from PySide6.QtWidgets import QFileDialog
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Modell laden", "", "PyTorch Checkpoint (*.pth)"
-        )
-        if not path:
-            return
-        try:
-            from core.pre_labeling import PreLabeler
-            pl = PreLabeler()
-            meta = pl.load_model(path)
-            self._pre_labeler = pl
-            classes = ", ".join(pl.class_names[:5])
-            if len(pl.class_names) > 5:
-                classes += "…"
-            self._pre_model_lbl.setText(
-                f"✅ {os.path.basename(path)}\n({len(pl.class_names)} Klassen: {classes})"
-            )
-            self._pre_run_btn.setEnabled(bool(self.project and self.project.images))
-        except Exception as exc:
-            from PySide6.QtWidgets import QMessageBox as _QMB
-            from utils.i18n import tr
-            _QMB.critical(self, tr("common.error"), str(exc))
-
-    @Slot()
-    def _pre_run(self):
-        if not self.project or not self._pre_labeler:
-            return
-        only_unlabeled = self._pre_only_unlabeled_cb.isChecked()
-        if only_unlabeled:
-            candidates = [p for p in self.project.images if not self.project.get_image_label(p)]
-        else:
-            candidates = list(self.project.images)
-        if not candidates:
-            from utils.i18n import tr
-            self._pre_status.setText(tr("labeling.pre_no_images"))
-            return
-
-        self._pre_suggestions = []
-        self._pre_progress.setMaximum(len(candidates))
-        self._pre_progress.setValue(0)
-        self._pre_progress.setVisible(True)
-        self._pre_run_btn.setEnabled(False)
-        self._pre_apply_btn.setEnabled(False)
-        self._pre_status.setText(f"Analysiere {len(candidates)} Bilder…")
-
-        from core.pre_labeling import PreLabelingThread
-        roi = None
-        if self.project.rois:
-            # Use first project ROI as crop template (same as inference page fallback)
-            for p, rois in self.project.rois.items():
-                if rois:
-                    roi = rois[0]
-                    break
-
-        t = PreLabelingThread(
-            self._pre_labeler,
-            candidates,
-            list(self.project.labels.keys()),
-            confidence_threshold=self._pre_thr_spin.value(),
-            roi=roi,
-            parent=self,
-        )
-        t.progress.connect(lambda c, tot: self._pre_progress.setValue(c))
-        t.finished.connect(self._pre_on_done)
-        t.error.connect(self._pre_on_error)
-        self._pre_label_thread = t
-        t.start()
-
-    @Slot(list)
-    def _pre_on_done(self, results: list):
-        self._pre_label_thread = None
-        self._pre_progress.setVisible(False)
-        self._pre_run_btn.setEnabled(True)
-        self._pre_suggestions = results
-        accepted = [r for r in results if not r["skip"] and not r["error"]]
-        skipped  = [r for r in results if r["skip"]]
-        errors   = [r for r in results if r["error"]]
-        thr      = self._pre_thr_spin.value()
-        self._pre_status.setText(
-            f"{len(accepted)} Vorschläge ≥ {thr:.0%}  •  "
-            f"{len(skipped)} unter Schwellwert  •  "
-            f"{len(errors)} Fehler"
-        )
-        self._pre_apply_btn.setEnabled(bool(accepted))
-
-    @Slot(str)
-    def _pre_on_error(self, msg: str):
-        self._pre_label_thread = None
-        self._pre_progress.setVisible(False)
-        self._pre_run_btn.setEnabled(True)
-        self._pre_status.setText(f"Fehler: {msg}")
-
-    @Slot()
-    def _pre_apply(self):
-        if not self.project or not hasattr(self, "_pre_suggestions"):
-            return
-        accepted = [r for r in self._pre_suggestions if not r["skip"] and not r["error"]]
-        if not accepted:
-            return
-        old_labels = {r["path"]: self.project.get_image_label(r["path"]) for r in accepted}
-        label_map  = {r["path"]: r["label"] for r in accepted}
-        from gui.labeling_commands import BulkSetImageLabelCommand
-        self._undo_stack.push(
-            BulkSetImageLabelCommand(
-                self, list(label_map.keys()), "", old_labels, label_map=label_map
-            )
-        )
-        self._pre_apply_btn.setEnabled(False)
-        self._pre_status.setText(f"✅ {len(accepted)} Labels übernommen (Undo mit Strg+Z).")
-
     # ------------------------------------------------------------------ remove images
 
     def _remove_images(self, paths: list) -> None:
@@ -2017,162 +2183,6 @@ class LabelingPage(QWidget):
             idx = paths.index(self._current_image)
             if idx < len(paths) - 1:
                 self.thumb_list.select_path(paths[idx + 1])
-
-    # ------------------------------------------------------------------ Active Learning Queue
-
-    def refresh_al_queue_panel(self) -> None:
-        """Refresh the AL queue panel after queue changes or project load."""
-        if not self.project:
-            self._al_panel.hide()
-            return
-        queue = self.project.get_al_queue()
-        unlabeled = self.project.get_unlabeled_al_queue()
-        if not queue:
-            self._al_panel.hide()
-            return
-        self._al_panel.show()
-        self._al_count_label.setText(
-            f"🔄 AL-Queue: {len(unlabeled)} offen / {len(queue)} gesamt"
-        )
-        # Show suggestion for current image if it's in queue
-        entry = next((e for e in queue if e["path"] == self._current_image), None)
-        if entry:
-            self._al_suggestion_label.setText(
-                f"Vorschlag: {entry['predicted_label']} "
-                f"({entry['confidence']*100:.0f}% Conf.)"
-            )
-        else:
-            self._al_suggestion_label.setText(
-                "Klicke '→ Nächstes', um das nächste ungelabelte Queue-Bild zu öffnen."
-                if unlabeled else "Alle Queue-Bilder wurden gelabelt."
-            )
-        self._al_next_btn.setEnabled(bool(unlabeled))
-        in_queue = bool(
-            self._current_image and
-            any(e["path"] == self._current_image for e in queue)
-        )
-        self._al_done_btn.setEnabled(in_queue)
-        self._al_accept_btn.setEnabled(in_queue and bool(
-            next((e for e in queue if e["path"] == self._current_image), {})
-            .get("predicted_label", "") in self.project.labels
-        ))
-
-    def _al_next_image(self) -> None:
-        """Jump to the next unlabeled image in the AL queue."""
-        if not self.project:
-            return
-        unlabeled = self.project.get_unlabeled_al_queue()
-        if not unlabeled:
-            return
-        target = unlabeled[0]["path"]
-        # Make sure the image is in the project
-        if target not in self.project.images:
-            self.project.remove_from_al_queue(target)
-            self.refresh_al_queue_panel()
-            return
-        self._save_current_rois()
-        self.thumb_list.select_path(target)
-        # Show prediction suggestion after loading
-        entry = unlabeled[0]
-        self._al_suggestion_label.setText(
-            f"Vorschlag: {entry['predicted_label']} "
-            f"({entry['confidence']*100:.0f}% Conf.)"
-        )
-        self._al_done_btn.setEnabled(True)
-
-    def _al_mark_done(self) -> None:
-        """Manually mark the current image as done and remove from queue."""
-        if not self.project or not self._current_image:
-            return
-        self.project.remove_from_al_queue(self._current_image)
-        self.refresh_al_queue_panel()
-        # Auto-advance to next queue image
-        unlabeled = self.project.get_unlabeled_al_queue()
-        if unlabeled:
-            self._al_next_image()
-        else:
-            remaining = self.project.get_al_queue()
-            if not remaining:
-                self._al_panel.hide()
-                reply = QMessageBox.question(
-                    self,
-                    "AL-Queue fertig",
-                    "Alle Queue-Bilder wurden gelabelt!\n\n"
-                    "Jetzt neu trainieren, um das Modell zu verbessern?",
-                    QMessageBox.Yes | QMessageBox.No,
-                )
-                if reply == QMessageBox.Yes:
-                    self.al_retrain_requested.emit()
-
-    def _al_clear_queue(self) -> None:
-        """Remove all entries from the AL queue after user confirmation and hide the panel."""
-        if not self.project:
-            return
-        n = len(self.project.get_al_queue())
-        if n == 0:
-            return
-        reply = QMessageBox.question(
-            self, "Queue leeren",
-            f"Alle {n} Einträge aus der AL-Queue entfernen?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply == QMessageBox.Yes:
-            self.project.clear_al_queue()
-            self._al_panel.hide()
-
-    def _al_accept_suggestion(self) -> None:
-        """Apply the predicted label for the current image and advance to next."""
-        if not self.project or not self._current_image:
-            return
-        queue = self.project.get_al_queue()
-        entry = next((e for e in queue if e["path"] == self._current_image), None)
-        if not entry:
-            return
-        suggested = entry.get("predicted_label", "")
-        if suggested and suggested in self.project.labels:
-            self._assign_label_direct(self._current_image, suggested)
-        self._al_mark_done()
-
-    def _al_bulk_accept(self) -> None:
-        """Auto-label all AL queue images with confidence ≥ 80%."""
-        if not self.project:
-            return
-        queue = self.project.get_al_queue()
-        eligible = [
-            e for e in queue
-            if e.get("confidence", 0) >= 0.80
-            and e.get("predicted_label", "") in self.project.labels
-            and e.get("path", "") in self.project.images
-        ]
-        if not eligible:
-            QMessageBox.information(
-                self, "Keine Kandidaten",
-                "Keine Queue-Einträge mit Confidence ≥ 80% und bekanntem Label gefunden."
-            )
-            return
-        reply = QMessageBox.question(
-            self, "Bulk-Accept",
-            f"{len(eligible)} Bilder werden automatisch gelabelt.\nFortfahren?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-        from gui.labeling_commands import SetImageLabelCommand
-        assignments = {e["path"]: e["predicted_label"] for e in eligible}
-        self._undo_stack.beginMacro(f"Bulk-Accept ({len(eligible)} Bilder)")
-        for path, label in assignments.items():
-            old = self.project.get_image_label(path)
-            self._undo_stack.push(SetImageLabelCommand(self, path, label, old))
-        self._undo_stack.endMacro()
-        for path in assignments:
-            self.project.remove_from_al_queue(path)
-        self.refresh_al_queue_panel()
-        self._do_update_stats()   # thumbnails already updated via update_label(); just refresh stats once
-        QMessageBox.information(
-            self, "Fertig",
-            f"{len(eligible)} Labels übernommen.\n"
-            "Im Labeling-Reiter zur Kontrolle prüfen."
-        )
 
     # ------------------------------------------------------------------ stats & progress
 
