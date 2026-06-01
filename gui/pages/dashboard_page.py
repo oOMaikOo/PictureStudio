@@ -205,6 +205,15 @@ class DashboardPage(QWidget):
         notes_layout.addWidget(self._notes_edit)
         layout.addWidget(notes_group)
 
+        # Keyboard shortcuts reference card
+        shortcuts_group = QGroupBox(tr("dashboard.shortcuts_group"))
+        shortcuts_layout = QVBoxLayout(shortcuts_group)
+        shortcuts_lbl = QLabel(tr("dashboard.shortcuts_content"))
+        shortcuts_lbl.setWordWrap(True)
+        shortcuts_lbl.setStyleSheet("color: #7F8C8D; font-size: 11px;")
+        shortcuts_layout.addWidget(shortcuts_lbl)
+        layout.addWidget(shortcuts_group)
+
         layout.addStretch()
 
     def _build_quickstart_group(self) -> QGroupBox:

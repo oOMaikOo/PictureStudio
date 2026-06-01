@@ -355,6 +355,11 @@ class MainWindow(QMainWindow):
         f1.setContext(Qt.ApplicationShortcut)
         f1.activated.connect(lambda: self._show_help())
 
+        # Page navigation shortcuts Ctrl+1..9 → pages 0..8
+        for _i, _idx in enumerate([0, 1, 2, 3, 4, 5, 6, 7, 8]):
+            QShortcut(QKeySequence(f"Ctrl+{_i + 1}"), self,
+                      activated=lambda idx=_idx: self._switch_page(idx))
+
     def _build_statusbar(self) -> None:
         """Create the status bar with a project-stats label and an autosave indicator."""
         sb = QStatusBar()

@@ -76,10 +76,7 @@ class ObjectDetectionPage(QWidget):
         self._ds_info_label.setStyleSheet("color:#aaa;font-size:10px;")
         ds_v.addWidget(self._ds_info_label)
         self._prepare_btn = QPushButton(tr("objdetect.prepare_btn"))
-        self._prepare_btn.setToolTip(
-            "Konvertiert die ROI-Annotationen des Projekts in das YOLO-Format\n"
-            "und legt den Trainings-/Validierungsordner an."
-        )
+        self._prepare_btn.setToolTip(tr("objdet.prepare_tooltip"))
         self._prepare_btn.clicked.connect(self._prepare_dataset)
         ds_v.addWidget(self._prepare_btn)
         v.addWidget(ds_box)
@@ -109,7 +106,7 @@ class ObjectDetectionPage(QWidget):
         self._imgsz_spin.setRange(320, 1280)
         self._imgsz_spin.setSingleStep(32)
         self._imgsz_spin.setValue(640)
-        self._imgsz_spin.setToolTip("Standard: 640. Höher = genauer, langsamer.")
+        self._imgsz_spin.setToolTip(tr("objdet.tip_img_size"))
         row_imgsz.addWidget(self._imgsz_spin)
         tf.addLayout(row_imgsz)
 
@@ -182,7 +179,7 @@ class ObjectDetectionPage(QWidget):
         self._conf_spin.setRange(0.05, 0.95)
         self._conf_spin.setValue(0.25)
         self._conf_spin.setSingleStep(0.05)
-        self._conf_spin.setToolTip("Mindest-Konfidenz für Erkennungen (0.25 = Standard)")
+        self._conf_spin.setToolTip(tr("objdet.tip_conf"))
         img_row.addWidget(QLabel(tr("objdetect.conf_label")))
         img_row.addWidget(self._conf_spin)
         img_row.addStretch()
@@ -192,12 +189,12 @@ class ObjectDetectionPage(QWidget):
         self._img_label.setAlignment(Qt.AlignCenter)
         self._img_label.setMinimumHeight(300)
         self._img_label.setStyleSheet("background:#1a1a1a;border-radius:4px;")
-        self._img_label.setText("← Bild wählen oder Ordner klassifizieren")
+        self._img_label.setText(tr("objdet.no_image_hint"))
         self._img_label.setWordWrap(True)
         v.addWidget(self._img_label, 1)
 
         # Training log
-        log_box = QGroupBox("Training-Log")
+        log_box = QGroupBox(tr("objdet.training_log_group"))
         lv = QVBoxLayout(log_box)
         self._log_edit = QTextEdit()
         self._log_edit.setReadOnly(True)
@@ -220,7 +217,7 @@ class ObjectDetectionPage(QWidget):
         iv = QVBoxLayout(infer_box)
 
         folder_row = QHBoxLayout()
-        self._folder_label = QLabel("(kein Ordner)")
+        self._folder_label = QLabel(tr("objdet.no_folder"))
         self._folder_label.setWordWrap(True)
         folder_row.addWidget(self._folder_label, 1)
         pick_folder_btn = QPushButton(tr("objdetect.pick_folder_btn"))
@@ -273,8 +270,9 @@ class ObjectDetectionPage(QWidget):
         self._update_ds_info()
 
     def _update_ds_info(self):
+        from utils.i18n import tr
         if not self.project:
-            self._ds_info_label.setText("Noch kein Projekt geladen.")
+            self._ds_info_label.setText(tr("objdet.no_project"))
             return
         total = len(self.project.images)
         annotated = sum(
@@ -283,8 +281,9 @@ class ObjectDetectionPage(QWidget):
         )
         classes = list(self.project.labels.keys())
         self._ds_info_label.setText(
-            f"{annotated} / {total} Bilder mit ROI-Labels\n"
-            f"Klassen: {', '.join(classes) if classes else '(keine)'}"
+            tr("objdet.ds_annotated",
+               annotated=annotated, total=total,
+               classes=', '.join(classes) if classes else '(keine)')
         )
 
     # ------------------------------------------------------------------ dependency check
@@ -313,16 +312,18 @@ class ObjectDetectionPage(QWidget):
 
         try:
             yaml_path, stats = prepare_yolo_dataset(self.project, self._dataset_dir)
+            from utils.i18n import tr
             self._ds_info_label.setText(
-                f"✓ Dataset bereit\n"
-                f"{stats['n_train']} Train / {stats['n_val']} Val\n"
-                f"{stats['n_classes']} Klassen | {stats['n_annotations']} Annotationen\n"
-                f"Pfad: {self._dataset_dir}"
+                tr("objdet.ds_ready",
+                   n_train=stats['n_train'], n_val=stats['n_val'],
+                   n_classes=stats['n_classes'], n_ann=stats['n_annotations'],
+                   path=self._dataset_dir)
             )
             self._ds_info_label.setStyleSheet("color:#4caf50;font-size:10px;")
             self._log("Dataset vorbereitet: " + yaml_path)
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            from utils.i18n import tr
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ------------------------------------------------------------------ training
 
@@ -385,17 +386,21 @@ class ObjectDetectionPage(QWidget):
             QMessageBox.critical(self, "Fehler", str(exc))
 
     def _stop_training(self):
+        from utils.i18n import tr
         if self._train_thread:
             self._train_thread.stop()
         self._stop_btn.setEnabled(False)
-        self._train_status.setText("Stopp angefordert…")
+        self._train_status.setText(tr("objdet.stop_requested"))
 
     @Slot(int, int, float, float)
     def _on_train_progress(self, epoch: int, total: int, box_loss: float, cls_loss: float):
+        from utils.i18n import tr
         pct = int(epoch / total * 100) if total else 0
         self._train_progress.setValue(pct)
         self._train_status.setText(
-            f"Epoche {epoch}/{total} | box={box_loss:.4f} cls={cls_loss:.4f}"
+            tr("objdet.epoch_status",
+               epoch=epoch, total=total,
+               box_loss=f"{box_loss:.4f}", cls_loss=f"{cls_loss:.4f}")
         )
 
     @Slot(str)
@@ -622,7 +627,7 @@ class ObjectDetectionPage(QWidget):
     def _export_csv(self):
         from utils.i18n import tr
         if not self._all_results:
-            QMessageBox.information(self, tr("common.info"), "Bitte zuerst eine Erkennung starten.")
+            QMessageBox.information(self, tr("common.info"), tr("objdet.no_results_msg"))
             return
         path, _ = QFileDialog.getSaveFileName(
             self, "CSV speichern", "detection_results.csv", "CSV (*.csv)"

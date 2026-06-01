@@ -169,6 +169,8 @@ STRINGS: dict = {
     "dashboard.qs.open_wizard":     "Assistenten öffnen…",
     "dashboard.notes_group":        "Projektnotizen",
     "dashboard.notes_placeholder":  "Notizen, Beobachtungen, Aufgaben…",
+    "dashboard.shortcuts_group":    "Tastenkürzel",
+    "dashboard.shortcuts_content":  "Ctrl+N  Neues Projekt   Ctrl+O  Öffnen   Ctrl+S  Speichern\nCtrl+1–8  Seiten-Navigation   Ctrl+L  Labels   F1  Hilfe",
 
     # ------------------------------------------------------------------ Neues Projekt Dialog
     "new_project.title":            "Neues Projekt erstellen",
@@ -361,6 +363,138 @@ STRINGS: dict = {
     "training.no_test_data_msg":    "Bitte erst ein Training mit Test-Set abschließen.",
     "training.start_btn_tip":       "Training starten (Ctrl+R)",
     "training.stop_btn_tip":        "Training stoppen (Ctrl+S)",
+
+    # Metric labels (Task B)
+    "training.metric_train_loss_init": "Train-Loss: –",
+    "training.metric_val_loss_init":   "Val-Loss: –",
+    "training.metric_train_acc_init":  "Train-Acc: –",
+    "training.metric_val_acc_init":    "Val-Acc: –",
+    "training.metric_train_loss":      "Train-Loss: {val}",
+    "training.metric_val_loss":        "Val-Loss: {val}",
+    "training.metric_train_acc":       "Train-Acc: {val}",
+    "training.metric_val_acc":         "Val-Acc: {val}",
+
+    # SSH / resume tooltips (Task C)
+    "training.resume_btn_tip":   "PyTorch-Checkpoint (.pth) für Resume-Training laden",
+    "training.ssh_python_tip":   "Python-Interpreter auf dem Server (z.B. python3 oder /opt/venv/bin/python)",
+    "training.ssh_path_tip":     "Basis-Arbeitsverzeichnis auf dem Remote-Server",
+    "training.ssh_status_ok":    "✓ {msg}",
+    "training.ssh_status_err":   "✗ {msg}",
+
+    # Hyperparameter tooltips (Task F)
+    "training.tip_model":         "Architektur des neuronalen Netzes:\n"
+                                  "• ResNet-18 — schnell, guter Startpunkt, ~11 M Parameter\n"
+                                  "• ResNet-50 — höhere Kapazität, ~25 M Parameter\n"
+                                  "• MobileNetV2 — sehr effizient, gut für CPU-Deployment\n"
+                                  "• EfficientNet-B0 — kompakt, ~77% ImageNet-Acc\n"
+                                  "• EfficientNet-B3 — deutlich besser als B0, ~82% ImageNet-Acc ★\n"
+                                  "• ConvNeXt-Tiny — modernste CNN-Architektur, ~82% ImageNet-Acc ★\n"
+                                  "  Empfehlung: EfficientNet-B3 oder ConvNeXt-Tiny für beste Ergebnisse\n"
+                                  "• DINOv2 ViT-S/14 — Foundation Model, Backbone eingefroren (linear probe).\n"
+                                  "  Erfordert Internet beim ersten Laden (~85 MB Download). ★★ wenig Daten\n"
+                                  "• SimpleCNN — kein Transfer Learning, ideal für Tests",
+    "training.tip_pretrained":    "Transfer Learning: Gewichte aus ImageNet-Vortraining laden.\n"
+                                  "Empfohlen — braucht viel weniger Daten und Epochen.\n"
+                                  "Deaktivieren nur wenn die Bilder sehr unähnlich zu Fotos sind\n"
+                                  "(z. B. Röntgenbilder, Mikroskopie, Satellitenbilder).",
+    "training.tip_img_size":      "Eingabegröße in Pixel (quadratisch). Bilder werden auf dieses Format\n"
+                                  "skaliert bevor sie ins Netz gehen.\n"
+                                  "• 224 px — Standard für ImageNet-vortrainierte Modelle\n"
+                                  "• 128 px — schneller, weniger Speicher, ausreichend für einfache Aufgaben\n"
+                                  "• 320–512 px — für kleine Details oder feine Strukturen\n"
+                                  "Tipp: immer Vielfaches von 32 wählen.",
+    "training.tip_batch":         "Anzahl Bilder pro Trainingsschritt.\n"
+                                  "• Größere Batches → stabilere Gradienten, brauchen mehr GPU-Speicher\n"
+                                  "• Kleinere Batches → weniger Speicher, etwas rauschigeres Training\n"
+                                  "Empfehlung: 32 (GPU) | 8–16 (CPU) | 4–8 (wenig Daten)",
+    "training.tip_epochs":        "Anzahl vollständiger Durchläufe durch den Trainingsdatensatz.\n"
+                                  "• Zu wenig → Underfitting (Modell lernt zu wenig)\n"
+                                  "• Zu viel → Overfitting (Modell lernt auswendig)\n"
+                                  "Empfehlung: 20–50 mit Early Stopping; \n"
+                                  "beobachte Val-Loss in den Live-Kurven.",
+    "training.tip_lr":            "Lernrate — wie groß die Gewichtsänderungen pro Schritt sind.\n"
+                                  "• 0.001 (1e-3) — Standardwert, gut für Adam/AdamW\n"
+                                  "• 0.0001 (1e-4) — konservativ, wenn Training instabil\n"
+                                  "• 0.01 — aggressiv, funktioniert manchmal mit SGD\n"
+                                  "Tipp: bei 'NaN Loss' Lernrate um Faktor 10 reduzieren.",
+    "training.tip_optimizer":     "Optimierungsalgorithmus:\n"
+                                  "• adam — adaptiv, robust, guter Standard für die meisten Aufgaben\n"
+                                  "• adamw — wie Adam + L2-Gewichtsregularisierung (gegen Overfitting)\n"
+                                  "• sgd — klassisch, oft mit Momentum; braucht sorgfältige LR-Wahl",
+    "training.tip_scheduler":     "Lernraten-Scheduler — passt die LR während des Trainings an:\n"
+                                  "• reduce_on_plateau — halbiert LR wenn Val-Loss stagniert (empfohlen)\n"
+                                  "• cosine — sanfte Cosinuskurve von LR bis fast 0 über alle Epochen\n"
+                                  "• step — reduziert LR alle N Epochen um festen Faktor",
+    "training.tip_early_stop":    "Training automatisch stoppen wenn Val-Loss sich N Epochen nicht verbessert.\n"
+                                  "0 = deaktiviert\n"
+                                  "Empfehlung: 5–10 — schützt vor Overfitting und spart Zeit.\n"
+                                  "Das beste Modell (niedrigster Val-Loss) wird gespeichert.",
+    "training.tip_seed":          "Zufalls-Seed für reproduzierbare Ergebnisse.\n"
+                                  "Gleicher Seed → gleicher Train/Val-Split und gleiche Augmentation.\n"
+                                  "Wert ändern um zu prüfen ob Ergebnisse stabil sind.",
+    "training.tip_device":        "Rechengerät für das Training:\n"
+                                  "• auto — wählt automatisch GPU (cuda) > Apple MPS > CPU\n"
+                                  "• cuda — NVIDIA GPU (10–50× schneller als CPU)\n"
+                                  "• mps — Apple Silicon GPU (Mac M1/M2/M3, ~5–15× schneller)\n"
+                                  "• cpu — immer verfügbar, aber langsam",
+    "training.tip_amp":           "Automatic Mixed Precision: berechnet in float16 wo möglich.\n"
+                                  "Nur auf NVIDIA-GPUs mit Tensor Cores (RTX/Ampere+) sinnvoll.\n"
+                                  "Vorteil: ~1,5–2× schneller, weniger GPU-Speicher.\n"
+                                  "Nachteil: marginale Präzisionsverluste (normalerweise unkritisch).",
+    "training.tip_train_split":   "Anteil der Bilder für das Training (0.7 = 70%).\n"
+                                  "Rest wird auf Validation + Test aufgeteilt.\n"
+                                  "Bei wenig Daten (<200 Bilder): 0.8 empfohlen.",
+    "training.tip_val_split":     "Anteil der Bilder für die Validation (0.2 = 20%).\n"
+                                  "Wird nach jeder Epoche ausgewertet — steuert Early Stopping\n"
+                                  "und LR-Scheduler. Nicht für das Training verwendet.",
+    "training.tip_aug_flip":      "Spiegelt Bilder zufällig horizontal und/oder vertikal.\n"
+                                  "Günstig wenn Ausrichtung keine Rolle spielt (z. B. Qualitätskontrolle).\n"
+                                  "Deaktivieren wenn Orientierung wichtig ist (z. B. Schriften, Pfeile).",
+    "training.tip_aug_rotation":  "Dreht Bilder zufällig um bis zu ±15° (per Editor anpassbar).\n"
+                                  "Hilft gegen Rotation der Kamera / des Objekts.\n"
+                                  "Intensität im Augmentierungs-Editor einstellen.",
+    "training.tip_aug_brightness": "Variiert Helligkeit und Kontrast zufällig.\n"
+                                   "Macht das Modell robuster gegen unterschiedliche Beleuchtung.\n"
+                                   "Intensität im Augmentierungs-Editor einstellen.",
+    "training.tip_aug_scale":     "Schneidet einen zufälligen Bildausschnitt aus und skaliert ihn.\n"
+                                  "Hilft gegen leichte Positionsänderungen des Objekts im Bild.\n"
+                                  "Intensität (min. Crop-Anteil) im Augmentierungs-Editor einstellen.",
+    "training.tip_aug_blur":      "Unscharfe Bilder durch Gaussian-Blur simulieren.\n"
+                                  "Gut gegen Unschärfe durch Kamerabewegung oder Defokus.\n"
+                                  "Radius im Augmentierungs-Editor einstellen.",
+    "training.tip_aug_preview":   "Augmentierungs-Editor öffnen: Intensitäten einstellen und Live-Vorschau sehen.",
+    "training.tip_use_rois":      "Wenn Bilder ROIs (Regions of Interest) haben, wird nur der\n"
+                                  "ROI-Bereich für das Training ausgeschnitten.\n"
+                                  "Nützlich um irrelevante Bildbereiche auszublenden.",
+    "training.tip_class_balance": "Gleicht ungleichmäßige Klassenverteilungen aus, indem unterrepräsentierte "
+                                  "Klassen häufiger gesampelt werden.",
+    "training.tip_focal_loss":    "Focal Loss fokussiert das Training auf schwierige Beispiele.\n"
+                                  "Empfohlen bei stark ungleichen Klassen (z.B. 10:1 Normal/Defekt).\n"
+                                  "Nicht aktiv bei Multi-Label-Klassifikation.",
+    "training.tip_focal_gamma":   "Focal-Loss-Exponent γ (gamma).\n"
+                                  "γ=0 → identisch mit CrossEntropy\n"
+                                  "γ=2 → Standardwert (empfohlen)\n"
+                                  "γ=5 → sehr starker Fokus auf schwierige Bilder",
+    "training.tip_resume":        "Setzt ein unterbrochenes Training ab einem gespeicherten\n"
+                                  "Checkpoint fort. Checkpoint unten auswählen.\n"
+                                  "Architektur und Bildgröße müssen mit dem Checkpoint übereinstimmen.",
+    "training.tip_hpt_btn":       "Automatische Hyperparameter-Suche mit Optuna starten.\n"
+                                  "Testet verschiedene Lernraten, Batch-Größen und Architekturen\n"
+                                  "und gibt die besten Parameter zurück.\n\n"
+                                  "Benötigt: pip install optuna",
+    "training.tip_al_thr":        "Bilder mit Confidence unterhalb dieses Schwellwerts gelten als unsicher.",
+    "training.tip_al_n":          "Maximale Anzahl Bilder, die in die AL-Queue eingetragen werden.",
+
+    # ETA label (Task H)
+    "training.eta_label":         "ETA: {eta}",
+    "training.eta_init":          "ETA: –",
+
+    # Config save/load buttons (Task K)
+    "training.save_config_btn":   "Konfiguration speichern",
+    "training.load_config_btn":   "Konfiguration laden",
+    "training.config_saved":      "Konfiguration gespeichert",
+    "training.config_loaded":     "Konfiguration geladen",
+    "training.config_not_found":  "Keine gespeicherte Konfiguration gefunden.",
 
     # ------------------------------------------------------------------ Modelle-Seite
     "models.tab.library":           "📦 Modellbibliothek",
@@ -909,4 +1043,33 @@ STRINGS: dict = {
     "report.success_title":         "Erstellt",
     "report.success_msg":           "Bericht gespeichert:\n{path}",
     "report.save_dlg":              "Bericht speichern unter",
+
+    # ------------------------------------------------------------------ Settings Page (Task D)
+    "settings.api_copy_tip":        "Basis-URL in Zwischenablage kopieren",
+    "settings.api_dashboard_tip":   "Live-Monitoring-Dashboard im Browser öffnen",
+    "settings.mqtt_not_connected":  "Nicht verbunden",
+
+    # ------------------------------------------------------------------ Object Detection Page (Task E)
+    "objdet.no_image_hint":         "← Bild wählen oder Ordner klassifizieren",
+    "objdet.no_project":            "Noch kein Projekt geladen.",
+    "objdet.stop_requested":        "Stopp angefordert…",
+    "objdet.tip_img_size":          "Standard: 640. Höher = genauer, langsamer.",
+    "objdet.tip_conf":              "Mindest-Konfidenz für Erkennungen (0.25 = Standard)",
+    "objdet.tip_interval":          "1 = jeder Frame, 5 = jeder 5. Frame",
+    "objdet.training_log_group":    "Training-Log",
+    "objdet.no_folder":             "(kein Ordner)",
+    "objdet.ds_annotated":          "{annotated} / {total} Bilder mit ROI-Labels\nKlassen: {classes}",
+    "objdet.ds_ready":              "✓ Dataset bereit\n{n_train} Train / {n_val} Val\n{n_classes} Klassen | {n_ann} Annotationen\nPfad: {path}",
+    "objdet.epoch_status":          "Epoche {epoch}/{total} | box={box_loss} cls={cls_loss}",
+    "objdet.no_results_msg":        "Bitte zuerst eine Erkennung starten.",
+    "objdet.prepare_tooltip":       "Konvertiert die ROI-Annotationen des Projekts in das YOLO-Format\nund legt den Trainings-/Validierungsordner an.",
+
+    # ------------------------------------------------------------------ Video Annotation Page (Task E)
+    "videoanno.no_frame":           "Kein Frame",
+    "videoanno.frame_info_empty":   "Frame – / –",
+    "videoanno.no_labels_status":   "Kein Frame gelabelt.",
+    "videoanno.frame_progress":     "Frame {cur} / {total}",
+    "videoanno.current_label":      "Label: {lbl}",
+    "videoanno.labeled_count":      "{labeled} Frame(s) gelabelt.",
+    "videoanno.transferred_count":  "{added} Frames ins Projekt übertragen.",
 }

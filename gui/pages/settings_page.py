@@ -227,12 +227,12 @@ class SettingsPage(QWidget):
 
         self.api_copy_btn = QPushButton(tr("settings.api_copy_url_btn"))
         self.api_copy_btn.setEnabled(False)
-        self.api_copy_btn.setToolTip("Basis-URL in Zwischenablage kopieren")
+        self.api_copy_btn.setToolTip(tr("settings.api_copy_tip"))
         self.api_copy_btn.clicked.connect(self._copy_api_url)
         api_btn_row.addWidget(self.api_copy_btn)
         self.api_dashboard_btn = QPushButton("📊 Dashboard")
         self.api_dashboard_btn.setEnabled(False)
-        self.api_dashboard_btn.setToolTip("Live-Monitoring-Dashboard im Browser öffnen")
+        self.api_dashboard_btn.setToolTip(tr("settings.api_dashboard_tip"))
         self.api_dashboard_btn.clicked.connect(self._open_dashboard)
         api_btn_row.addWidget(self.api_dashboard_btn)
         ag.addLayout(api_btn_row)
@@ -276,7 +276,7 @@ class SettingsPage(QWidget):
         self.mqtt_pass_edit.setEchoMode(QLineEdit.Password)
         self.mqtt_pass_edit.setPlaceholderText("optional")
         mf.addRow(tr("settings.mqtt_pass_label"), self.mqtt_pass_edit)
-        self.mqtt_status_lbl = QLabel("Nicht verbunden")
+        self.mqtt_status_lbl = QLabel(tr("settings.mqtt_not_connected"))
         self.mqtt_status_lbl.setStyleSheet("color:#7F8C8D;font-size:10px;")
         mf.addRow("Status:", self.mqtt_status_lbl)
         mqtt_hint = QLabel(

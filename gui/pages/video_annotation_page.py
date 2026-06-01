@@ -132,7 +132,7 @@ class VideoAnnotationPage(QWidget):
         self._interval_spin = QSpinBox()
         self._interval_spin.setRange(1, 100)
         self._interval_spin.setValue(5)
-        self._interval_spin.setToolTip("1 = jeder Frame, 5 = jeder 5. Frame")
+        self._interval_spin.setToolTip(tr("objdet.tip_interval"))
         self._interval_spin.setFixedWidth(70)
         top_bar.addWidget(self._interval_spin)
         root.addLayout(top_bar)
@@ -149,14 +149,14 @@ class VideoAnnotationPage(QWidget):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 8, 0)
 
-        self._frame_view = QLabel("Kein Frame")
+        self._frame_view = QLabel(tr("videoanno.no_frame"))
         self._frame_view.setAlignment(Qt.AlignCenter)
         self._frame_view.setMinimumSize(320, 240)
         self._frame_view.setStyleSheet("background: #0D1117; border: 1px solid #30363D; border-radius: 4px; color: #4A5568;")
         self._frame_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         left_layout.addWidget(self._frame_view)
 
-        self._frame_info = QLabel("Frame – / –")
+        self._frame_info = QLabel(tr("videoanno.frame_info_empty"))
         self._frame_info.setAlignment(Qt.AlignCenter)
         self._frame_info.setStyleSheet("color: #8B949E; font-size: 11px;")
         left_layout.addWidget(self._frame_info)
@@ -201,7 +201,7 @@ class VideoAnnotationPage(QWidget):
 
         right_layout.addWidget(lbl_grp)
 
-        self._status_lbl = QLabel("Kein Frame gelabelt.")
+        self._status_lbl = QLabel(tr("videoanno.no_labels_status"))
         self._status_lbl.setStyleSheet("color: #8B949E; font-size: 11px;")
         right_layout.addWidget(self._status_lbl)
         right_layout.addStretch()
@@ -293,21 +293,22 @@ class VideoAnnotationPage(QWidget):
             vh = self._frame_view.height() or 240
             self._frame_view.setPixmap(pix.scaled(vw, vh, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         n = len(self._frame_paths)
-        self._frame_info.setText(f"Frame {idx + 1} / {n}")
+        self._frame_info.setText(tr("videoanno.frame_progress", cur=idx + 1, total=n))
         lbl = self._frame_labels.get(idx, "")
-        self._current_label_lbl.setText(f"Label: {lbl}" if lbl else tr("videoannotation.no_label"))
+        self._current_label_lbl.setText(tr("videoanno.current_label", lbl=lbl) if lbl else tr("videoannotation.no_label"))
 
     @Slot()
     def _assign_label(self) -> None:
         items = self._label_list.selectedItems()
         if not items:
             return
+        from utils.i18n import tr
         lbl = items[0].text()
         idx = self._current_frame_idx
         self._frame_labels[idx] = lbl
-        self._current_label_lbl.setText(f"Label: {lbl}")
+        self._current_label_lbl.setText(tr("videoanno.current_label", lbl=lbl))
         labeled = len(self._frame_labels)
-        self._status_lbl.setText(f"{labeled} Frame(s) gelabelt.")
+        self._status_lbl.setText(tr("videoanno.labeled_count", labeled=labeled))
 
     @Slot()
     def _save_to_project(self) -> None:
@@ -344,4 +345,4 @@ class VideoAnnotationPage(QWidget):
             self, tr("videoannotation.saved_title"),
             tr("videoannotation.saved", n=added) + f":\n{save_dir}"
         )
-        self._status_lbl.setText(f"{added} Frames ins Projekt übertragen.")
+        self._status_lbl.setText(tr("videoanno.transferred_count", added=added))
