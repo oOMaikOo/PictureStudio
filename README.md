@@ -1,5 +1,7 @@
 # Picture Studio v2.5.0-beta
 
+[![CI](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml/badge.svg)](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml)
+
 > ⚠ **Beta-Version** — Funktionsumfang vollständig, noch nicht für den produktiven Einsatz freigegeben.
 
 Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.

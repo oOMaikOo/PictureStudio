@@ -34,3 +34,17 @@ Verbesserungen, die noch nicht umgesetzt wurden. Sortiert nach Aufwand.
 |----|-------------|-----------|
 | K | **Batch-Inferenz: Konfidenz-Histogramm** — BatchInferencePage zeigt nur Tabelle; ein Balkendiagramm der Confidence-Verteilung (Anteil Bilder pro 10%-Bucket) würde Modellqualität auf einen Blick zeigen | `gui/pages/batch_inference_page.py` |
 | L | **Multi-Kamera: Alarm-Protokoll-Export** — MultiCameraPage loggt Alarme in CSV, aber kein UI-Button zum Herunterladen. „Protokoll exportieren"-Button mit QFileDialog | `gui/pages/multi_camera_page.py` |
+
+---
+
+## Vertrieb / Release
+
+| ID | Beschreibung | Datei(en) |
+|----|-------------|-----------|
+| V1 | **Standalone-Installer (PyInstaller)** — Kein `.spec`-File vorhanden. PyInstaller-Spec erstellen, der alle Assets, Locale-Dateien, Modelle und Qt-Plugins bündelt. Für macOS `.app`-Bundle + DMG, für Windows `.exe` + Installer (NSIS/Inno Setup) | `Picture.spec`, `build_macos.sh`, `build_windows.bat` |
+| V2 | **„Beta"-Label entfernen / Versions-Bump** — `APP_VERSION = "2.5.0-beta"` in `utils/config.py` → `"2.5.0"` sowie `"⚠ Beta-Version"` aus `README.md` entfernen | `utils/config.py`, `README.md` |
+| V3 | **THIRD_PARTY_LICENSES.md** — PySide6 (LGPL) erfordert Attribution bei Weitergabe. Lizenzen aller direkten Abhängigkeiten (PySide6, PyTorch, OpenCV, Pillow, etc.) zusammenstellen | `THIRD_PARTY_LICENSES.md` |
+| V6 | **Support-Kanal definieren** — Kein Hinweis in der App oder Doku, wohin Nutzer bei Problemen gehen sollen. GitHub Issues-Link im About-Dialog und in `Fehlerbehebung.md` ergänzen | `gui/main_window.py` (About-Dialog), `wiki/Fehlerbehebung.md` |
+| V7 | **Datenschutzerklärung (DSGVO)** — Beim Einsatz in deutschen Unternehmen ggf. erforderlich. Dokument erstellen, das erklärt, welche Daten lokal gespeichert werden (keine Cloud-Übertragung, keine Telemetrie) | `PRIVACY.md` |
+| V8 | **Update-Check** — Keine automatische Prüfung auf neue Versionen. Beim Start einmal GitHub Releases API abfragen (`github.com/oOMaikOo/Picture/releases/latest`) und bei neuerer Version einen nicht-blockierenden Banner zeigen | `gui/main_window.py`, `utils/updater.py` |
+| V10 | **Windows-Kompatibilitätstest** — App nur auf macOS entwickelt und getestet. Auf einer Windows-VM prüfen: Schriftarten (Segoe UI), Pfadtrennzeichen, `list_usb_cameras()` Swift-Subprocess, Icon-Format `.ico` vs `.icns` | manuell / CI matrix |

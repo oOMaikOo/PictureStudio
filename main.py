@@ -11,9 +11,9 @@ import traceback
 
 # Ensure project root is on sys.path when running as a script
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QSplashScreen
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont, QIcon, QPixmap
 
 from gui.main_window import MainWindow
 from utils.logging_utils import setup_logging, get_logger
@@ -104,8 +104,20 @@ def main() -> None:
     font.setHintingPreference(QFont.PreferFullHinting)
     app.setFont(font)
 
+    # Show splash screen while MainWindow loads
+    _splash_path = os.path.join(_assets, "icon_1024.png")
+    if os.path.exists(_splash_path):
+        _pixmap = QPixmap(_splash_path).scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        splash = QSplashScreen(_pixmap, Qt.WindowStaysOnTopHint)
+        splash.show()
+        app.processEvents()
+    else:
+        splash = None
+
     window = MainWindow()
     window.show()
+    if splash:
+        splash.finish(window)
     sys.exit(app.exec())
 
 
