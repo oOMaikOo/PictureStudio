@@ -2,6 +2,10 @@
 Lightweight REST API server for Picture Studio.
 Runs in a background daemon thread; no extra dependencies required.
 
+Routing/JSON/auth/CORS are handled by the shared ``core.http_router`` (the
+same router the monitor daemon uses) — this module only defines the routes
+and the shared state they read from.
+
 Endpoints
 ---------
 GET  /api/status                — server status + project summary
@@ -11,8 +15,14 @@ GET  /api/images[?labeled=true] — all images with their label(s)
 GET  /api/images/<filename>     — single image info + ROIs
 GET  /api/scores                — last N anomaly scores (live monitoring feed)
 GET  /api/events[?limit=N]      — recent anomaly events from CSV log
+GET  /api/latest_alarm          — most recent alarm event
+GET  /api/frame/<filename>      — serve a saved alarm frame JPEG
+GET  /api/mc/channels           — multi-camera channel summary
+GET  /api/mc/scores?channel=N   — per-channel score buffer
+GET  /api/mc/latest_alarm?channel=N — per-channel latest alarm
 GET  /dashboard                 — self-contained HTML monitoring dashboard
 POST /api/images/label          — assign a label  {path, label}
+POST /api/images/multilabel     — assign labels   {path, labels[]}
 POST /api/classify              — live inference  {path, top_k?} or {image_b64, top_k?}
 """
 import base64
@@ -22,31 +32,26 @@ import os
 import tempfile
 import threading
 import time as _time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable, Optional
-from urllib.parse import parse_qs, urlparse
+
+from core.http_router import Request, Response, Router, RouterServer
+from utils.config import APP_VERSION
 
 _MAX_IMAGE_BYTES: int = 50 * 1024 * 1024   # 50 MB — max decoded image size
 _MAX_BODY_BYTES:  int = 70 * 1024 * 1024   # 70 MB — max raw request body
 
-from utils.config import APP_VERSION
-
 log = logging.getLogger("ImageLabelingStudio.rest_server")
 
 
-class _ProjectHandler(BaseHTTPRequestHandler):
-    """
-    HTTP request handler for the REST API.
+class _ProjectHandler:
+    """Shared state for all REST routes (set by :class:`RestApiServer`).
 
-    Class-level attributes are shared across all requests (single-threaded
-    serve_forever loop):
-      project        — current Project (set by RestApiServer.set_project).
-      inferencer     — Inferencer for /api/classify, or None.
-      score_buffer   — Rolling list of {ts, score, threshold, alarm} dicts.
-      event_log_path — Path to anomaly_events.csv for /api/events.
+    Kept as a single class of class-level attributes so the route functions
+    below and the ``RestApiServer`` push/set methods read and write the same
+    place. (Formerly also the BaseHTTPRequestHandler; routing now lives in
+    ``core.http_router``.)
     """
 
-    # Shared state injected by RestApiServer before starting
     project = None
     inferencer = None   # core.inference.Inferencer or None
     request_count: int = 0
@@ -55,57 +60,15 @@ class _ProjectHandler(BaseHTTPRequestHandler):
     alarm_frame_dir: str = ""        # directory where alarm JPEG snapshots are saved
     latest_alarm: dict = {}          # most recent alarm: {ts, score, threshold, frame_path}
     _api_key: str = ""               # shared secret; empty = no auth required
-    # Multi-camera per-channel state: list of dicts, one per channel
-    mc_channels: list = []           # [{channel, score, threshold, is_alarm, event_count,
-                                     #   cam_status, score_buffer, latest_alarm}, ...]
+    mc_channels: list = []           # per-channel state dicts
     # Rate-limiting for /api/classify: one request at a time, max 10/s
     _classify_lock = threading.Lock()
     _classify_last_t: float = 0.0
     _CLASSIFY_MIN_INTERVAL: float = 0.1   # seconds between calls (10 req/s)
+    _MAX_EVENT_LOG_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
-    # ------------------------------------------------------------------ util
-
-    def log_message(self, fmt, *args) -> None:
-        pass  # suppress the default BaseHTTPRequestHandler stdout noise
-
-    def _send_json(self, data: dict, status: int = 200) -> None:
-        """Serialise *data* to JSON and send it as the HTTP response with CORS headers."""
-        body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _err(self, msg: str, status: int = 400) -> None:
-        """Send a JSON error response with the given HTTP status code."""
-        self._send_json({"error": msg}, status)
-
-    def _read_body(self) -> Optional[dict]:
-        """Parse the JSON request body. Returns None and logs a warning on failure."""
-        try:
-            length = int(self.headers.get("Content-Length", 0))
-        except (ValueError, TypeError):
-            log.warning("REST: ungültiger Content-Length Header von %s", self.client_address)
-            return None
-        if not (0 <= length <= _MAX_BODY_BYTES):
-            log.warning("REST: Content-Length %d überschreitet Limit %d", length, _MAX_BODY_BYTES)
-            return None
-        if length == 0:
-            return {}
-        try:
-            return json.loads(self.rfile.read(length))
-        except json.JSONDecodeError as exc:
-            log.warning("REST: JSON-Parsefehler im Request-Body: %s", exc)
-            return None
-        except Exception as exc:
-            log.warning("REST: Body-Lesefehler: %s", exc)
-            return None
-
-    def _resolve_image(self, raw: str) -> Optional[str]:
+    @staticmethod
+    def resolve_image(raw: str) -> Optional[str]:
         """Resolve a full path or bare filename to a project image path."""
         proj = _ProjectHandler.project
         if not proj:
@@ -115,271 +78,13 @@ class _ProjectHandler(BaseHTTPRequestHandler):
         matches = [p for p in proj.images if os.path.basename(p) == raw]
         return matches[0] if matches else None
 
-    # ------------------------------------------------------------------ auth
-
-    # Public endpoints that never require a key (monitoring dashboards need them)
-    _PUBLIC_PATHS = {"/api/status", "/dashboard", "/dashboard/"}
-
-    def _check_auth(self) -> bool:
-        """Return True if the request is authorised (or no key is configured)."""
-        key = _ProjectHandler._api_key
-        if not key:
-            return True
-        provided = (
-            self.headers.get("X-Api-Key", "")
-            or self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        )
-        return provided == key
-
-    # ------------------------------------------------------------------ CORS pre-flight
-
-    def do_OPTIONS(self) -> None:
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-    # ------------------------------------------------------------------ GET
-
-    def do_GET(self) -> None:
-        _ProjectHandler.request_count += 1
-        parsed = urlparse(self.path)
-        path = parsed.path.rstrip("/") or "/"
-        qs = parse_qs(parsed.query)
-        proj = _ProjectHandler.project
-
-        if path not in self._PUBLIC_PATHS and not self._check_auth():
-            self._err("Unauthorized — provide X-Api-Key header", 401)
-            return
-
-        # /api/status
-        if path == "/api/status":
-            self._send_json({
-                "status": "running",
-                "project": proj.config.name if proj else None,
-                "project_path": proj.project_path if proj else None,
-                "total_images": len(proj.images) if proj else 0,
-                "labeled_images": proj.get_labeled_image_count() if proj else 0,
-                "multi_label": proj.config.multi_label if proj else False,
-                "requests_served": _ProjectHandler.request_count,
-                "version": APP_VERSION,
-            })
-            return
-
-        if proj is None:
-            self._err("No project loaded", 503)
-            return
-
-        # /api/project
-        if path == "/api/project":
-            self._send_json({
-                "name": proj.config.name,
-                "description": proj.config.description,
-                "image_dir": proj.config.image_dir,
-                "multi_label": proj.config.multi_label,
-                "total_images": len(proj.images),
-                "labeled_images": proj.get_labeled_image_count(),
-                "unlabeled_images": len(proj.get_unlabeled_images()),
-                "total_rois": proj.get_roi_count(),
-                "labels": list(proj.labels.keys()),
-                "label_counts": proj.get_label_counts(),
-                "training_runs": len(proj.training_runs),
-                "current_model": os.path.basename(proj.current_model_path),
-            })
-            return
-
-        # /api/labels
-        if path == "/api/labels":
-            labels = [
-                {"name": name, "color": info.get("color", "#888"),
-                 "description": info.get("description", "")}
-                for name, info in proj.labels.items()
-            ]
-            self._send_json({"labels": labels, "count": len(labels)})
-            return
-
-        # /api/images
-        if path == "/api/images":
-            filter_labeled = qs.get("labeled", [None])[0]
-            images = []
-            for img_path in proj.images:
-                if proj.is_multi_label:
-                    lbls = proj.get_image_multi_labels(img_path)
-                else:
-                    lbl = proj.get_image_label(img_path)
-                    lbls = [lbl] if lbl else []
-                is_labeled = bool(lbls)
-
-                if filter_labeled == "true" and not is_labeled:
-                    continue
-                if filter_labeled == "false" and is_labeled:
-                    continue
-
-                images.append({
-                    "path": img_path,
-                    "filename": os.path.basename(img_path),
-                    "label": lbls[0] if lbls else "",
-                    "labels": lbls,
-                    "roi_count": len(proj.get_rois(img_path)),
-                })
-            self._send_json({"images": images, "count": len(images)})
-            return
-
-        # /api/images/<filename>
-        if path.startswith("/api/images/"):
-            fname = path[len("/api/images/"):]
-            img_path = self._resolve_image(fname)
-            if img_path is None:
-                self._err(f"Image '{fname}' not found in project", 404)
-                return
-            if proj.is_multi_label:
-                lbls = proj.get_image_multi_labels(img_path)
-            else:
-                lbl = proj.get_image_label(img_path)
-                lbls = [lbl] if lbl else []
-            self._send_json({
-                "path": img_path,
-                "filename": os.path.basename(img_path),
-                "label": lbls[0] if lbls else "",
-                "labels": lbls,
-                "rois": proj.get_rois(img_path),
-            })
-            return
-
-        # /api/scores — live anomaly score buffer
-        if path == "/api/scores":
-            try:
-                limit = max(1, min(int(qs.get("limit", ["120"])[0]), 2000))
-            except (ValueError, TypeError):
-                self._err("'limit' muss eine positive Ganzzahl sein", 400)
-                return
-            buf = _ProjectHandler.score_buffer[-limit:]
-            self._send_json({"scores": buf, "count": len(buf)})
-            return
-
-        # /api/events — recent anomaly events from CSV log
-        if path == "/api/events":
-            try:
-                limit = max(1, min(int(qs.get("limit", ["100"])[0]), 2000))
-            except (ValueError, TypeError):
-                self._err("'limit' muss eine positive Ganzzahl sein", 400)
-                return
-            events = self._read_event_log(limit)
-            self._send_json({"events": events, "count": len(events)})
-            return
-
-        # /api/latest_alarm — last alarm event (score, threshold, frame filename)
-        if path == "/api/latest_alarm":
-            self._send_json(_ProjectHandler.latest_alarm or {})
-            return
-
-        # /api/frame/<filename> — serve a saved alarm frame JPEG
-        if path.startswith("/api/frame/"):
-            fname = path[len("/api/frame/"):]
-            frame_dir = _ProjectHandler.alarm_frame_dir
-            if not frame_dir:
-                self._err("No alarm frame directory configured", 503)
-                return
-            if not fname:
-                self._err("Invalid filename", 400)
-                return
-            # Prevent path traversal: resolve both paths and verify containment
-            safe_dir = os.path.realpath(frame_dir)
-            fpath = os.path.realpath(os.path.join(frame_dir, fname))
-            if not fpath.startswith(safe_dir + os.sep):
-                log.warning("REST: Path-Traversal-Versuch: '%s' von %s", fname, self.client_address)
-                self._err("Invalid filename", 400)
-                return
-            if not os.path.isfile(fpath):
-                self._err(f"Frame '{fname}' not found", 404)
-                return
-            try:
-                with open(fpath, "rb") as f:
-                    data = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "image/jpeg")
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(data)
-            except Exception as exc:
-                self._err(str(exc), 500)
-            return
-
-        # /dashboard — HTML monitoring dashboard
-        if path in ("/dashboard", "/dashboard/"):
-            html = _build_dashboard_html(_ProjectHandler._api_key)
-            body = html.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(body)
-            return
-
-        # /api/mc/channels — multi-camera channel summary
-        if path == "/api/mc/channels":
-            channels = _ProjectHandler.mc_channels
-            summary = [
-                {
-                    "channel":     ch.get("channel", i),
-                    "score":       ch.get("score", 0.0),
-                    "threshold":   ch.get("threshold", 0.0),
-                    "is_alarm":    ch.get("is_alarm", False),
-                    "event_count": ch.get("event_count", 0),
-                    "cam_status":  ch.get("cam_status", "Gestoppt"),
-                }
-                for i, ch in enumerate(channels)
-            ]
-            self._send_json({"channels": summary, "count": len(summary)})
-            return
-
-        # /api/mc/scores?channel=N — per-channel score buffer
-        if path == "/api/mc/scores":
-            try:
-                channel = int(qs.get("channel", ["0"])[0])
-            except ValueError:
-                self._err("'channel' must be an integer", 400)
-                return
-            try:
-                limit = max(1, min(int(qs.get("limit", ["120"])[0]), 2000))
-            except (ValueError, TypeError):
-                self._err("'limit' muss eine positive Ganzzahl sein", 400)
-                return
-            channels = _ProjectHandler.mc_channels
-            if channel < 0 or channel >= len(channels):
-                self._err(f"Channel {channel} not found", 404)
-                return
-            buf = channels[channel].get("score_buffer", [])[-limit:]
-            self._send_json({"channel": channel, "scores": buf, "count": len(buf)})
-            return
-
-        # /api/mc/latest_alarm?channel=N — per-channel latest alarm
-        if path == "/api/mc/latest_alarm":
-            try:
-                channel = int(qs.get("channel", ["0"])[0])
-            except ValueError:
-                self._err("'channel' must be an integer", 400)
-                return
-            channels = _ProjectHandler.mc_channels
-            if channel < 0 or channel >= len(channels):
-                self._err(f"Channel {channel} not found", 404)
-                return
-            self._send_json(channels[channel].get("latest_alarm", {}))
-            return
-
-        self._err("Endpoint not found", 404)
-
-    _MAX_EVENT_LOG_BYTES: int = 10 * 1024 * 1024  # 10 MB
-
-    def _read_event_log(self, limit: int) -> list:
+    @staticmethod
+    def read_event_log(limit: int) -> list:
         path = _ProjectHandler.event_log_path
         if not path or not os.path.isfile(path):
             return []
         try:
-            if os.path.getsize(path) > self._MAX_EVENT_LOG_BYTES:
+            if os.path.getsize(path) > _ProjectHandler._MAX_EVENT_LOG_BYTES:
                 log.warning("Event-Log zu groß (>10 MB), nur letzte %d Zeilen werden gelesen", limit)
         except OSError:
             pass
@@ -397,157 +102,356 @@ class _ProjectHandler(BaseHTTPRequestHandler):
             return []
         return rows[-limit:]
 
-    # ------------------------------------------------------------------ POST
 
-    def do_POST(self) -> None:
+# ── route decorators ────────────────────────────────────────────────────────
+
+def _track(fn):
+    """Bump the served-request counter before running the route."""
+    def wrapped(req: Request) -> Response:
         _ProjectHandler.request_count += 1
-        path = urlparse(self.path).path.rstrip("/")
-        proj = _ProjectHandler.project
+        return fn(req)
+    return wrapped
 
-        if not self._check_auth():
-            self._err("Unauthorized — provide X-Api-Key header", 401)
-            return
 
-        body = self._read_body()
-        if body is None:
-            self._err("Ungültiger JSON-Body — Content-Type: application/json erwartet", 400)
-            return
+def _needs_project(fn):
+    """Return 503 when no project is loaded, else run the route."""
+    def wrapped(req: Request) -> Response:
+        if _ProjectHandler.project is None:
+            return Response.error("No project loaded", 503)
+        return fn(req)
+    return wrapped
 
-        if proj is None:
-            self._err("No project loaded", 503)
-            return
 
-        # POST /api/images/label  — assign a label to one image
-        if path == "/api/images/label":
-            raw_path = body.get("path", "")
-            label = body.get("label", "")
-            if not raw_path:
-                self._err("'path' field required")
-                return
-            img_path = self._resolve_image(raw_path)
-            if img_path is None:
-                self._err(f"Image '{raw_path}' not found in project", 404)
-                return
-            if label and label not in proj.labels:
-                self._err(f"Label '{label}' not defined. "
-                          f"Known labels: {list(proj.labels.keys())}", 422)
-                return
-            proj.set_image_label(img_path, label)
-            self._send_json({"ok": True, "path": img_path, "label": label})
-            return
+def _read_json_strict(req: Request) -> Optional[dict]:
+    """Parse a JSON body; None on bad/oversized body (→ caller sends 400)."""
+    length = req.content_length()
+    if not (0 <= length <= _MAX_BODY_BYTES):
+        return None
+    if length == 0:
+        return {}
+    try:
+        return json.loads(req.body)
+    except Exception:
+        return None
 
-        # POST /api/images/multilabel  — assign multiple labels
-        if path == "/api/images/multilabel":
-            raw_path = body.get("path", "")
-            labels = body.get("labels", [])
-            if not raw_path:
-                self._err("'path' field required")
-                return
-            if not isinstance(labels, list):
-                self._err("'labels' must be an array")
-                return
-            img_path = self._resolve_image(raw_path)
-            if img_path is None:
-                self._err(f"Image '{raw_path}' not found in project", 404)
-                return
-            unknown = [l for l in labels if l and l not in proj.labels]
-            if unknown:
-                self._err(f"Unknown labels: {unknown}. "
-                          f"Known: {list(proj.labels.keys())}", 422)
-                return
-            proj.set_image_multi_labels(img_path, labels)
-            if labels:
-                proj.set_image_label(img_path, labels[0])
-            self._send_json({"ok": True, "path": img_path, "labels": labels})
-            return
 
-        # POST /api/classify — live inference on a single image
-        if path == "/api/classify":
-            if not _ProjectHandler._classify_lock.acquire(blocking=False):
-                self._err("Eine Klassifizierung läuft bereits. Bitte kurz warten.", 429)
-                return
-            try:
-                now = _time.monotonic()
-                elapsed = now - _ProjectHandler._classify_last_t
-                if elapsed < _ProjectHandler._CLASSIFY_MIN_INTERVAL:
-                    self._err(
-                        f"Rate limit: max 10 Anfragen/Sekunde. "
-                        f"Bitte {_ProjectHandler._CLASSIFY_MIN_INTERVAL - elapsed:.2f}s warten.",
-                        429,
-                    )
-                    return
-                _ProjectHandler._classify_last_t = now
-            finally:
-                _ProjectHandler._classify_lock.release()
+# ── GET routes ──────────────────────────────────────────────────────────────
 
-            inf = _ProjectHandler.inferencer
-            if inf is None or not inf.is_ready():
-                self._err("No model loaded. Load a model via the Models page first.", 503)
-                return
+def _h_status(req: Request) -> Response:
+    proj = _ProjectHandler.project
+    return Response.json({
+        "status": "running",
+        "project": proj.config.name if proj else None,
+        "project_path": proj.project_path if proj else None,
+        "total_images": len(proj.images) if proj else 0,
+        "labeled_images": proj.get_labeled_image_count() if proj else 0,
+        "multi_label": proj.config.multi_label if proj else False,
+        "requests_served": _ProjectHandler.request_count,
+        "version": APP_VERSION,
+    })
 
-            try:
-                top_k = max(1, min(int(body.get("top_k", 3)), 20))
-            except (ValueError, TypeError):
-                self._err("'top_k' muss eine Ganzzahl zwischen 1 und 20 sein", 400)
-                return
-            img_path = body.get("path", "")
-            if not isinstance(img_path, str):
-                self._err("'path' muss ein String sein", 400)
-                return
-            b64 = body.get("image_b64", "")
 
-            tmp_path = None
-            if b64:
-                # Guard against DoS: check encoded length before decoding
-                if len(b64) > _MAX_IMAGE_BYTES * 4 // 3 + 4:
-                    self._err(
-                        f"Image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413
-                    )
-                    return
-                try:
-                    img_bytes = base64.b64decode(b64)
-                except Exception as exc:
-                    self._err(f"Base64 decode error: {exc}")
-                    return
-                if len(img_bytes) > _MAX_IMAGE_BYTES:
-                    self._err(
-                        f"Decoded image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413
-                    )
-                    return
-                suffix = ".png" if img_bytes[:4] == b'\x89PNG' else ".jpg"
-                try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-                        tmp_path = f.name  # set before write so finally can clean up
-                        f.write(img_bytes)
-                    img_path = tmp_path
-                except Exception as exc:
-                    self._err(f"Temp-Datei konnte nicht erstellt werden: {exc}", 500)
-                    return
-            elif not img_path:
-                self._err("Provide 'path' (file path) or 'image_b64' (base64 image).")
-                return
-            elif not os.path.isfile(img_path):
-                self._err(f"File not found: {img_path}", 404)
-                return
+def _h_project(req: Request) -> Response:
+    proj = _ProjectHandler.project
+    return Response.json({
+        "name": proj.config.name,
+        "description": proj.config.description,
+        "image_dir": proj.config.image_dir,
+        "multi_label": proj.config.multi_label,
+        "total_images": len(proj.images),
+        "labeled_images": proj.get_labeled_image_count(),
+        "unlabeled_images": len(proj.get_unlabeled_images()),
+        "total_rois": proj.get_roi_count(),
+        "labels": list(proj.labels.keys()),
+        "label_counts": proj.get_label_counts(),
+        "training_runs": len(proj.training_runs),
+        "current_model": os.path.basename(proj.current_model_path),
+    })
 
-            try:
-                result = inf.classify_single(img_path, top_k=top_k)
-                response = {
-                    "predicted_label": result.get("predicted_label", ""),
-                    "confidence":      result.get("confidence", 0.0),
-                    "top_k":           result.get("top_k", []),
-                    "low_confidence":  result.get("low_confidence", False),
-                    "path":            img_path,
-                }
-                self._send_json(response)
-            except Exception as exc:
-                self._err(f"Inference error: {exc}", 500)
-            finally:
-                if tmp_path and os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-            return
 
-        self._err("Endpoint not found", 404)
+def _h_labels(req: Request) -> Response:
+    proj = _ProjectHandler.project
+    labels = [
+        {"name": name, "color": info.get("color", "#888"),
+         "description": info.get("description", "")}
+        for name, info in proj.labels.items()
+    ]
+    return Response.json({"labels": labels, "count": len(labels)})
+
+
+def _h_images(req: Request) -> Response:
+    proj = _ProjectHandler.project
+    filter_labeled = req.query_str("labeled", None)
+    images = []
+    for img_path in proj.images:
+        if proj.is_multi_label:
+            lbls = proj.get_image_multi_labels(img_path)
+        else:
+            lbl = proj.get_image_label(img_path)
+            lbls = [lbl] if lbl else []
+        is_labeled = bool(lbls)
+        if filter_labeled == "true" and not is_labeled:
+            continue
+        if filter_labeled == "false" and is_labeled:
+            continue
+        images.append({
+            "path": img_path,
+            "filename": os.path.basename(img_path),
+            "label": lbls[0] if lbls else "",
+            "labels": lbls,
+            "roi_count": len(proj.get_rois(img_path)),
+        })
+    return Response.json({"images": images, "count": len(images)})
+
+
+def _h_image_detail(req: Request) -> Response:
+    proj = _ProjectHandler.project
+    fname = req.params["fname"]
+    img_path = _ProjectHandler.resolve_image(fname)
+    if img_path is None:
+        return Response.error(f"Image '{fname}' not found in project", 404)
+    if proj.is_multi_label:
+        lbls = proj.get_image_multi_labels(img_path)
+    else:
+        lbl = proj.get_image_label(img_path)
+        lbls = [lbl] if lbl else []
+    return Response.json({
+        "path": img_path,
+        "filename": os.path.basename(img_path),
+        "label": lbls[0] if lbls else "",
+        "labels": lbls,
+        "rois": proj.get_rois(img_path),
+    })
+
+
+def _h_scores(req: Request) -> Response:
+    try:
+        limit = max(1, min(req.query_int("limit", 120), 2000))
+    except (ValueError, TypeError):
+        return Response.error("'limit' muss eine positive Ganzzahl sein", 400)
+    buf = _ProjectHandler.score_buffer[-limit:]
+    return Response.json({"scores": buf, "count": len(buf)})
+
+
+def _h_events(req: Request) -> Response:
+    limit = max(1, min(req.query_int("limit", 100), 2000))
+    events = _ProjectHandler.read_event_log(limit)
+    return Response.json({"events": events, "count": len(events)})
+
+
+def _h_latest_alarm(req: Request) -> Response:
+    return Response.json(_ProjectHandler.latest_alarm or {})
+
+
+def _h_frame(req: Request) -> Response:
+    fname = req.params["fname"]
+    frame_dir = _ProjectHandler.alarm_frame_dir
+    if not frame_dir:
+        return Response.error("No alarm frame directory configured", 503)
+    if not fname:
+        return Response.error("Invalid filename", 400)
+    # Prevent path traversal: resolve both paths and verify containment
+    safe_dir = os.path.realpath(frame_dir)
+    fpath = os.path.realpath(os.path.join(frame_dir, fname))
+    if not fpath.startswith(safe_dir + os.sep):
+        log.warning("REST: Path-Traversal-Versuch: '%s' von %s", fname, req.client_address)
+        return Response.error("Invalid filename", 400)
+    if not os.path.isfile(fpath):
+        return Response.error(f"Frame '{fname}' not found", 404)
+    try:
+        with open(fpath, "rb") as f:
+            data = f.read()
+        return Response.data(data, "image/jpeg")
+    except Exception as exc:
+        return Response.error(str(exc), 500)
+
+
+def _h_dashboard(req: Request) -> Response:
+    return Response.html(_build_dashboard_html(_ProjectHandler._api_key))
+
+
+def _h_mc_channels(req: Request) -> Response:
+    channels = _ProjectHandler.mc_channels
+    summary = [
+        {
+            "channel":     ch.get("channel", i),
+            "score":       ch.get("score", 0.0),
+            "threshold":   ch.get("threshold", 0.0),
+            "is_alarm":    ch.get("is_alarm", False),
+            "event_count": ch.get("event_count", 0),
+            "cam_status":  ch.get("cam_status", "Gestoppt"),
+        }
+        for i, ch in enumerate(channels)
+    ]
+    return Response.json({"channels": summary, "count": len(summary)})
+
+
+def _h_mc_scores(req: Request) -> Response:
+    try:
+        channel = int(req.query_str("channel", "0"))
+    except ValueError:
+        return Response.error("'channel' must be an integer", 400)
+    limit = max(1, min(req.query_int("limit", 120), 2000))
+    channels = _ProjectHandler.mc_channels
+    if channel < 0 or channel >= len(channels):
+        return Response.error(f"Channel {channel} not found", 404)
+    buf = channels[channel].get("score_buffer", [])[-limit:]
+    return Response.json({"channel": channel, "scores": buf, "count": len(buf)})
+
+
+def _h_mc_latest_alarm(req: Request) -> Response:
+    try:
+        channel = int(req.query_str("channel", "0"))
+    except ValueError:
+        return Response.error("'channel' must be an integer", 400)
+    channels = _ProjectHandler.mc_channels
+    if channel < 0 or channel >= len(channels):
+        return Response.error(f"Channel {channel} not found", 404)
+    return Response.json(channels[channel].get("latest_alarm", {}))
+
+
+# ── POST routes ─────────────────────────────────────────────────────────────
+
+def _h_post_label(req: Request) -> Response:
+    body = _read_json_strict(req)
+    if body is None:
+        return Response.error("Ungültiger JSON-Body — Content-Type: application/json erwartet", 400)
+    proj = _ProjectHandler.project
+    raw_path = body.get("path", "")
+    label = body.get("label", "")
+    if not raw_path:
+        return Response.error("'path' field required")
+    img_path = _ProjectHandler.resolve_image(raw_path)
+    if img_path is None:
+        return Response.error(f"Image '{raw_path}' not found in project", 404)
+    if label and label not in proj.labels:
+        return Response.error(f"Label '{label}' not defined. "
+                              f"Known labels: {list(proj.labels.keys())}", 422)
+    proj.set_image_label(img_path, label)
+    return Response.json({"ok": True, "path": img_path, "label": label})
+
+
+def _h_post_multilabel(req: Request) -> Response:
+    body = _read_json_strict(req)
+    if body is None:
+        return Response.error("Ungültiger JSON-Body — Content-Type: application/json erwartet", 400)
+    proj = _ProjectHandler.project
+    raw_path = body.get("path", "")
+    labels = body.get("labels", [])
+    if not raw_path:
+        return Response.error("'path' field required")
+    if not isinstance(labels, list):
+        return Response.error("'labels' must be an array")
+    img_path = _ProjectHandler.resolve_image(raw_path)
+    if img_path is None:
+        return Response.error(f"Image '{raw_path}' not found in project", 404)
+    unknown = [l for l in labels if l and l not in proj.labels]
+    if unknown:
+        return Response.error(f"Unknown labels: {unknown}. "
+                              f"Known: {list(proj.labels.keys())}", 422)
+    proj.set_image_multi_labels(img_path, labels)
+    if labels:
+        proj.set_image_label(img_path, labels[0])
+    return Response.json({"ok": True, "path": img_path, "labels": labels})
+
+
+def _h_post_classify(req: Request) -> Response:
+    body = _read_json_strict(req)
+    if body is None:
+        return Response.error("Ungültiger JSON-Body — Content-Type: application/json erwartet", 400)
+
+    if not _ProjectHandler._classify_lock.acquire(blocking=False):
+        return Response.error("Eine Klassifizierung läuft bereits. Bitte kurz warten.", 429)
+    try:
+        now = _time.monotonic()
+        elapsed = now - _ProjectHandler._classify_last_t
+        if elapsed < _ProjectHandler._CLASSIFY_MIN_INTERVAL:
+            return Response.error(
+                f"Rate limit: max 10 Anfragen/Sekunde. "
+                f"Bitte {_ProjectHandler._CLASSIFY_MIN_INTERVAL - elapsed:.2f}s warten.", 429)
+        _ProjectHandler._classify_last_t = now
+    finally:
+        _ProjectHandler._classify_lock.release()
+
+    inf = _ProjectHandler.inferencer
+    if inf is None or not inf.is_ready():
+        return Response.error("No model loaded. Load a model via the Models page first.", 503)
+
+    try:
+        top_k = max(1, min(int(body.get("top_k", 3)), 20))
+    except (ValueError, TypeError):
+        return Response.error("'top_k' muss eine Ganzzahl zwischen 1 und 20 sein", 400)
+    img_path = body.get("path", "")
+    if not isinstance(img_path, str):
+        return Response.error("'path' muss ein String sein", 400)
+    b64 = body.get("image_b64", "")
+
+    tmp_path = None
+    if b64:
+        if len(b64) > _MAX_IMAGE_BYTES * 4 // 3 + 4:
+            return Response.error(f"Image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413)
+        try:
+            img_bytes = base64.b64decode(b64)
+        except Exception as exc:
+            return Response.error(f"Base64 decode error: {exc}")
+        if len(img_bytes) > _MAX_IMAGE_BYTES:
+            return Response.error(f"Decoded image too large — max {_MAX_IMAGE_BYTES // 1_048_576} MB", 413)
+        suffix = ".png" if img_bytes[:4] == b'\x89PNG' else ".jpg"
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                tmp_path = f.name
+                f.write(img_bytes)
+            img_path = tmp_path
+        except Exception as exc:
+            return Response.error(f"Temp-Datei konnte nicht erstellt werden: {exc}", 500)
+    elif not img_path:
+        return Response.error("Provide 'path' (file path) or 'image_b64' (base64 image).")
+    elif not os.path.isfile(img_path):
+        return Response.error(f"File not found: {img_path}", 404)
+
+    try:
+        result = inf.classify_single(img_path, top_k=top_k)
+        return Response.json({
+            "predicted_label": result.get("predicted_label", ""),
+            "confidence":      result.get("confidence", 0.0),
+            "top_k":           result.get("top_k", []),
+            "low_confidence":  result.get("low_confidence", False),
+            "path":            img_path,
+        })
+    except Exception as exc:
+        return Response.error(f"Inference error: {exc}", 500)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def _build_router() -> Router:
+    """Register all REST routes on a shared :class:`Router`."""
+    r = Router(
+        api_key=lambda: _ProjectHandler._api_key,
+        public_paths={"/api/status", "/dashboard"},
+        cors=True,
+    )
+    # Public (no project required)
+    r.get("/api/status", _track(_h_status))
+    r.get("/dashboard", _track(_h_dashboard))
+    # Project-scoped GET
+    r.get("/api/project", _track(_needs_project(_h_project)))
+    r.get("/api/labels", _track(_needs_project(_h_labels)))
+    r.get("/api/images", _track(_needs_project(_h_images)))
+    r.get("/api/images/{fname}", _track(_needs_project(_h_image_detail)))
+    r.get("/api/scores", _track(_needs_project(_h_scores)))
+    r.get("/api/events", _track(_needs_project(_h_events)))
+    r.get("/api/latest_alarm", _track(_needs_project(_h_latest_alarm)))
+    r.get("/api/frame/{fname}", _track(_needs_project(_h_frame)))
+    r.get("/api/mc/channels", _track(_needs_project(_h_mc_channels)))
+    r.get("/api/mc/scores", _track(_needs_project(_h_mc_scores)))
+    r.get("/api/mc/latest_alarm", _track(_needs_project(_h_mc_latest_alarm)))
+    # POST
+    r.post("/api/images/label", _track(_needs_project(_h_post_label)))
+    r.post("/api/images/multilabel", _track(_needs_project(_h_post_multilabel)))
+    r.post("/api/classify", _track(_needs_project(_h_post_classify)))
+    return r
 
 
 # ── Dashboard HTML ─────────────────────────────────────────────────────────
@@ -793,14 +697,13 @@ setInterval(fetchData, 3000);
 
 class RestApiServer:
     """
-    Manages a single-threaded HTTP server in a background daemon thread.
-    Thread-safe for read operations against the project; label writes are
-    fire-and-forget (no UI undo stack integration).
+    Manages an HTTP server in a background daemon thread (via the shared
+    ``core.http_router``). Thread-safe for read operations against the project;
+    label writes are fire-and-forget (no UI undo stack integration).
     """
 
     def __init__(self):
-        self._server: Optional[HTTPServer] = None
-        self._thread: Optional[threading.Thread] = None
+        self._server: Optional[RouterServer] = None
         self._port: int = 8765
         self._status_cb: Optional[Callable[[str], None]] = None
 
@@ -932,30 +835,22 @@ class RestApiServer:
         self._port = port
         _ProjectHandler.request_count = 0
         try:
-            server = ThreadingHTTPServer(("", port), _ProjectHandler)
-            server.allow_reuse_address = True
+            server = RouterServer(port, _build_router(), thread_name="RestApiThread")
+            server.start()
             self._server = server
-            self._thread = threading.Thread(
-                target=server.serve_forever,
-                name="RestApiThread",
-                daemon=True,
-            )
-            self._thread.start()
             self._notify(f"Läuft auf http://localhost:{port}/api/")
             return True
         except OSError as exc:
             self._server = None
-            self._thread = None
             self._notify(f"Startfehler: {exc}")
             return False
 
     def stop(self) -> None:
         if not self._server:
             return
-        self._server.shutdown()
+        self._server.stop()
         self._server.server_close()
         self._server = None
-        self._thread = None
         self._notify("Gestoppt")
 
     def _notify(self, msg: str) -> None:

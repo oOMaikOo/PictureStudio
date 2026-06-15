@@ -710,13 +710,12 @@ def monitor_server(tmp_path_factory):
 @pytest.fixture(scope="module")
 def auth_server(tmp_path_factory):
     """Server with API key set."""
-    from monitor import _MonitorApiServer, _MonitorState, _MonitorHandler
+    from monitor import _MonitorApiServer, _MonitorState
     state = _MonitorState()
     state.api_key = "monitor-secret-key"
     state.output_dir = str(tmp_path_factory.mktemp("auth_frames"))
 
     port = _free_port()
-    _MonitorHandler.state = state
     srv = _MonitorApiServer(port, state)
     srv.start()
     import time; time.sleep(0.1)

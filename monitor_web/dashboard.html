@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PictureStudio Monitor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#22272E;color:#CDD9E5;padding:20px}
+h1{color:#5DADE2;margin-bottom:16px;font-size:20px}
+h2{color:#7FC3F5;font-size:13px;margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.card{background:#2D333B;border-radius:8px;padding:14px;border:1px solid #373E47}
+.card .val{font-size:28px;font-weight:bold;color:#58D68D;margin:4px 0}
+.card .val.alarm{color:#E74C3C}
+.card .lbl{font-size:11px;color:#768390}
+#chart-wrap{background:#2D333B;border-radius:8px;padding:14px;border:1px solid #373E47;margin-bottom:20px}
+canvas{width:100%;height:160px;display:block}
+#alarm-wrap{background:#2D333B;border-radius:8px;padding:14px;border:2px solid #E74C3C;margin-bottom:20px;display:none}
+#alarm-wrap h2{color:#E74C3C}
+#alarm-img{max-width:100%;border-radius:6px;margin-top:8px}
+#alarm-meta{font-size:11px;color:#768390;margin-top:4px}
+#dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#58D68D;margin-right:6px}
+#dot.err{background:#E74C3C}
+.footer{font-size:10px;color:#545D68;margin-top:14px;text-align:center}
+</style>
+</head>
+<body>
+<h1><span id="dot"></span>PictureStudio Monitor</h1>
+<div class="grid">
+  <div class="card"><div class="lbl">Letzter Score</div><div class="val" id="score">–</div></div>
+  <div class="card"><div class="lbl">Schwellwert</div><div class="val" id="thr">–</div></div>
+  <div class="card"><div class="lbl">Alarme</div><div class="val alarm" id="alarms">–</div></div>
+  <div class="card"><div class="lbl">Laufzeit</div><div class="val" id="uptime">–</div></div>
+  <div class="card"><div class="lbl">Kamera</div><div class="val" id="cam" style="font-size:14px">–</div></div>
+</div>
+<div id="chart-wrap"><h2>Score-Verlauf (letzte 120 Frames)</h2><canvas id="chart"></canvas></div>
+<div id="alarm-wrap"><h2>⚠ Letzter Alarm-Frame</h2>
+  <img id="alarm-img" src="" alt="">
+  <div id="alarm-meta"></div>
+</div>
+<div class="footer">Aktualisiert alle 3 s &middot; PictureStudio Monitor-Client</div>
+<script>
+const BASE=window.location.origin;
+const KEY="__API_KEY__";
+const H=KEY?{'X-Api-Key':KEY}:{};
+function api(u){return fetch(BASE+u,{headers:H}).then(r=>r.json())}
+let lastFrame='';
+function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return h?`${h}h ${m}m`:`${m}m ${sec}s`}
+function draw(canvas,scores,thr){
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width=canvas.offsetWidth,H=canvas.height=canvas.offsetHeight||160;
+  ctx.clearRect(0,0,W,H);
+  if(!scores.length)return;
+  const vals=scores.map(s=>s.score);
+  const mx=Math.max(...vals,thr*1.5,0.001);
+  const dx=W/Math.max(vals.length-1,1);
+  const ty=H-(thr/mx)*H;
+  ctx.strokeStyle='#E67E22';ctx.setLineDash([6,4]);ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(W,ty);ctx.stroke();ctx.setLineDash([]);
+  ctx.lineWidth=2;
+  vals.forEach((v,i)=>{
+    const x=i*dx,y=H-(v/mx)*H;
+    ctx.strokeStyle=v>thr?'#E74C3C':'#2ECC71';
+    if(i===0){ctx.beginPath();ctx.moveTo(x,y);}
+    else{ctx.lineTo(x,y);ctx.stroke();ctx.beginPath();ctx.moveTo(x,y);}
+  });
+}
+async function tick(){
+  try{
+    const[st,sc,al]=await Promise.all([
+      api('/api/status'),api('/api/scores?limit=120'),api('/api/latest_alarm')
+    ]);
+    document.getElementById('dot').className='';
+    document.getElementById('score').textContent=st.score.toFixed(5);
+    document.getElementById('score').className='val'+(st.is_alarm?' alarm':'');
+    document.getElementById('thr').textContent=st.threshold.toFixed(5);
+    document.getElementById('alarms').textContent=st.event_count;
+    document.getElementById('uptime').textContent=fmt(st.uptime_s);
+    document.getElementById('cam').textContent=st.cam_status;
+    draw(document.getElementById('chart'),sc.scores||[],st.threshold);
+    const aw=document.getElementById('alarm-wrap');
+    if(al.frame_filename){
+      aw.style.display='block';
+      if(al.frame_filename!==lastFrame){lastFrame=al.frame_filename;
+        document.getElementById('alarm-img').src=BASE+'/api/frame/'+al.frame_filename+'?t='+Date.now();}
+      document.getElementById('alarm-meta').textContent=
+        al.ts+'  |  Score: '+(al.score||0).toFixed(5)+'  |  Thr: '+(al.threshold||0).toFixed(5);
+    }else{aw.style.display='none';}
+  }catch(e){document.getElementById('dot').className='err';}
+}
+tick();setInterval(tick,3000);
+</script>
+</body>
+</html>

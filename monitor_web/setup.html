@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PictureStudio Monitor – Einrichtung</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#22272E;color:#CDD9E5;padding:16px;min-height:100vh}
+h1{color:#5DADE2;margin-bottom:14px;font-size:19px;letter-spacing:.02em}
+/* Top bar */
+.topbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:5px;
+     border:none;cursor:pointer;font-size:12px;font-weight:600;transition:background .15s}
+.btn-primary{background:#1C6EA4;color:#fff}.btn-primary:hover{background:#2185C5}
+.btn-success{background:#1A8754;color:#fff}.btn-success:hover{background:#1DB05E}
+.btn-success:disabled{background:#2D333B;color:#545D68;cursor:not-allowed;opacity:.6}
+.btn-danger{background:#8B2222;color:#fff}.btn-danger:hover{background:#A52626}
+.btn-sm{padding:4px 10px;font-size:11px}
+/* Add channel controls */
+#add-area{display:flex;gap:6px;align-items:center}
+#cam-input{background:#1B2028;border:1px solid #373E47;color:#CDD9E5;border-radius:4px;
+           padding:5px 8px;width:120px;font-size:12px}
+/* Grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+/* Channel card */
+.ch-card{background:#2D333B;border-radius:8px;border:1px solid #373E47;padding:12px;position:relative}
+.ch-card .ch-title{font-size:13px;font-weight:bold;color:#7FC3F5;margin-bottom:8px}
+.ch-canvas-wrap{position:relative;width:100%;padding-top:56.25%;background:#1B2028;border-radius:5px;overflow:hidden;margin-bottom:8px}
+.ch-canvas-wrap img,.ch-canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.ch-canvas-wrap img{object-fit:contain}
+.ch-canvas-wrap canvas{cursor:crosshair}
+.ch-info{display:flex;gap:10px;font-size:11px;color:#768390;margin-bottom:8px;flex-wrap:wrap}
+.ch-info span b{color:#CDD9E5}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.badge-ok{background:#1E3A2F;color:#58D68D}.badge-wait{background:#3D2B00;color:#FFC107}
+.badge-pending{background:#373E47;color:#768390}
+.ch-actions{display:flex;gap:6px;flex-wrap:wrap}
+/* Success */
+.success-full{display:none;text-align:center;padding:60px 20px}
+.success-full .icon{font-size:64px;margin-bottom:14px}
+.success-full h2{color:#58D68D;font-size:22px;margin-bottom:8px}
+.success-full p{color:#768390;font-size:13px}
+</style>
+</head>
+<body>
+<h1>PictureStudio Monitor – Einrichtung</h1>
+<div class="topbar" id="topbar">
+  <div id="add-area">
+    <input id="cam-input" type="text" placeholder="Kamera-Index (0-8) oder URL" value="0">
+    <button class="btn btn-primary" onclick="addChannel()">+ Kanal hinzufügen</button>
+  </div>
+  <button class="btn btn-success" id="btn-live" disabled onclick="goLive()">Alle live starten</button>
+</div>
+<div id="cam-discovery" style="margin-bottom:12px;display:none">
+  <span style="font-size:12px;color:#768390;margin-right:8px">Erkannte Kameras:</span>
+  <span id="cam-discovery-list"></span>
+</div>
+<div class="grid" id="grid"></div>
+<div class="success-full" id="success-full">
+  <div class="icon">&#10003;</div>
+  <h2>Live-Modus gestartet</h2>
+  <p>Einrichtung abgeschlossen.<br>Dieses Fenster kann geschlossen werden.</p>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let channels = [];      // [{channel_id, camera_source, roi, model_path, status}, ...]
+let phase = 'setup';
+// ROI drawing state per channel
+let roiState = {};      // {id: {drawing, sx, sy, ex, ey}}
+
+// ─── Polling ─────────────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const r = await fetch('/setup/status');
+    const d = await r.json();
+    phase = d.phase || 'setup';
+    channels = d.channels || [];
+    if (phase === 'live') {
+      showSuccess();
+      return;
+    }
+    updateGrid();
+  } catch(e) {}
+  setTimeout(pollStatus, 1000);
+}
+
+// ─── Grid rendering ───────────────────────────────────────────────────────────
+function updateGrid() {
+  const grid = document.getElementById('grid');
+  const ids = new Set(channels.map(c => c.channel_id));
+  // Remove cards for deleted channels
+  [...grid.querySelectorAll('.ch-card')].forEach(el => {
+    if (!ids.has(parseInt(el.dataset.id))) el.remove();
+  });
+  channels.forEach(ch => {
+    let card = grid.querySelector('.ch-card[data-id="'+ch.channel_id+'"]');
+    if (!card) {
+      card = buildCard(ch);
+      grid.appendChild(card);
+    }
+    refreshCard(card, ch);
+  });
+  // Live button
+  const allReady = channels.length > 0 && channels.every(c => c.status === 'ready');
+  document.getElementById('btn-live').disabled = !allReady;
+}
+
+function buildCard(ch) {
+  const id = ch.channel_id;
+  const div = document.createElement('div');
+  div.className = 'ch-card';
+  div.dataset.id = id;
+  div.innerHTML = `
+    <div class="ch-title">Kanal ${id} &nbsp;<span class="badge badge-pending" id="badge-${id}">pending</span></div>
+    <div class="ch-canvas-wrap">
+      <img id="img-${id}" alt="" style="background:#1B2028">
+      <canvas id="canvas-${id}"></canvas>
+    </div>
+    <div class="ch-info">
+      <span>ROI: <b id="roi-info-${id}">—</b></span>
+      <span>Modell: <b id="model-info-${id}">—</b></span>
+    </div>
+    <div class="ch-actions">
+      <button class="btn btn-sm btn-primary" onclick="resetROI(${id})">ROI zuruecksetzen</button>
+      <button class="btn btn-sm btn-danger" onclick="removeChannel(${id})">Entfernen</button>
+    </div>`;
+  // Start frame polling for this channel
+  startFramePoll(id);
+  // ROI drawing
+  setupROICanvas(id);
+  return div;
+}
+
+function refreshCard(card, ch) {
+  const id = ch.channel_id;
+  const badge = document.getElementById('badge-'+id);
+  if (badge) {
+    badge.textContent = ch.status;
+    badge.className = 'badge ' + (ch.status === 'ready' ? 'badge-ok' : ch.status === 'pending' ? 'badge-pending' : 'badge-wait');
+  }
+  const roiInfo = document.getElementById('roi-info-'+id);
+  if (roiInfo) roiInfo.textContent = ch.roi ? '['+ch.roi.map(v=>Math.round(v)).join(',')+']' : '—';
+  const modelInfo = document.getElementById('model-info-'+id);
+  if (modelInfo) modelInfo.textContent = ch.model_path ? '✓ bereit' : '⏳ ausstehend';
+  // Draw ROI on canvas
+  drawROI(id, ch.roi);
+}
+
+// ─── Frame polling per channel ────────────────────────────────────────────────
+// Fetch JPEG bytes and set img.src as a data: URL.
+// This completely bypasses Safari's image caching and blob-URL lifecycle quirks.
+function startFramePoll(id) {
+  async function poll() {
+    if (!document.getElementById('img-'+id)) return;
+    try {
+      const res = await fetch('/setup/channels/'+id+'/frame.jpg?t='+Date.now(),
+                              {cache: 'no-store'});
+      if (res.ok) {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        // Convert to base64 in 8 KB chunks to avoid call-stack limits
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        }
+        const img = document.getElementById('img-'+id);
+        if (img) img.src = 'data:image/jpeg;base64,' + btoa(binary);
+      }
+    } catch(e) {}
+    setTimeout(poll, 250);
+  }
+  poll();
+}
+
+// ─── ROI drawing ──────────────────────────────────────────────────────────────
+function setupROICanvas(id) {
+  roiState[id] = {drawing: false, sx:0, sy:0, ex:0, ey:0};
+  // Use delegation — canvas created in buildCard, wire events after DOM insert
+  setTimeout(() => {
+    const canvas = document.getElementById('canvas-'+id);
+    if (!canvas) return;
+    canvas.addEventListener('mousedown', e => {
+      const r = canvas.getBoundingClientRect();
+      roiState[id].drawing = true;
+      roiState[id].sx = e.clientX - r.left;
+      roiState[id].sy = e.clientY - r.top;
+      roiState[id].ex = roiState[id].sx;
+      roiState[id].ey = roiState[id].sy;
+    });
+    canvas.addEventListener('mousemove', e => {
+      if (!roiState[id] || !roiState[id].drawing) return;
+      const r = canvas.getBoundingClientRect();
+      roiState[id].ex = e.clientX - r.left;
+      roiState[id].ey = e.clientY - r.top;
+      drawDragROI(canvas, roiState[id]);
+    });
+    canvas.addEventListener('mouseup', e => {
+      if (!roiState[id] || !roiState[id].drawing) return;
+      roiState[id].drawing = false;
+      const r = canvas.getBoundingClientRect();
+      roiState[id].ex = e.clientX - r.left;
+      roiState[id].ey = e.clientY - r.top;
+      const W = r.width, H = r.height;
+      const x = Math.min(roiState[id].sx, roiState[id].ex);
+      const y = Math.min(roiState[id].sy, roiState[id].ey);
+      const w = Math.abs(roiState[id].ex - roiState[id].sx);
+      const h = Math.abs(roiState[id].ey - roiState[id].sy);
+      if (w > 4 && h > 4) {
+        // Send pixel coords
+        fetch('/setup/channels/'+id+'/roi', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({roi:[x,y,w,h]})
+        });
+      }
+    });
+  }, 50);
+}
+
+function drawDragROI(canvas, rs) {
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#F39C12';
+  ctx.lineWidth = 2;
+  const x = Math.min(rs.sx, rs.ex), y = Math.min(rs.sy, rs.ey);
+  const w = Math.abs(rs.ex-rs.sx), h = Math.abs(rs.ey-rs.sy);
+  ctx.strokeRect(x, y, w, h);
+}
+
+function drawROI(id, roi) {
+  const canvas = document.getElementById('canvas-'+id);
+  if (!canvas) return;
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (!roi || roi.length !== 4) return;
+  // roi is [x, y, w, h] in pixels at capture resolution
+  // We draw them proportionally on the display canvas
+  ctx.strokeStyle = '#2ECC71';
+  ctx.lineWidth = 2;
+  // The server stores the roi in display-canvas-pixel coords
+  ctx.strokeRect(roi[0], roi[1], roi[2], roi[3]);
+}
+
+// ─── API calls ────────────────────────────────────────────────────────────────
+async function addChannel() {
+  const val = document.getElementById('cam-input').value.trim();
+  const src = (val === '' || val === null) ? 0 : (isNaN(val) ? val : parseInt(val));
+  await fetch('/setup/channels/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({camera_source: src})
+  });
+}
+
+async function removeChannel(id) {
+  await fetch('/setup/channels/'+id, {method:'DELETE'});
+}
+
+async function resetROI(id) {
+  await fetch('/setup/channels/'+id+'/roi', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({roi: null})
+  });
+}
+
+async function goLive() {
+  document.getElementById('btn-live').disabled = true;
+  await fetch('/setup/go_live', {method:'POST'});
+  showSuccess();
+}
+
+function showSuccess() {
+  document.getElementById('topbar').style.display='none';
+  document.getElementById('grid').style.display='none';
+  document.getElementById('success-full').style.display='block';
+}
+
+// ─── Discovered cameras ───────────────────────────────────────────────────────
+async function loadDiscoveredCameras() {
+  try {
+    const r = await fetch('/setup/cameras');
+    const cams = await r.json();
+    const area = document.getElementById('cam-discovery');
+    const list = document.getElementById('cam-discovery-list');
+    if (!cams || cams.length === 0) return;
+    list.innerHTML = cams.map(c =>
+      `<button class="btn btn-sm btn-primary" style="margin:2px" onclick="addCameraByIndex(${c.index})">
+        + ${c.label || 'Index '+c.index}
+       </button>`
+    ).join('');
+    area.style.display = 'block';
+  } catch(e) {}
+}
+async function addCameraByIndex(idx) {
+  await fetch('/setup/channels/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({camera_source: idx})
+  });
+}
+loadDiscoveredCameras();
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+pollStatus();
+</script>
+</body>
+</html>

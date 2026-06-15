@@ -23,19 +23,11 @@ import time
 
 import pytest
 
-# ── Import monitor without executing main() ───────────────────────────────────
-import importlib.util
+# ── Import from the monitor package (split from the old single-file module) ──
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-_MONITOR_PATH = os.path.join(os.path.dirname(__file__), "..", "monitor.py")
-_spec = importlib.util.spec_from_file_location("monitor", _MONITOR_PATH)
-_monitor = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_monitor)
-
-_SetupChannel = _monitor._SetupChannel
-_SetupState = _monitor._SetupState
-_SetupHandler = _monitor._SetupHandler
-_SetupApiServer = _monitor._SetupApiServer
-build_parser = _monitor.build_parser
+from monitor.setup_server import _SetupApiServer, _SetupChannel, _SetupState
+from monitor.cli import build_parser
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
