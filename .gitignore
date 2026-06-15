@@ -27,6 +27,10 @@ test_cam.json
 # Trained autoencoder models saved from the camera dialog
 *.pth
 
+# PyInstaller build artifacts (the .spec + build_macos.sh ARE tracked)
+/build/
+/dist/
+
 # IDE
 .idea/
 .vscode/

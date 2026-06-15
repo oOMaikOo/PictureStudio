@@ -67,7 +67,8 @@ def main() -> None:
     app.setOrganizationName("ImageLabelingStudio")
     app.setStyle("Fusion")
 
-    _assets = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    _base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    _assets = os.path.join(_base, "assets")
     for _icon_name in ("icon.icns", "icon_1024.png"):
         _icon_path = os.path.join(_assets, _icon_name)
         if os.path.exists(_icon_path):
