@@ -13,8 +13,8 @@ from PySide6.QtGui import QFont, QColor
 # Tour steps per page index (0–9)
 # 0=Dashboard, 1=Daten, 2=Labeling, 3=Training, 4=Modelle,
 # 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch,
-# 10=Multi-Kamera, 11=Clustering, 12=Datensatz, 13=VideoAnnotation,
-# 14=Fleet, 15=Objekterkennung, 16=DataDrift, 17=AnomalieTraining
+# 10=Multi-Kamera, 11=Datensatz, 12=VideoAnnotation,
+# 13=Fleet, 14=DataDrift, 15=AnomalieTraining
 # Each step: (title, description, button_text_to_highlight | None)
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
@@ -470,6 +470,10 @@ TOUR_STEPS = {
          "• Maximum: 25.000 Frames\n\n"
          "'Aufnehmen starten' → Frames werden\n"
          "automatisch gesammelt.\n\n"
+         "Tipp – 'Nur bei Bewegung aufnehmen':\n"
+         "Nimmt nur Frames mit Bewegung auf,\n"
+         "statische Phasen werden übersprungen\n"
+         "und zählen nicht zur Zielanzahl.\n\n"
          "Wichtig:\n"
          "• Alle Varianten des Normalzustands\n"
          "  abdecken (Werkstücke, Winkel, Licht)\n"
@@ -727,46 +731,6 @@ TOUR_STEPS = {
          "eine Multi-Kamera-Sektion.",
          None),
     ],
-    11: [  # Anomalie-Clustering
-        ("Anomalie-Clustering – Überblick",
-         "Diese Seite gruppiert deine Alarm-Bilder automatisch\n"
-         "nach visueller Ähnlichkeit – ohne manuelle Annotation.\n\n"
-         "Der k-Means-Algorithmus erkennt, welche Fehlertypen\n"
-         "im Datensatz vorkommen und wie häufig sie sind.\n\n"
-         "Voraussetzung: Projekt mit Bildern, die als\n"
-         "Anomalie (oder Fehler) gelabelt sind.",
-         None),
-        ("Cluster-Anzahl einstellen & starten",
-         "Anzahl Cluster einstellen (2–20).\n\n"
-         "Empfehlung: mit 5 Clustern starten.\n"
-         "Sind Bilder innerhalb eines Clusters\n"
-         "optisch zu verschieden → Anzahl erhöhen.\n\n"
-         "Dann 'Clustering starten' klicken.\n"
-         "Das Modell extrahiert Merkmale und\n"
-         "berechnet die Cluster (wenige Sekunden).",
-         "Clustering starten"),
-        ("Ergebnisse im Cluster-Browser lesen",
-         "Nach der Berechnung erscheinen Cluster-Karten:\n\n"
-         "• Jede Karte zeigt das repräsentative Bild\n"
-         "  (den Cluster-Mittelpunkt) als Thumbnail\n"
-         "• Darunter steht die Bildanzahl des Clusters\n"
-         "• Karte anklicken → alle Bilder des Clusters\n"
-         "  werden in der Thumbnail-Liste angezeigt\n\n"
-         "Cluster mit wenigen Bildern = seltene Anomalie.\n"
-         "Cluster mit vielen Bildern = häufige Fehlerart.",
-         None),
-        ("CSV exportieren",
-         "Klicke 'CSV exportieren' um die Ergebnisse\n"
-         "als Tabelle zu speichern.\n\n"
-         "Die CSV enthält drei Spalten:\n"
-         "• path — absoluter Dateipfad des Bildes\n"
-         "• cluster_id — Cluster-Nummer (0-basiert)\n"
-         "• is_representative — True für das Bild\n"
-         "  das dem Cluster-Mittelpunkt am nächsten liegt\n\n"
-         "Die CSV kann direkt in Excel oder Python\n"
-         "für weitere Analysen genutzt werden.",
-         "CSV exportieren"),
-    ],
     9: [  # Batch-Inferenz
         ("Batch-Inferenz",
          "Klassifiziere einen ganzen Ordner\n"
@@ -798,7 +762,7 @@ TOUR_STEPS = {
          "CSV-Datei speichern.",
          "Batch starten"),
     ],
-    12: [  # Datensatz-Statistiken
+    11: [  # Datensatz-Statistiken
         ("Datensatz-Statistiken – Überblick",
          "Die Datensatz-Statistiken-Seite analysiert\n"
          "den aktuellen Datensatz auf Qualität und\n"
@@ -827,7 +791,7 @@ TOUR_STEPS = {
          "Benötigt: pip install imagehash",
          "Analyse aktualisieren"),
     ],
-    13: [  # Video-Annotation
+    12: [  # Video-Annotation
         ("Video-Annotation – Überblick",
          "Annotiere einzelne Frames direkt aus\n"
          "einer Videodatei ohne vorherigen Export.\n\n"
@@ -852,7 +816,7 @@ TOUR_STEPS = {
          "Danach auf der Labeling-Seite prüfen.",
          "Frame extrahieren"),
     ],
-    14: [  # Fleet-Management
+    13: [  # Fleet-Management
         ("Fleet-Management – Überblick",
          "Überwache mehrere remote monitor.py-\n"
          "Instanzen (Edge-Geräte, Server, VMs)\n"
@@ -892,58 +856,7 @@ TOUR_STEPS = {
          "Training"),
     ],
 
-    15: [  # Objekterkennung
-        ("Objekterkennung – Überblick",
-         "YOLOv8-basierte Objekterkennung:\n"
-         "Erkennt und lokalisiert mehrere Objekte\n"
-         "gleichzeitig mit Bounding Boxes.\n\n"
-         "Voraussetzung: pip install ultralytics\n\n"
-         "Unterschied zur Klassifikation:\n"
-         "• Mehrere Objekte pro Bild möglich\n"
-         "• Gibt Position + Klasse zurück\n"
-         "• ROIs = Trainingsannotationen",
-         None),
-        ("Schritt 1 – Bilder annotieren",
-         "Im Labeling-Editor ROIs zeichnen\n"
-         "und jedem ROI ein Label zuweisen.\n\n"
-         "Jeder ROI wird zur Bounding-Box-\n"
-         "Annotation für das YOLO-Training.\n"
-         "Mehrere ROIs pro Bild sind möglich.\n\n"
-         "→ Dann hier zurückkommen.",
-         None),
-        ("Schritt 2 – Dataset vorbereiten",
-         "Klicke 'Dataset vorbereiten'.\n\n"
-         "Das System konvertiert automatisch:\n"
-         "• ROI-Koordinaten → YOLO-Format\n"
-         "• 80 % Training / 20 % Validation\n"
-         "• Erstellt data.yaml für YOLOv8\n\n"
-         "Status zeigt: Bilder, Klassen,\n"
-         "Annotationen.",
-         "Dataset vorbereiten"),
-        ("Schritt 3 – Modell & Training",
-         "Modellgröße wählen:\n"
-         "• yolov8n — sehr schnell (CPU ok)\n"
-         "• yolov8s — schnell, gute Qualität\n"
-         "• yolov8m — empfohlen für Produktion\n"
-         "• yolov8l — maximale Genauigkeit\n\n"
-         "Epochen: 50 (Standard)\n"
-         "Bildgröße: 640 px (Standard)\n\n"
-         "Klicke '⚡ Training starten'.",
-         "Training starten"),
-        ("Schritt 4 – Erkennung",
-         "'Bild wählen' → Einzelbild mit\n"
-         "eingezeichneten Bounding Boxes.\n\n"
-         "'Ordner…' + 'Erkennung starten' →\n"
-         "alle Bilder im Ordner werden\n"
-         "analysiert, Tabelle zeigt Ergebnisse.\n\n"
-         "Konfidenz-Schwelle einstellen:\n"
-         "0.25 = Standard\n"
-         "0.5+ = weniger Fehlerkennungen\n\n"
-         "CSV-Export für Weiterverarbeitung.",
-         "Erkennung starten"),
-    ],
-
-    16: [  # Data Drift
+    14: [  # Data Drift
         ("Data Drift – Überblick",
          "Erkennt automatisch, wenn sich\n"
          "Produktionsbilder statistisch von\n"
@@ -999,7 +912,7 @@ TOUR_STEPS = {
          None),
     ],
 
-    17: [  # Anomalie-Training (Video-Modus)
+    15: [  # Anomalie-Training (Video-Modus)
         ("🧠 Anomalie-Training – Überblick",
          "Diese Seite ist der Einstieg ins\n"
          "Anomalie-Tracking im Video-Modus.\n\n"

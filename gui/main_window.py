@@ -125,11 +125,9 @@ class MainWindow(QMainWindow):
         from gui.pages.settings_page           import SettingsPage
         from gui.pages.batch_inference_page    import BatchInferencePage
         from gui.pages.multi_camera_page       import MultiCameraPage
-        from gui.pages.anomaly_clustering_page import AnomalyClusteringPage
         from gui.pages.dataset_stats_page      import DatasetStatsPage
         from gui.pages.video_annotation_page   import VideoAnnotationPage
         from gui.pages.fleet_page              import FleetPage
-        from gui.pages.object_detection_page   import ObjectDetectionPage
         from gui.pages.data_drift_page         import DataDriftPage
         from gui.pages.anomaly_training_page   import AnomalyTrainingPage
 
@@ -144,11 +142,9 @@ class MainWindow(QMainWindow):
         self.settings_page           = SettingsPage()
         self.batch_page              = BatchInferencePage()
         self.multi_camera_page       = MultiCameraPage()
-        self.anomaly_clustering_page = AnomalyClusteringPage()
         self.dataset_stats_page      = DatasetStatsPage()
         self.video_annotation_page   = VideoAnnotationPage()
         self.fleet_page              = FleetPage()
-        self.object_detection_page   = ObjectDetectionPage()
         self.data_drift_page         = DataDriftPage()
         self.anomaly_training_page   = AnomalyTrainingPage()
 
@@ -158,13 +154,11 @@ class MainWindow(QMainWindow):
             self.export_page, self.settings_page, self.camera_page,
             self.batch_page,                # index 9
             self.multi_camera_page,         # index 10
-            self.anomaly_clustering_page,   # index 11
-            self.dataset_stats_page,        # index 12
-            self.video_annotation_page,     # index 13
-            self.fleet_page,                # index 14
-            self.object_detection_page,     # index 15
-            self.data_drift_page,           # index 16
-            self.anomaly_training_page,     # index 17
+            self.dataset_stats_page,        # index 11
+            self.video_annotation_page,     # index 12
+            self.fleet_page,                # index 13
+            self.data_drift_page,           # index 14
+            self.anomaly_training_page,     # index 15
         ]:
             self.stack.addWidget(page)
 
@@ -332,7 +326,6 @@ class MainWindow(QMainWindow):
             (tr("menu.help.troubleshoot"),    12),
             (tr("menu.help.monitor"),         13),
             (tr("menu.help.multicamera"),     14),
-            (tr("menu.help.clustering"),      15),
             (tr("menu.help.datasetstats"),    16),
             (tr("menu.help.videoannotation"), 17),
             (tr("menu.help.fleet"),           18),
@@ -493,11 +486,9 @@ class MainWindow(QMainWindow):
         self.inference_page.set_project(project, self.audit)
         self.export_page.set_project(project)
         self.batch_page.set_project(project)
-        self.anomaly_clustering_page.set_project(project)
         self.dataset_stats_page.set_project(project)
         self.video_annotation_page.set_project(project)
         self.fleet_page.set_project(project)
-        self.object_detection_page.set_project(project)
         self.data_drift_page.set_project(project)
         self.anomaly_training_page.set_project(project)
 
@@ -982,12 +973,6 @@ class MainWindow(QMainWindow):
             t.request_stop()
             t.quit()
             t.wait(3000)
-
-        # Clustering thread: no cancellation flag — just ask it to quit.
-        ct = getattr(self.anomaly_clustering_page, "_thread", None)
-        if ct and ct.isRunning():
-            ct.quit()
-            ct.wait(3000)
 
         # Industrial notifier background event loop.
         self._industrial_notifier.disconnect()

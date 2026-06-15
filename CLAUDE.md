@@ -53,13 +53,11 @@ Stack indices (add new pages here):
 | 8 | `CameraPage` | video |
 | 9 | `BatchInferencePage` | image |
 | 10 | `MultiCameraPage` | video |
-| 11 | `AnomalyClusteringPage` | both |
-| 12 | `DatasetStatsPage` | image |
-| 13 | `VideoAnnotationPage` | video |
-| 14 | `FleetPage` | video |
-| 15 | `ObjectDetectionPage` | image |
-| 16 | `DataDriftPage` | image |
-| 17 | `AnomalyTrainingPage` | video |
+| 11 | `DatasetStatsPage` | image |
+| 12 | `VideoAnnotationPage` | video |
+| 13 | `FleetPage` | video |
+| 14 | `DataDriftPage` | image |
+| 15 | `AnomalyTrainingPage` | video |
 
 ### Central data model: `core/project.py`
 
@@ -180,7 +178,7 @@ The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPag
 
 ### Fleet & Edge deployment
 
-`FleetPage` (stack 14) polls remote `monitor.py` daemons via `GET /api/status`. Devices are persisted in `QSettings`. Two per-device actions:
+`FleetPage` (stack 13) polls remote `monitor.py` daemons via `GET /api/status`. Devices are persisted in `QSettings`. Two per-device actions:
 - **Einrichten** — opens `monitor.py --setup` web UI in browser
 - **Training** — opens `_RemoteTrainDialog` (2 tabs):
   - *Frames & Training*: downloads buffered frames via `GET /api/frames?n=N` (ZIP of JPEGs) using `_FrameDownloadThread`, then trains `AnomalyDetector` locally via `_LocalTrainThread`
