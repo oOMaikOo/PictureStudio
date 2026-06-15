@@ -833,6 +833,7 @@ class MultiCameraPage(QWidget):
                             score, thr,
                             frame_path=fpath,
                             model_name=model_name,
+                            source=f"Kanal {channel_idx + 1}",
                         )
                     except Exception:
                         log.warning("AlarmNotifier failed for channel %d", channel_idx)

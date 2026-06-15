@@ -76,6 +76,12 @@ class _WebhookCapture:
     def wait_for_request(self, timeout: float = 3.0) -> bool:
         return self._done.wait(timeout)
 
+    def reset(self):
+        """Clear captured state so the next request can be awaited again."""
+        self.received_body = b""
+        self.request_count = 0
+        self._done.clear()
+
     def stop(self):
         if self._server:
             self._server.shutdown()
@@ -544,3 +550,134 @@ class TestNotifyIntegration:
         # Should complete without raising
         n.notify(0.005, 0.001)
         time.sleep(0.5)  # let background thread finish
+
+
+# ---------------------------------------------------------------------------
+# Microsoft Teams Incoming Webhook (MessageCard) payload
+# ---------------------------------------------------------------------------
+
+class TestTeamsWebhook:
+    def test_is_teams_url_detects_office_hosts(self):
+        from core.alarm_notifier import AlarmNotifier
+        assert AlarmNotifier._is_teams_url(
+            "https://acme.webhook.office.com/webhookb2/abc/IncomingWebhook/xyz")
+        assert AlarmNotifier._is_teams_url(
+            "https://outlook.office.com/webhook/abc")
+        assert not AlarmNotifier._is_teams_url("http://127.0.0.1:8000/webhook")
+        assert not AlarmNotifier._is_teams_url("https://hooks.slack.com/services/x")
+
+    def test_messagecard_has_required_summary_and_type(self):
+        from core.alarm_notifier import AlarmNotifier
+        card = AlarmNotifier._build_teams_card(
+            score=0.005, threshold=0.002, pct=250,
+            model_name="m.pt", frame_file="alarm_x.jpg",
+            ts="2026-06-06T12:00:00Z")
+        # summary is mandatory; without it Teams returns HTTP 400
+        assert card["summary"]
+        assert card["@type"] == "MessageCard"
+        assert card["@context"] == "http://schema.org/extensions"
+        facts = {f["name"]: f["value"] for f in card["sections"][0]["facts"]}
+        assert facts["Score %"] == "250%"
+        assert facts["Modell"] == "m.pt"
+        assert facts["Frame"] == "alarm_x.jpg"
+
+    def test_messagecard_omits_empty_model_and_frame(self):
+        from core.alarm_notifier import AlarmNotifier
+        card = AlarmNotifier._build_teams_card(
+            score=0.001, threshold=0.001, pct=100,
+            model_name="", frame_file="", ts="2026-06-06T12:00:00Z")
+        names = [f["name"] for f in card["sections"][0]["facts"]]
+        assert "Modell" not in names
+        assert "Frame" not in names
+
+    def test_teams_url_sends_messagecard_over_http(self):
+        from unittest.mock import patch
+        capture = _WebhookCapture()
+        capture.start()
+        try:
+            n = _make_notifier({
+                "webhook_enabled": True,
+                "webhook_url": capture.url,
+            })
+            # capture server is 127.0.0.1, so force the Teams branch
+            with patch.object(type(n), "_is_teams_url", staticmethod(lambda u: True)):
+                n._send_webhook(score=0.005, threshold=0.002,
+                                frame_path="", model_name="m.pt",
+                                cfg=n._get_config())
+            assert capture.wait_for_request(timeout=3.0)
+            payload = json.loads(capture.received_body)
+            assert payload["@type"] == "MessageCard"
+            assert payload["summary"]
+            assert "event" not in payload  # not the generic format
+        finally:
+            capture.stop()
+
+
+# ---------------------------------------------------------------------------
+# Per-source cooldown + channel identifier (multi-camera)
+# ---------------------------------------------------------------------------
+
+class TestPerSourceCooldown:
+    def test_different_sources_fire_within_cooldown(self):
+        capture = _WebhookCapture()
+        capture.start()
+        try:
+            n = _make_notifier({
+                "webhook_enabled": True,
+                "webhook_url": capture.url,
+                "cooldown_s": 60,
+            })
+            n.notify(0.005, 0.001, model_name="m.pt", source="Kanal 1")
+            assert capture.wait_for_request(timeout=4.0)
+            capture.reset()
+            # Same instant, different source → must NOT be suppressed
+            n.notify(0.005, 0.001, model_name="m.pt", source="Kanal 2")
+            assert capture.wait_for_request(timeout=4.0)
+            assert capture.request_count == 1
+        finally:
+            capture.stop()
+
+    def test_same_source_within_cooldown_is_suppressed(self):
+        capture = _WebhookCapture()
+        capture.start()
+        try:
+            n = _make_notifier({
+                "webhook_enabled": True,
+                "webhook_url": capture.url,
+                "cooldown_s": 60,
+            })
+            n.notify(0.005, 0.001, source="Kanal 1")
+            assert capture.wait_for_request(timeout=4.0)
+            capture.reset()
+            n.notify(0.005, 0.001, source="Kanal 1")  # suppressed
+            time.sleep(0.4)
+            assert capture.request_count == 0
+        finally:
+            capture.stop()
+
+    def test_generic_payload_includes_source(self):
+        capture = _WebhookCapture()
+        capture.start()
+        try:
+            n = _make_notifier({
+                "webhook_enabled": True,
+                "webhook_url": capture.url,
+            })
+            n._send_webhook(score=0.005, threshold=0.002,
+                            frame_path="", model_name="m.pt",
+                            cfg=n._get_config(), source="Kanal 3")
+            assert capture.wait_for_request(timeout=3.0)
+            payload = json.loads(capture.received_body)
+            assert payload["source"] == "Kanal 3"
+        finally:
+            capture.stop()
+
+    def test_teams_card_includes_source_fact(self):
+        from core.alarm_notifier import AlarmNotifier
+        card = AlarmNotifier._build_teams_card(
+            score=0.005, threshold=0.002, pct=250,
+            model_name="m.pt", frame_file="", ts="2026-06-07T12:00:00Z",
+            source="Kanal 2")
+        facts = {f["name"]: f["value"] for f in card["sections"][0]["facts"]}
+        assert facts["Quelle"] == "Kanal 2"
+        assert "Kanal 2" in card["title"]

@@ -42,7 +42,7 @@ class AlarmNotifier:
 
     def __init__(self, config: dict | None = None):
         self._lock = threading.Lock()
-        self._last_sent: float = 0.0
+        self._last_sent: dict[str, float] = {}
         self._config: dict = {}
         if config:
             self.update_config(config)
@@ -55,8 +55,14 @@ class AlarmNotifier:
             self._config = dict(config)
 
     def notify(self, score: float, threshold: float,
-               frame_path: str = "", model_name: str = "") -> None:
-        """Fire email + webhook in a background thread. Respects cooldown."""
+               frame_path: str = "", model_name: str = "",
+               source: str = "") -> None:
+        """Fire email + webhook in a background thread. Respects cooldown.
+
+        ``source`` is an optional human-readable label for the alarm origin
+        (e.g. ``"Kanal 2"``). The cooldown is tracked **per source**, so an
+        alarm on one camera channel never suppresses another channel's alarm.
+        """
         cfg = self._get_config()
         email_enabled = cfg.get("email_enabled", False)
         webhook_enabled = cfg.get("webhook_enabled", False)
@@ -67,13 +73,13 @@ class AlarmNotifier:
         cooldown = float(cfg.get("cooldown_s", 60))
         now = time.monotonic()
         with self._lock:
-            if now - self._last_sent < cooldown:
+            if now - self._last_sent.get(source, 0.0) < cooldown:
                 return
-            self._last_sent = now
+            self._last_sent[source] = now
 
         t = threading.Thread(
             target=self._notify_bg,
-            args=(score, threshold, frame_path, model_name, cfg),
+            args=(score, threshold, frame_path, model_name, cfg, source),
             daemon=True,
         )
         t.start()
@@ -116,22 +122,23 @@ class AlarmNotifier:
         with self._lock:
             return dict(self._config)
 
-    def _notify_bg(self, score, threshold, frame_path, model_name, cfg) -> None:
+    def _notify_bg(self, score, threshold, frame_path, model_name, cfg, source="") -> None:
         """Background thread: send email and/or webhook."""
         if cfg.get("email_enabled", False):
             try:
-                self._send_email(score, threshold, frame_path, model_name, cfg)
+                self._send_email(score, threshold, frame_path, model_name, cfg, source=source)
             except Exception as exc:
                 log.warning("E-Mail-Alarm fehlgeschlagen: %s", exc)
 
         if cfg.get("webhook_enabled", False):
             try:
-                self._send_webhook(score, threshold, frame_path, model_name, cfg)
+                self._send_webhook(score, threshold, frame_path, model_name, cfg, source=source)
             except Exception as exc:
                 log.warning("Webhook-Alarm fehlgeschlagen: %s", exc)
 
     def _send_email(self, score, threshold, frame_path, model_name, cfg,
-                    subject_override: str = "", body_override: str = "") -> None:
+                    subject_override: str = "", body_override: str = "",
+                    source: str = "") -> None:
         """Internal: builds MIME email with optional JPEG attachment and sends via SMTP."""
         smtp_host = cfg.get("email_smtp_host", "")
         smtp_port = int(cfg.get("email_smtp_port", 587))
@@ -152,12 +159,15 @@ class AlarmNotifier:
         pct = int(score / threshold * 100) if threshold > 0 else 0
 
         subject = subject_override or (
-            f"[PictureStudio] Anomalie erkannt – Score {score:.5f}"
+            f"[PictureStudio] Anomalie erkannt"
+            + (f" – {source}" if source else "")
+            + f" – Score {score:.5f}"
         )
         body = body_override or (
             f"PictureStudio Alarm\n"
             f"===================\n"
-            f"Zeitstempel : {ts}\n"
+            + (f"Quelle      : {source}\n" if source else "")
+            + f"Zeitstempel : {ts}\n"
             f"Score       : {score:.5f}\n"
             f"Schwellwert : {threshold:.5f}\n"
             f"Score %     : {pct}%\n"
@@ -205,8 +215,50 @@ class AlarmNotifier:
                 f"SMTP-Timeout beim Verbinden mit {smtp_host}:{smtp_port}"
             ) from exc
 
-    def _send_webhook(self, score, threshold, frame_path, model_name, cfg) -> None:
-        """Internal: sends JSON payload via HTTP POST/GET."""
+    @staticmethod
+    def _is_teams_url(url: str) -> bool:
+        """True for Microsoft Teams *Incoming Webhook* connector URLs."""
+        u = url.lower()
+        return "webhook.office.com" in u or "office365.com" in u or "outlook.office.com" in u
+
+    @staticmethod
+    def _build_teams_card(score, threshold, pct, model_name, frame_file, ts,
+                          source: str = "") -> dict:
+        """
+        Build a legacy *MessageCard* payload accepted by the classic Teams
+        Incoming Webhook connector. A plain JSON body is rejected with HTTP 400
+        ("Summary or Text is required"), so ``summary`` must always be present.
+        """
+        facts = []
+        if source:
+            facts.append({"name": "Quelle", "value": source})
+        facts += [
+            {"name": "Zeitstempel", "value": ts},
+            {"name": "Score", "value": f"{score:.5f}"},
+            {"name": "Schwellwert", "value": f"{threshold:.5f}"},
+            {"name": "Score %", "value": f"{pct}%"},
+        ]
+        if model_name:
+            facts.append({"name": "Modell", "value": model_name})
+        if frame_file:
+            facts.append({"name": "Frame", "value": frame_file})
+        title = "⚠ Anomalie erkannt" + (f" – {source}" if source else "")
+        return {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "themeColor": "E74C3C",
+            "summary": "PictureStudio Anomalie-Alarm",
+            "title": title,
+            "sections": [{"facts": facts, "markdown": False}],
+        }
+
+    def _send_webhook(self, score, threshold, frame_path, model_name, cfg,
+                      source: str = "") -> None:
+        """Internal: sends JSON payload via HTTP POST/GET.
+
+        Teams Incoming Webhook URLs get a MessageCard payload (required by the
+        connector); all other URLs receive the generic event JSON.
+        """
         url = cfg.get("webhook_url", "")
         method = cfg.get("webhook_method", "POST").upper()
 
@@ -217,15 +269,21 @@ class AlarmNotifier:
         frame_file = os.path.basename(frame_path) if frame_path else ""
         pct = int(score / threshold * 100) if threshold > 0 else 0
 
-        payload = {
-            "event": "anomaly_alarm",
-            "timestamp": ts,
-            "score": round(score, 7),
-            "threshold": round(threshold, 7),
-            "score_pct": pct,
-            "model": model_name,
-            "frame_file": frame_file,
-        }
+        if self._is_teams_url(url):
+            payload = self._build_teams_card(
+                score, threshold, pct, model_name, frame_file, ts, source
+            )
+        else:
+            payload = {
+                "event": "anomaly_alarm",
+                "timestamp": ts,
+                "source": source,
+                "score": round(score, 7),
+                "threshold": round(threshold, 7),
+                "score_pct": pct,
+                "model": model_name,
+                "frame_file": frame_file,
+            }
 
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
