@@ -53,3 +53,78 @@ def test_filter_applied_to_frame(qtbot):
         # Either the mock was called, or _active_filter is correctly set
     assert dlg._active_filter == "grayscale"
     dlg.reject()
+
+
+# ---------------------------------------------------------------------------
+# Motion-gated frame collection ("Nur bei Bewegung aufnehmen")
+# ---------------------------------------------------------------------------
+
+def _make_collecting_dialog(qtbot, motion: bool, sens: int = 15):
+    """Build a dialog primed to collect 5 frames, with a mocked detector."""
+    from gui.camera_capture_dialog import CameraCaptureDialog
+    dlg = CameraCaptureDialog()
+    qtbot.addWidget(dlg)
+    dlg._detector = MagicMock()
+    dlg._detector.n_collected.return_value = 1
+    dlg._ae_motion_collect_cb.setChecked(motion)
+    dlg._ae_motion_sens_spin.setValue(sens)
+    dlg._ae_collecting = True
+    dlg._ae_collect_remaining = 5
+    dlg._ae_collect_bar.setRange(0, 5)
+    return dlg
+
+
+def _feed(dlg, frame):
+    try:
+        dlg._on_frame(frame)
+    except Exception:
+        pass  # display/scoring path may not be fully wired in the test
+
+
+def test_motion_gate_skips_static_frames(qtbot):
+    """With motion gating on, identical frames are not collected and don't count down."""
+    dlg = _make_collecting_dialog(qtbot, motion=True)
+    black = np.zeros((64, 64, 3), dtype=np.uint8)
+    _feed(dlg, black)   # first frame → only establishes prev baseline
+    _feed(dlg, black)   # 0% change → skipped
+    _feed(dlg, black)   # 0% change → skipped
+    assert dlg._detector.collect_frame.call_count == 0
+    assert dlg._ae_collect_remaining == 5  # target untouched
+    dlg.reject()
+
+
+def test_motion_gate_collects_on_movement(qtbot):
+    """A frame that differs strongly from the previous one is collected."""
+    dlg = _make_collecting_dialog(qtbot, motion=True)
+    black = np.zeros((64, 64, 3), dtype=np.uint8)
+    white = np.full((64, 64, 3), 255, dtype=np.uint8)
+    _feed(dlg, black)   # baseline
+    _feed(dlg, white)   # ~100% changed → collected
+    assert dlg._detector.collect_frame.call_count == 1
+    assert dlg._ae_collect_remaining == 4
+    dlg.reject()
+
+
+def test_no_motion_gate_collects_every_frame(qtbot):
+    """Without motion gating the previous behaviour is unchanged: every frame counts."""
+    dlg = _make_collecting_dialog(qtbot, motion=False)
+    black = np.zeros((64, 64, 3), dtype=np.uint8)
+    _feed(dlg, black)
+    _feed(dlg, black)
+    _feed(dlg, black)
+    assert dlg._detector.collect_frame.call_count == 3
+    assert dlg._ae_collect_remaining == 2
+    dlg.reject()
+
+
+def test_collect_motion_toggle_enables_sensitivity(qtbot):
+    """Toggling the checkbox enables the sensitivity spinner and resets the prev frame."""
+    from gui.camera_capture_dialog import CameraCaptureDialog
+    dlg = CameraCaptureDialog()
+    qtbot.addWidget(dlg)
+    assert not dlg._ae_motion_sens_spin.isEnabled()
+    dlg._motion_prev_frame = np.zeros((8, 8), dtype=np.uint8)
+    dlg._ae_motion_collect_cb.setChecked(True)
+    assert dlg._ae_motion_sens_spin.isEnabled()
+    assert dlg._motion_prev_frame is None
+    dlg.reject()

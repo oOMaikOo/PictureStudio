@@ -715,6 +715,34 @@ class CameraCaptureDialog(QDialog):
         cnt_row.addWidget(self._ae_collect_n)
         cl.addLayout(cnt_row)
 
+        # Optional: only collect frames that actually contain motion
+        mc_row = QHBoxLayout()
+        self._ae_motion_collect_cb = QCheckBox("Nur bei Bewegung aufnehmen")
+        self._ae_motion_collect_cb.setToolTip(
+            "Es werden nur Frames in den Trainingspuffer übernommen, in denen sich\n"
+            "etwas im Bild verändert hat. Statische Frames werden übersprungen und\n"
+            "zählen NICHT zur Zielanzahl. Nützlich, um gezielt Bewegungs-Frames zu\n"
+            "trainieren statt langer statischer Phasen."
+        )
+        self._ae_motion_collect_cb.toggled.connect(self._on_collect_motion_toggled)
+        mc_row.addWidget(self._ae_motion_collect_cb)
+        self._ae_motion_sens_lbl = QLabel("Sens.:")
+        self._ae_motion_sens_lbl.setEnabled(False)
+        mc_row.addWidget(self._ae_motion_sens_lbl)
+        self._ae_motion_sens_spin = QSpinBox()
+        self._ae_motion_sens_spin.setRange(1, 100)
+        self._ae_motion_sens_spin.setValue(15)
+        self._ae_motion_sens_spin.setSuffix(" %")
+        self._ae_motion_sens_spin.setEnabled(False)
+        self._ae_motion_sens_spin.setToolTip(
+            "Bewegungssensitivität: minimaler Anteil veränderter Pixel (in %),\n"
+            "ab dem ein Frame als Bewegung gilt und aufgenommen wird.\n"
+            "Klein = sehr sensitiv, Groß = nur grobe Bewegungen."
+        )
+        mc_row.addWidget(self._ae_motion_sens_spin)
+        mc_row.addStretch()
+        cl.addLayout(mc_row)
+
         collect_row = QHBoxLayout()
         self._ae_collect_btn = QPushButton("Aufnehmen starten")
         self._ae_collect_btn.clicked.connect(self._start_collecting)
@@ -1144,23 +1172,15 @@ class CameraCaptureDialog(QDialog):
         # Region used for anomaly detection (full frame or ROI crop)
         analysis_frame = self._crop_roi(frame)
 
-        # ── Frame collection for autoencoder training ─────────────────────────
-        if self._ae_collecting and self._ae_collect_remaining > 0:
-            self._detector.collect_frame(analysis_frame)
-            self._ae_collect_remaining -= 1
-            n = self._detector.n_collected()
-            self._ae_collect_bar.setValue(n)
-            self._ae_collect_lbl.setText(f"{n} Frames gesammelt")
-            if self._ae_collect_remaining <= 0:
-                self._ae_collecting = False
-                self._ae_collect_bar.setVisible(False)
-                self._ae_collect_btn.setEnabled(True)
-                self._ae_train_btn.setEnabled(True)
-                self._ae_hpt_btn.setEnabled(True)
-
-        # ── Motion filter (optional pre-check before anomaly scoring) ────────
-        motion_detected = True
-        if self._motion_filter_cb.isChecked():
+        # ── Motion detection (computed ONCE, shared by collection + scoring) ──
+        # changed_pct = % of pixels that differ from the previous frame, or None
+        # when there is no previous frame yet. Computed only when a feature needs
+        # it; the prev-frame reference is updated exactly once per frame here so
+        # the collection gate and the scoring filter never fight over it.
+        collect_motion_on = self._ae_collecting and self._ae_motion_collect_cb.isChecked()
+        score_motion_on = self._motion_filter_cb.isChecked()
+        changed_pct = None
+        if collect_motion_on or score_motion_on:
             gray = cv2.cvtColor(analysis_frame, cv2.COLOR_BGR2GRAY)
             if self._motion_prev_frame is not None:
                 prev_gray = cv2.resize(
@@ -1170,6 +1190,40 @@ class CameraCaptureDialog(QDialog):
                 )
                 diff = cv2.absdiff(gray, prev_gray)
                 changed_pct = float(np.count_nonzero(diff > 25)) / diff.size * 100
+            self._motion_prev_frame = gray
+
+        # ── Frame collection for autoencoder training ─────────────────────────
+        if self._ae_collecting and self._ae_collect_remaining > 0:
+            collect_ok = True
+            if self._ae_motion_collect_cb.isChecked():
+                # Only collect frames with motion; static frames are skipped and
+                # do NOT count down the target. Need a prev frame first.
+                collect_ok = (
+                    changed_pct is not None
+                    and changed_pct >= self._ae_motion_sens_spin.value()
+                )
+            if collect_ok:
+                self._detector.collect_frame(analysis_frame)
+                self._ae_collect_remaining -= 1
+                n = self._detector.n_collected()
+                self._ae_collect_bar.setValue(n)
+                self._ae_collect_lbl.setText(f"{n} Frames gesammelt")
+                if self._ae_collect_remaining <= 0:
+                    self._ae_collecting = False
+                    self._ae_collect_bar.setVisible(False)
+                    self._ae_collect_btn.setEnabled(True)
+                    self._ae_train_btn.setEnabled(True)
+                    self._ae_hpt_btn.setEnabled(True)
+            elif self._ae_motion_collect_cb.isChecked():
+                pct_txt = "—" if changed_pct is None else f"{changed_pct:.1f}%"
+                self._ae_collect_lbl.setText(
+                    f"{self._detector.n_collected()} Frames — ⏸ warte auf Bewegung ({pct_txt})"
+                )
+
+        # ── Motion filter (optional pre-check before anomaly scoring) ────────
+        motion_detected = True
+        if score_motion_on:
+            if changed_pct is not None:
                 threshold_pct = self._motion_sens_spin.value()
                 motion_detected = changed_pct >= threshold_pct
                 status = (
@@ -1182,7 +1236,6 @@ class CameraCaptureDialog(QDialog):
             else:
                 motion_detected = False  # no prev frame yet → skip first frame
                 self._motion_status_lbl.setText("Bewegung: warte auf 2. Frame…")
-            self._motion_prev_frame = gray
 
         # ── Anomaly scoring (every 3rd frame to reduce CPU load) ──────────────
         if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained and motion_detected:
@@ -1691,6 +1744,8 @@ class CameraCaptureDialog(QDialog):
             return
         self._ensure_detector()
         n = self._ae_collect_n.value()
+        if self._ae_motion_collect_cb.isChecked():
+            self._motion_prev_frame = None  # fresh baseline for motion gating
         self._ae_collecting = True
         self._ae_collect_remaining = n
         self._ae_collect_bar.setRange(0, n)
@@ -1925,6 +1980,12 @@ class CameraCaptureDialog(QDialog):
         self._motion_sens_lbl.setEnabled(checked)
         self._motion_status_lbl.setVisible(checked)
         self._motion_prev_frame = None  # reset prev frame on toggle
+
+    def _on_collect_motion_toggled(self, checked: bool) -> None:
+        """Enable/disable the motion-collection sensitivity and reset the prev frame reference."""
+        self._ae_motion_sens_spin.setEnabled(checked)
+        self._ae_motion_sens_lbl.setEnabled(checked)
+        self._motion_prev_frame = None  # reset shared prev frame on toggle
 
     def _open_event_log(self) -> None:
         """Open the anomaly event log file with the OS default application."""
