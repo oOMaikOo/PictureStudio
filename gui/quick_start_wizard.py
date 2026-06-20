@@ -55,6 +55,7 @@ _IMAGE_STEPS = [
         "action_de":  None,
         "action_en":  None,
         "stack_idx":  None,
+        "mode_choice": True,
     },
     {
         "icon": "📁",
@@ -167,8 +168,7 @@ _IMAGE_STEPS = [
             "• Wechsle zur 'Klassifikation'-Seite\n"
             "• Lade ein einzelnes Bild oder einen ganzen Ordner\n"
             "• Das Modell sagt dir für jedes Bild die Klasse voraus\n\n"
-            "Für große Mengen nutze 'Batch-Klassifikation' in der Seitenleiste.\n\n"
-            "Du hast alles! 🎉 Viel Erfolg mit deinem Projekt."
+            "Für große Mengen nutze 'Batch-Klassifikation' in der Seitenleiste."
         ),
         "title_en":  "Step 5 — Classify New Images",
         "desc_en": (
@@ -176,13 +176,40 @@ _IMAGE_STEPS = [
             "• Switch to the 'Classification' page\n"
             "• Load a single image or an entire folder\n"
             "• The model predicts the class for each image\n\n"
-            "For large volumes use 'Batch' in the sidebar.\n\n"
-            "You're all set! 🎉 Good luck with your project."
+            "For large volumes use 'Batch' in the sidebar."
         ),
         "action_de":  "→ Zur Klassifikation",
         "action_en":  "→ Go to Classification",
         "stack_idx":  5,
         "action_type": "navigate",
+    },
+    {
+        "icon": "🎥",
+        "title_de":  "Schritt 6 — Live-Klassifikation (optional)",
+        "desc_de": (
+            "Wende dein Modell in Echtzeit auf einen Kamerastream an.\n\n"
+            "• Wechsle zur 'Live-Klassifikation'-Seite\n"
+            "• Modell laden + Kamera/Video wählen + Start\n"
+            "• Die erkannte Klasse wird live im Bild angezeigt\n"
+            "• Mit 'Frame ins Projekt übernehmen' fütterst du\n"
+            "  interessante Frames zurück ins Labeling/Training\n\n"
+            "Du hast alles! 🎉 Viel Erfolg mit deinem Projekt."
+        ),
+        "title_en":  "Step 6 — Live Classification (optional)",
+        "desc_en": (
+            "Apply your model to a live camera stream in real time.\n\n"
+            "• Switch to the 'Live Classification' page\n"
+            "• Load a model, pick a camera/video, click Start\n"
+            "• The predicted class is shown live on the frame\n"
+            "• Use 'Capture frame into project' to feed interesting\n"
+            "  frames back into labeling/training\n\n"
+            "You're all set! 🎉 Good luck with your project."
+        ),
+        "action_de":  "→ Zur Live-Klassifikation",
+        "action_en":  "→ Go to Live Classification",
+        "stack_idx":  16,
+        "action_type": "navigate",
+        "expert_only": True,   # hidden in beginner mode (live is an expert feature)
     },
 ]
 
@@ -258,7 +285,7 @@ _VIDEO_STEPS = [
         ),
         "action_de":  "→ Zur Training-Seite",
         "action_en":  "→ Go to Training Page",
-        "stack_idx":  17,
+        "stack_idx":  15,
         "action_type": "navigate",
     },
     {
@@ -281,7 +308,7 @@ _VIDEO_STEPS = [
         ),
         "action_de":  "→ Zur Training-Seite",
         "action_en":  "→ Go to Training Page",
-        "stack_idx":  17,
+        "stack_idx":  15,
         "action_type": "navigate",
     },
     {
@@ -330,16 +357,18 @@ class QuickStartWizard(QDialog):
     navigate_requested    = Signal(int)
     new_project_requested = Signal()
     open_project_requested = Signal()
+    mode_selected          = Signal(str)   # "beginner" | "expert"
 
     # Set to True by MainWindow after first display so it isn't shown again.
     SETTINGS_KEY = "wizard/shown_v1"
 
-    def __init__(self, workflow: str = "image", parent=None):
+    def __init__(self, workflow: str = "image", current_mode: str = "expert", parent=None):
         super().__init__(parent)
         from utils.i18n import tr, current_lang
         self._lang = current_lang()
         self._steps = _IMAGE_STEPS if workflow == "image" else _VIDEO_STEPS
         self._step = 0
+        self._chosen_mode = "beginner" if current_mode == "beginner" else "expert"
 
         self.setWindowTitle(
             "Schnellstart-Assistent" if self._lang == "de" else "Quick-Start Wizard"
@@ -498,6 +527,9 @@ class QuickStartWizard(QDialog):
         desc.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         v.addWidget(desc, 1)
 
+        if step.get("mode_choice"):
+            v.addWidget(self._build_mode_row())
+
         action_text = step.get(f"action_{lang}")
         if action_text:
             action_btn = QPushButton(action_text)
@@ -516,6 +548,48 @@ class QuickStartWizard(QDialog):
 
         return page
 
+    def _build_mode_row(self) -> QWidget:
+        """Two toggle buttons letting the user pick Beginner vs Expert mode."""
+        from utils.i18n import tr
+        row = QWidget()
+        row.setStyleSheet("background: transparent;")
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(10)
+
+        intro = QLabel("Modus:" if self._lang == "de" else "Mode:")
+        intro.setStyleSheet("color: #8B949E; font-size: 12px; background: transparent;")
+        h.addWidget(intro)
+
+        self._mode_btns: dict[str, QPushButton] = {}
+        for mode, icon, key in [
+            ("beginner", "👤", "mode.beginner"),
+            ("expert",   "🛠", "mode.expert"),
+        ]:
+            btn = QPushButton(f"{icon}  {tr(key)}")
+            btn.setCheckable(True)
+            btn.setChecked(self._chosen_mode == mode)
+            btn.setFixedHeight(38)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(
+                "QPushButton { background: #21262D; color: #8B949E; border: 1px solid #30363D;"
+                " border-radius: 6px; padding: 6px 18px; font-size: 13px; }"
+                "QPushButton:checked { background: #1F6FEB; color: white;"
+                " border-color: #1F6FEB; font-weight: bold; }"
+            )
+            btn.clicked.connect(lambda _=False, m=mode: self._choose_mode(m))
+            h.addWidget(btn)
+            self._mode_btns[mode] = btn
+        h.addStretch()
+        return row
+
+    def _choose_mode(self, mode: str) -> None:
+        self._chosen_mode = mode
+        for m, btn in self._mode_btns.items():
+            btn.setChecked(m == mode)
+        self._show_step(self._step)   # refresh step visibility + next-button label
+        self.mode_selected.emit(mode)
+
     # ── Navigation ────────────────────────────────────────────────────────────
 
     def _step_label(self, idx: int) -> str:
@@ -525,26 +599,35 @@ class QuickStartWizard(QDialog):
         # Truncate long step labels for sidebar
         return full[:26] + "…" if len(full) > 27 else full
 
+    def _step_visible(self, idx: int) -> bool:
+        """A step is hidden when it is expert-only and beginner mode is active."""
+        step = self._steps[idx]
+        return not (step.get("expert_only") and self._chosen_mode == "beginner")
+
+    def _last_visible_step(self) -> int:
+        return max(i for i in range(len(self._steps)) if self._step_visible(i))
+
     def _show_step(self, idx: int) -> None:
         self._step = idx
         self._stack.setCurrentIndex(idx)
-        last = len(self._steps) - 1
+        last = self._last_visible_step()
 
-        # Unlock all visited steps
+        # Unlock all visited steps; hide steps the current mode doesn't offer.
         for i, btn in enumerate(self._step_btns):
+            btn.setVisible(self._step_visible(i))
             btn.setEnabled(i <= idx)
             btn.setChecked(i == idx)
 
         self._back_btn.setEnabled(idx > 0)
         label = (
             ("Fertig!" if self._lang == "de" else "Finish!")
-            if idx == last
+            if idx >= last
             else ("Weiter ▶" if self._lang == "de" else "Next ▶")
         )
         self._next_btn.setText(label)
 
     def _go_next(self) -> None:
-        if self._step >= len(self._steps) - 1:
+        if self._step >= self._last_visible_step():
             self.accept()
         else:
             self._show_step(self._step + 1)

@@ -176,6 +176,32 @@ class Inferencer:
             "tta_passes": tta_passes,
         }
 
+    def predict_frame(self, frame, top_k: int = 3) -> Dict:
+        """Classify a single live BGR video frame (numpy array).
+
+        Same model pipeline as :meth:`predict_image` but takes an in-memory
+        frame instead of a file path — used by the live video classification
+        page. Returns predicted_label, confidence, top_k and low_confidence.
+        """
+        if not self.is_ready():
+            raise RuntimeError("Kein Modell geladen.")
+        import numpy as np
+        rgb = np.ascontiguousarray(frame[..., ::-1])  # BGR → RGB
+        image = Image.fromarray(rgb)
+        tensor = self.transform(image).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = self.model(tensor)
+            probs = F.softmax(logits, dim=1)[0].cpu().tolist()
+        k = min(top_k, len(self.class_names))
+        indexed = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)
+        top = [{"label": self.class_names[i], "prob": round(p, 4)} for i, p in indexed[:k]]
+        return {
+            "predicted_label": top[0]["label"],
+            "confidence": round(top[0]["prob"], 4),
+            "top_k": top,
+            "low_confidence": top[0]["prob"] < 0.70,
+        }
+
     def classify_single(self, image_path: str, top_k: int = 3) -> Dict:
         """Alias for the REST API. Same as predict_image without ROI."""
         result = self.predict_image(image_path, top_k=top_k)

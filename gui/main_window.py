@@ -99,7 +99,9 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        self._ui_mode = self._settings.get_ui_mode()
         self.sidebar = Sidebar()
+        self.sidebar.set_ui_mode(self._ui_mode)
         self.sidebar.set_locked(True)   # locked until a project is loaded
         self.sidebar.page_requested.connect(self._switch_page)
         self.sidebar.help_requested.connect(lambda: self._show_help())
@@ -130,6 +132,7 @@ class MainWindow(QMainWindow):
         from gui.pages.fleet_page              import FleetPage
         from gui.pages.data_drift_page         import DataDriftPage
         from gui.pages.anomaly_training_page   import AnomalyTrainingPage
+        from gui.pages.live_classification_page import LiveClassificationPage
 
         self.dashboard_page          = DashboardPage()
         self.data_page               = DataPage()
@@ -147,6 +150,7 @@ class MainWindow(QMainWindow):
         self.fleet_page              = FleetPage()
         self.data_drift_page         = DataDriftPage()
         self.anomaly_training_page   = AnomalyTrainingPage()
+        self.live_classify_page      = LiveClassificationPage()
 
         for page in [
             self.dashboard_page, self.data_page, self.labeling_page,
@@ -159,8 +163,10 @@ class MainWindow(QMainWindow):
             self.fleet_page,                # index 13
             self.data_drift_page,           # index 14
             self.anomaly_training_page,     # index 15
+            self.live_classify_page,        # index 16
         ]:
             self.stack.addWidget(page)
+        self.live_classify_page.images_added.connect(self._on_images_loaded)
 
         # REST API server
         from api.rest_server import RestApiServer
@@ -278,6 +284,12 @@ class MainWindow(QMainWindow):
 
         # View
         vm = mb.addMenu(tr("menu.view"))
+        self._expert_mode_action = QAction(tr("menu.view.expertmode"), self, checkable=True)
+        self._expert_mode_action.setChecked(self._ui_mode != "beginner")
+        self._expert_mode_action.toggled.connect(
+            lambda on: self._set_ui_mode("expert" if on else "beginner"))
+        vm.addAction(self._expert_mode_action)
+        vm.addSeparator()
         for label, idx in [
             (tr("nav.dashboard"),       0),
             (tr("nav.data"),            1),
@@ -286,6 +298,8 @@ class MainWindow(QMainWindow):
             (tr("nav.models"),          4),
             (tr("nav.inference"),       5),
             (tr("menu.view.batchinference"), 9),
+            (tr("nav.dataset"),         11),
+            (tr("nav.datadrift"),       14),
             (tr("nav.export"),          6),
             (tr("nav.settings"),        7),
         ]:
@@ -367,11 +381,38 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ page switching
 
+    # Beginner mode: only these stack pages may be reached (matches sidebar).
+    _BEGINNER_ALLOWED = {0, 1, 2, 3, 5, 7}
+
     @Slot(int)
     def _switch_page(self, idx: int) -> None:
-        """Show the stacked-widget page at *idx* and sync the sidebar highlight."""
+        """Show the stacked-widget page at *idx* and sync the sidebar highlight.
+
+        In beginner mode, navigation to pages outside the label+train workflow
+        (via shortcuts, the Help menu or the wizard) is ignored, so beginners
+        only ever reach the pages the sidebar shows.
+        """
+        if self._ui_mode == "beginner" and idx not in self._BEGINNER_ALLOWED:
+            return
         self.stack.setCurrentIndex(idx)
         self.sidebar.set_page(idx)
+
+    def _set_ui_mode(self, mode: str) -> None:
+        """Switch beginner/expert live (no restart needed) and persist it.
+
+        Rebuilds the sidebar to the matching page set and, if the current page
+        is hidden by the new mode, falls back to the dashboard.
+        """
+        mode = "beginner" if mode == "beginner" else "expert"
+        if mode == self._ui_mode:
+            return
+        self._ui_mode = mode
+        self._settings.set_ui_mode(mode)
+        self.sidebar.set_ui_mode(mode)
+        if hasattr(self, "_expert_mode_action"):
+            self._expert_mode_action.setChecked(mode != "beginner")
+        if mode == "beginner" and self.stack.currentIndex() not in self._BEGINNER_ALLOWED:
+            self._switch_page(0)
 
     # ------------------------------------------------------------------ active learning
 
@@ -490,6 +531,7 @@ class MainWindow(QMainWindow):
         self.video_annotation_page.set_project(project)
         self.fleet_page.set_project(project)
         self.data_drift_page.set_project(project)
+        self.live_classify_page.set_project(project)
         self.anomaly_training_page.set_project(project)
 
         self._rest_server.set_project(project)
@@ -764,10 +806,11 @@ class MainWindow(QMainWindow):
     def _open_wizard(self, workflow: str = "image") -> None:
         """Open the quick-start wizard for the given workflow."""
         from gui.quick_start_wizard import QuickStartWizard
-        wiz = QuickStartWizard(workflow=workflow, parent=self)
+        wiz = QuickStartWizard(workflow=workflow, current_mode=self._ui_mode, parent=self)
         wiz.navigate_requested.connect(self._switch_page)
         wiz.new_project_requested.connect(self._new_project)
         wiz.open_project_requested.connect(self._open_project)
+        wiz.mode_selected.connect(self._set_ui_mode)
         wiz.exec()
 
     def _show_help(self, page_idx: int = None) -> None:
@@ -781,7 +824,7 @@ class MainWindow(QMainWindow):
         """Launch the guided tour overlaid on the currently-visible page."""
         idx = self.stack.currentIndex()
         page_widget = self.stack.currentWidget()
-        self._tour.start(idx, page_widget)
+        self._tour.start(idx, page_widget, beginner=self._ui_mode == "beginner")
 
     def resizeEvent(self, event) -> None:
         """Keep the floating tour overlay positioned correctly on window resize."""
@@ -959,6 +1002,7 @@ class MainWindow(QMainWindow):
         # camera_page and multi_camera_page each own CameraFrameThreads.
         self.camera_page._stop_stream()
         self.multi_camera_page._on_stop_all()
+        self.live_classify_page.stop_camera()
 
         # Inference/batch-inference threads.
         for page in (self.inference_page, self.batch_page):

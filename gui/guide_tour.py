@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, QColor
 # 0=Dashboard, 1=Daten, 2=Labeling, 3=Training, 4=Modelle,
 # 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch,
 # 10=Multi-Kamera, 11=Datensatz, 12=VideoAnnotation,
-# 13=Fleet, 14=DataDrift, 15=AnomalieTraining
+# 13=Fleet, 14=DataDrift, 15=AnomalieTraining, 16=Live-Klassifikation
 # Each step: (title, description, button_text_to_highlight | None)
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
@@ -200,7 +200,7 @@ TOUR_STEPS = {
          "Bestes Checkpoint wird automatisch gespeichert.\n\n"
          "Nach dem Training:\n"
          "• HTML- oder Excel-Bericht erstellen\n"
-         "• Modell auf der Modelle-Seite verwalten",
+         "• Modell auf der Klassifikation-Seite anwenden",
          "Training starten"),
         ("SSH-Ferntraining auf GPU-Server",
          "Training auf einem externen Server:\n"
@@ -270,8 +270,8 @@ TOUR_STEPS = {
          None),
         ("Modell laden",
          "'Modell laden (.pth)' → Datei wählen\n\n"
-         "Oder direkt von der Modelle-Seite:\n"
-         "Modell auswählen → 'In Inferenz laden'\n\n"
+         "Nach einem Training ist das Modell hier\n"
+         "oft schon vorausgewählt.\n\n"
          "Ensemble — mehrere Modelle kombinieren:\n"
          "'+ Modell hinzufügen' → alle geladenen\n"
          "Modelle werden gemittelt (stabilere\n"
@@ -958,6 +958,57 @@ TOUR_STEPS = {
          "False-Positive-Rate akzeptabel.",
          None),
     ],
+    16: [  # Live-Klassifikation
+        ("Live-Klassifikation – Überblick",
+         "Wende dein trainiertes Klassifikationsmodell\n"
+         "in Echtzeit auf einen Kamera- oder Video-Stream an.\n\n"
+         "Voraussetzung: ein trainiertes Modell (.pth)\n"
+         "aus der Training-Seite.",
+         None),
+        ("Modell & Kamera wählen",
+         "1. 'Modell laden…' — dein .pth wählen\n"
+         "   (oder es ist schon aus dem Projekt geladen).\n"
+         "2. '🔄 Kameras suchen' und Kamera wählen,\n"
+         "   oder RTSP-URL / Videodatei eingeben.\n"
+         "3. '▶ Start'.",
+         "▶ Start"),
+        ("Live-Ergebnis lesen",
+         "Oben im Bild erscheint die erkannte Klasse\n"
+         "mit Konfidenz, darunter die Top-3.\n\n"
+         "'Klassifizieren alle N Frames' steuert,\n"
+         "wie oft ausgewertet wird (Last).",
+         None),
+        ("Frame ins Projekt übernehmen",
+         "Interessante oder falsch erkannte Frames mit\n"
+         "'📸 Frame ins Projekt übernehmen' speichern.\n\n"
+         "Sie landen im Projekt und können in der\n"
+         "Labeling-Seite gelabelt und ins nächste\n"
+         "Training aufgenommen werden — der Kreis\n"
+         "schließt sich.",
+         "📸 Frame ins Projekt übernehmen"),
+    ],
+}
+
+
+# Step titles hidden in beginner mode — expert-only features that aren't part of
+# the slimmed-down label → train → classify workflow (matched by title, which is
+# unique within each beginner-reachable page 0/1/2/3/5/7).
+_EXPERT_ONLY_TITLES = {
+    "Video importieren",
+    "Datensatz analysieren",
+    "Annotationen exportieren",
+    "ROI zeichnen",
+    "ROI-Label zuweisen",
+    "Segmentierungsmaske malen",
+    "Pre-Labeling – Vorschläge vom Modell",
+    "SSH-Ferntraining auf GPU-Server",
+    "Active Learning nach dem Training",
+    "REST-API & Web-Dashboard",
+    "MQTT-Alarm konfigurieren",
+    "SSH-Profile anlegen",
+    "Alarmierung",
+    "Industrieanbindung",
+    "Monitor-Client",
 }
 
 
@@ -1089,9 +1140,17 @@ class GuideTour(QFrame):
 
     # ------------------------------------------------------------------ public
 
-    def start(self, page_index: int, page_widget: QWidget) -> None:
-        """Start tour for the given page."""
-        self._steps = TOUR_STEPS.get(page_index, [])
+    def start(self, page_index: int, page_widget: QWidget, beginner: bool = False) -> None:
+        """Start tour for the given page.
+
+        In beginner mode, steps covering expert-only features are filtered out so
+        the tour matches the slimmed-down sidebar (only the label → train →
+        classify workflow).
+        """
+        steps = TOUR_STEPS.get(page_index, [])
+        if beginner:
+            steps = [s for s in steps if s[0] not in _EXPERT_ONLY_TITLES]
+        self._steps = steps
         self._page_widget = page_widget
         self._index = 0
         if not self._steps:

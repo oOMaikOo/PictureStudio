@@ -29,11 +29,10 @@ _IMAGE_PAGES: List[Tuple[str, str, Optional[int]]] = [
     ("nav.labeling",        "🏷", 2),
     ("nav.training",        "🧠", 3),
     ("nav.models",          "📊", 4),
+    ("sidebar.section.anwenden",    "",   None),
     ("nav.inference",       "🔍", 5),
     ("nav.batch",           "📦", 9),
-    ("sidebar.section.analyse",     "",   None),
-    ("nav.dataset",         "📈", 11),
-    ("nav.datadrift",       "📉", 14),
+    ("nav.liveclassify",    "🎥", 16),
     ("sidebar.section.system",      "",   None),
     ("nav.export",          "📤", 6),
     ("nav.settings",        "⚙",  7),
@@ -52,6 +51,18 @@ _VIDEO_PAGES: List[Tuple[str, str, Optional[int]]] = [
     ("sidebar.section.system",      "",   None),
     ("nav.export",         "📤", 6),
     ("nav.settings",       "⚙",  7),
+]
+
+# Beginner mode: the label → train → classify workflow (image classification).
+_BEGINNER_PAGES: List[Tuple[str, str, Optional[int]]] = [
+    ("sidebar.section.workflow",    "",   None),
+    ("nav.dashboard",       "🏠", 0),
+    ("nav.data",            "📁", 1),
+    ("nav.labeling",        "🏷", 2),
+    ("nav.training",        "🧠", 3),
+    ("nav.inference",       "🔍", 5),
+    ("sidebar.section.system",      "",   None),
+    ("nav.settings",        "⚙",  7),
 ]
 
 _BTN_STYLE = """
@@ -100,6 +111,8 @@ class Sidebar(QWidget):
         self.setObjectName("Sidebar")
 
         self._locked = True
+        self._ui_mode = "expert"          # "expert" | "beginner"
+        self._project_type = "image"      # "image" | "video"
         self._page_config = _IMAGE_PAGES
         # List of (QPushButton, stack_idx)
         self._buttons: List[Tuple[QPushButton, int]] = []
@@ -245,9 +258,23 @@ class Sidebar(QWidget):
 
     def set_project_type(self, type_str: str) -> None:
         """Switch between image and video page configurations."""
-        new_config = _VIDEO_PAGES if type_str == "video" else _IMAGE_PAGES
+        self._project_type = type_str
+        self._apply_config()
+
+    def set_ui_mode(self, mode: str) -> None:
+        """Switch between 'beginner' (label+train only) and 'expert' (all)."""
+        self._ui_mode = "beginner" if mode == "beginner" else "expert"
+        self._apply_config()
+
+    def _apply_config(self) -> None:
+        """Pick the effective page list from ui_mode + project_type and rebuild."""
         from utils.i18n import tr
-        badge_text = tr("sidebar.badge.image") if type_str == "image" else tr("sidebar.badge.video")
+        if self._ui_mode == "beginner":
+            new_config = _BEGINNER_PAGES
+        else:
+            new_config = _VIDEO_PAGES if self._project_type == "video" else _IMAGE_PAGES
+        badge_text = (tr("sidebar.badge.image") if self._project_type == "image"
+                      else tr("sidebar.badge.video"))
         self._type_badge.setText(badge_text)
         self._type_badge.setVisible(True)
         if new_config is self._page_config:

@@ -34,6 +34,13 @@ class AppSettings:
     def set_font_size(self, size: int) -> None:
         self._s.setValue("appearance/font_size", size)
 
+    def get_ui_mode(self) -> str:
+        """UI mode: 'expert' (all pages) or 'beginner' (label + train only)."""
+        return self._s.value("appearance/ui_mode", "expert")
+
+    def set_ui_mode(self, mode: str) -> None:
+        self._s.setValue("appearance/ui_mode", "beginner" if mode == "beginner" else "expert")
+
     # ---- project ----
     def get_autosave_enabled(self) -> bool:
         return self._s.value("project/autosave_enabled", True, type=bool)

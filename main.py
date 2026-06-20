@@ -105,6 +105,9 @@ def main() -> None:
     font.setHintingPreference(QFont.PreferFullHinting)
     app.setFont(font)
 
+    # UI mode (Beginner / Expert) is read from settings; first-time users pick it
+    # in the quick-start wizard and can switch live via the View menu afterwards.
+
     # Show splash screen while MainWindow loads
     _splash_path = os.path.join(_assets, "icon_1024.png")
     if os.path.exists(_splash_path):
