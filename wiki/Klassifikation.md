@@ -1,6 +1,6 @@
 # 🔍 Klassifikation
 
-> **PictureStudio v2.3.0** — Neue Bilder mit dem trainierten Modell klassifizieren
+> **PictureStudio v2.5.1** — Neue Bilder mit dem trainierten Modell klassifizieren
 
 ---
 

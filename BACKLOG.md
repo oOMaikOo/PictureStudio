@@ -41,8 +41,7 @@ Verbesserungen, die noch nicht umgesetzt wurden. Sortiert nach Aufwand.
 
 | ID | Beschreibung | Datei(en) |
 |----|-------------|-----------|
-| V1 | **Standalone-Installer (PyInstaller)** — Kein `.spec`-File vorhanden. PyInstaller-Spec erstellen, der alle Assets, Locale-Dateien, Modelle und Qt-Plugins bündelt. Für macOS `.app`-Bundle + DMG, für Windows `.exe` + Installer (NSIS/Inno Setup) | `Picture.spec`, `build_macos.sh`, `build_windows.bat` |
-| V2 | **„Beta"-Label entfernen / Versions-Bump** — `APP_VERSION = "2.5.0-beta"` in `utils/config.py` → `"2.5.0"` sowie `"⚠ Beta-Version"` aus `README.md` entfernen | `utils/config.py`, `README.md` |
+| V1 | **Release-Installer vervollständigen** — macOS `.app`/DMG ist vorhanden; Windows `.exe` + Installer (NSIS/Inno Setup) und signierte Release-Artefakte fehlen noch | `Picture.spec`, `build_macos.sh`, `build_windows.bat` |
 | V3 | **THIRD_PARTY_LICENSES.md** — PySide6 (LGPL) erfordert Attribution bei Weitergabe. Lizenzen aller direkten Abhängigkeiten (PySide6, PyTorch, OpenCV, Pillow, etc.) zusammenstellen | `THIRD_PARTY_LICENSES.md` |
 | V6 | **Support-Kanal definieren** — Kein Hinweis in der App oder Doku, wohin Nutzer bei Problemen gehen sollen. GitHub Issues-Link im About-Dialog und in `Fehlerbehebung.md` ergänzen | `gui/main_window.py` (About-Dialog), `wiki/Fehlerbehebung.md` |
 | V7 | **Datenschutzerklärung (DSGVO)** — Beim Einsatz in deutschen Unternehmen ggf. erforderlich. Dokument erstellen, das erklärt, welche Daten lokal gespeichert werden (keine Cloud-Übertragung, keine Telemetrie) | `PRIVACY.md` |

@@ -1,6 +1,6 @@
 # 🏠 Dashboard
 
-> **PictureStudio v2.3.0** — Projektübersicht auf einen Blick, Schnellzugriff auf alle Funktionen
+> **PictureStudio v2.5.1** — Projektübersicht auf einen Blick, Schnellzugriff auf alle Funktionen
 
 ---
 

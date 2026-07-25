@@ -1,6 +1,6 @@
 # 📋 Übersicht & Features
 
-> **PictureStudio v2.3.0** — Vollständige Feature-Liste aller Bereiche und unterstützten Architekturen
+> **PictureStudio v2.5.1** — Vollständige Feature-Liste aller Bereiche und unterstützten Architekturen
 
 ---
 

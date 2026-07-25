@@ -248,7 +248,7 @@ class TestNewI18nKeys:
         "camera.scoring_btn_tip",
         "multicam.resume_scoring_btn",
         "dataset_stats.refresh_tip",
-        "objdetect.yaml_not_found",
+        "videoannotation.interval_tip",
     ])
     def test_key_not_returned_raw(self, key):
         from utils.i18n import tr

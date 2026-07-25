@@ -1,6 +1,6 @@
 # Settings
 
-> **PictureStudio v2.3.0** — REST API, MQTT, SSH profiles, and all application settings
+> **PictureStudio v2.5.1** — REST API, MQTT, SSH profiles, and all application settings
 
 ---
 

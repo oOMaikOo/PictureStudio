@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec for Picture Studio — macOS .app bundle (BETA).
+PyInstaller spec for Picture Studio — macOS .app bundle.
 
 Build with:  ./build_macos.sh
 or directly: pyinstaller --noconfirm Picture.spec
@@ -37,7 +37,7 @@ excludes = [
     "tkinter", "PyQt5", "PyQt6", "PySide2",
     "pytest", "pytest_qt", "_pytest",
     # Optional extras that are not installed / not needed at runtime:
-    "optuna", "ultralytics", "coremltools", "imagehash",
+    "optuna", "coremltools", "imagehash",
 ]
 
 a = Analysis(
@@ -100,8 +100,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": APP_NAME,
         "CFBundleDisplayName": APP_NAME,
-        "CFBundleShortVersionString": "2.5.0",
-        "CFBundleVersion": "2.5.0-beta",
+        "CFBundleShortVersionString": "2.5.1",
+        "CFBundleVersion": "2.5.1",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0",
         # Required so macOS allows camera access instead of crashing:

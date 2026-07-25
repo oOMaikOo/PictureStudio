@@ -13,39 +13,37 @@ from PySide6.QtGui import QFont, QColor
 # ---------------------------------------------------------------------------
 
 SECTIONS = [
-    ("🚀", "Erste Schritte"),
-    ("📋", "Übersicht & Features"),
-    ("🏠", "Dashboard"),
-    ("📁", "Daten"),
-    ("🏷", "Labeling & ROIs"),
-    ("🧠", "Training"),
-    ("📊", "Modellbibliothek"),
-    ("🔍", "Klassifikation"),
-    ("📤", "Excel-Export"),
-    ("⚙", "Einstellungen"),
-    ("📷", "Kamera & Videoanalyse"),
-    ("⌨", "Tastenkürzel"),
-    ("🔧", "Fehlerbehebung"),
-    ("💻", "Monitor-Client"),         # 13
-    ("📹", "Multi-Kamera"),           # 14
-    ("🔬", "Anomalie-Clustering"),    # 15
-    ("📈", "Datensatz-Statistiken"),  # 16
-    ("🎬", "Video-Annotation"),       # 17
-    ("🌐", "Fleet-Management"),       # 18
-    ("⚡", "Modelle Erweitert"),      # 19
-    ("🔗", "Kontakt & Repository"),   # 20
-    ("🎯", "Objekterkennung"),        # 21
-    ("📉", "Data Drift"),             # 22
-    ("🔄", "Active Learning"),        # 23
-    ("🧠", "Anomalie-Training"),      # 24
+    (0, "🚀", "Erste Schritte"),
+    (1, "📋", "Übersicht & Features"),
+    (2, "🏠", "Dashboard"),
+    (3, "📁", "Daten"),
+    (4, "🏷", "Labeling & ROIs"),
+    (5, "🧠", "Training"),
+    (6, "📊", "Modellbibliothek"),
+    (7, "🔍", "Klassifikation"),
+    (8, "📤", "Excel-Export"),
+    (9, "⚙", "Einstellungen"),
+    (10, "📷", "Kamera & Videoanalyse"),
+    (11, "⌨", "Tastenkürzel"),
+    (12, "🔧", "Fehlerbehebung"),
+    (13, "💻", "Monitor-Client"),
+    (14, "📹", "Multi-Kamera"),
+    (16, "📈", "Datensatz-Statistiken"),
+    (17, "🎬", "Video-Annotation"),
+    (18, "🌐", "Fleet-Management"),
+    (19, "⚡", "Modelle Erweitert"),
+    (20, "🔗", "Kontakt & Repository"),
+    (22, "📉", "Data Drift"),
+    (23, "🔄", "Active Learning"),
+    (24, "🧠", "Anomalie-Training"),
 ]
 
 # Map sidebar page index → section index
 PAGE_TO_SECTION = {
     0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
-    10: 14, 11: 15,
-    12: 16, 13: 17, 14: 18,
-    15: 21, 16: 22, 17: 24,
+    8: 10, 10: 14, 11: 16,
+    12: 17, 13: 18, 14: 22,
+    15: 24, 16: 7,
 }
 
 # ---------------------------------------------------------------------------
@@ -1178,72 +1176,6 @@ Der Dateiname enthält Kanalnummer und UTC-Zeitstempel.</div>
 <div class="warn"><b>Kanalzahl ändern stoppt alle Kanäle</b> — laufende Streams werden beendet. Konfigurierte Kanäle (Modell, Kamera-Index) bleiben erhalten.</div>
 """),
 
-
-# ── 15  Anomalie-Clustering ───────────────────────────────────────────────────
-15: page("""
-<h1>🔬 Anomalie-Clustering</h1>
-<p>Alarm-Bilder automatisch nach visueller Ähnlichkeit gruppieren – ohne manuelle Annotation.</p>
-
-<hr>
-<h2>Was macht Anomalie-Clustering?</h2>
-<p>Der k-Means-Algorithmus analysiert die visuellen Merkmale aller Bilder, die als Anomalie gelabelt
-wurden, und teilt sie in Gruppen (<b>Cluster</b>) auf. Bilder in einem Cluster sehen sich ähnlich –
-z. B. alle Kratzer an einer bestimmten Stelle, alle Farbausreißer oder alle Positionsfehler.</p>
-<div class="tip"><b>Wozu ist das nützlich?</b><br>
-Statt hunderte Alarm-Bilder manuell durchzusehen bekommst du auf einen Blick, welche
-<b>Fehlerarten</b> im Datensatz vorkommen und wie häufig sie sind. Ideal als erster Schritt
-zur Fehlerklassifikation.</div>
-
-<hr>
-<h2>Schritt-für-Schritt</h2>
-
-<div class="step"><b><span class="num">1</span>Projekt mit Anomalie-Bildern laden</b><br>
-Öffne ein Projekt, in dem Bilder mit dem Anomalie-Label (oder einem anderen Fehler-Label)
-annotiert sind. Die Seite zeigt automatisch wie viele Bilder für das Clustering zur Verfügung stehen.</div>
-
-<div class="step"><b><span class="num">2</span>Cluster-Anzahl wählen</b><br>
-Stelle den Schieberegler oder das Eingabefeld auf die gewünschte Anzahl Cluster ein (2–20).<br>
-<b>Empfehlung:</b> Mit <b>5 Clustern</b> starten. Erhöhe die Anzahl, wenn die Ergebnisse noch zu
-gemischt wirken – d. h. ein Cluster enthält optisch sehr verschiedene Bilder.</div>
-
-<div class="step"><b><span class="num">3</span>Clustering starten</b><br>
-Klicke <i>Clustering starten</i>. Das Modell extrahiert Bildmerkmale und berechnet die Cluster.
-Der Vorgang dauert je nach Bildanzahl wenige Sekunden bis ca. eine Minute.</div>
-
-<div class="step"><b><span class="num">4</span>Ergebnisse im Cluster-Browser ansehen</b><br>
-Nach der Berechnung erscheinen die Cluster als Karten:<br>
-<ul>
-  <li>Jede Karte zeigt das <b>repräsentative Bild</b> (den Cluster-Mittelpunkt) als Thumbnail</li>
-  <li>Darunter steht die Anzahl der Bilder in diesem Cluster</li>
-  <li>Klicke eine Karte an um alle Bilder des Clusters in der Thumbnail-Liste zu sehen</li>
-</ul></div>
-
-<div class="step"><b><span class="num">5</span>CSV exportieren</b><br>
-Klicke <i>CSV exportieren</i> um die Clustering-Ergebnisse als Tabelle zu speichern.</div>
-
-<hr>
-<h2>CSV-Export – Spalten</h2>
-<table>
-  <tr><th>Spalte</th><th>Inhalt</th></tr>
-  <tr><td><code>path</code></td><td>Absoluter Dateipfad des Bildes</td></tr>
-  <tr><td><code>cluster_id</code></td><td>Cluster-Nummer (0-basiert) dem das Bild zugeordnet wurde</td></tr>
-  <tr><td><code>is_representative</code></td><td><code>True</code> für das Bild das dem Cluster-Mittelpunkt am nächsten liegt, sonst <code>False</code></td></tr>
-</table>
-
-<hr>
-<h2>Tipps &amp; Empfehlungen</h2>
-<div class="tip"><b>Startpunkt: 5 Cluster</b><br>
-Beginne mit 5 Clustern und erhöhe schrittweise. Sind Bilder eines Clusters optisch zu
-verschieden, teile diesen Cluster durch Erhöhung der Gesamtanzahl weiter auf.</div>
-<div class="tip"><b>Zu wenige Bilder?</b><br>
-k-Means benötigt mindestens so viele Bilder wie Cluster. Bei weniger als 10 Anomalie-Bildern
-2–3 Cluster verwenden.</div>
-<div class="warn"><b>Cluster ≠ Fehlerklassen</b><br>
-Clustering gruppiert nach visueller Ähnlichkeit, nicht nach technischer Fehlerursache.
-Die inhaltliche Interpretation der Cluster (z. B. „Cluster 0 = Risse, Cluster 1 = Flecken")
-muss manuell erfolgen.</div>
-"""),
-
 # ── 16  Datensatz-Statistiken ──────────────────────────────────────────────────
 16: page("""
 <h1>📈 Datensatz-Statistiken</h1>
@@ -1415,74 +1347,6 @@ Pull-Requests sind herzlich willkommen.</p>
 <h2>Feedback &amp; Beiträge</h2>
 <p>Pull Requests sind willkommen. Bitte einen Feature-Branch erstellen und
 einen kurzen Issue anlegen, bevor größere Änderungen umgesetzt werden.</p>
-"""),
-
-
-
-# ── 21  Objekterkennung ───────────────────────────────────────────────────────
-21: page("""
-<h1>🎯 Objekterkennung (Object Detection)</h1>
-<p>Erkennt und lokalisiert mehrere Objekte gleichzeitig in einem Bild —
-mit Bounding Boxes und Klassennamen. Basiert auf <b>YOLOv8</b> (ultralytics).</p>
-
-<div class="warn"><b>Voraussetzung:</b> <code>pip install ultralytics</code></div>
-
-<h2>Unterschied zur Klassifikation</h2>
-<table>
-<tr><th>Klassifikation</th><th>Objekterkennung</th></tr>
-<tr><td>Ein Label pro Bild</td><td>Mehrere Objekte pro Bild</td></tr>
-<tr><td>Kein Ort</td><td>Bounding Box pro Objekt</td></tr>
-<tr><td>ROI = Zuschnitt</td><td>ROI = Trainingsannotation</td></tr>
-</table>
-
-<h2>Schritt-für-Schritt</h2>
-
-<div class="step">
-<b>Schritt 1 – Bilder annotieren (Labeling-Seite)</b><br>
-ROIs im Labeling-Editor zeichnen und jedem ROI ein Label zuweisen.
-Jeder ROI wird zur Trainings-Annotation (Bounding Box + Klasse).
-Es können mehrere ROIs pro Bild gesetzt werden.
-</div>
-
-<div class="step">
-<b>Schritt 2 – Dataset vorbereiten</b><br>
-„Dataset vorbereiten" konvertiert alle ROI-Annotationen in das YOLO-Format
-(normalisierte Koordinaten, Train-/Val-Split 80/20).
-</div>
-
-<div class="step">
-<b>Schritt 3 – Modell wählen</b><br>
-<ul>
-<li><b>yolov8n</b> — Nano, sehr schnell, für CPU geeignet</li>
-<li><b>yolov8s</b> — Small, gutes Gleichgewicht</li>
-<li><b>yolov8m</b> — Medium, empfohlen für Produktion</li>
-<li><b>yolov8l</b> — Large, maximale Genauigkeit (GPU empfohlen)</li>
-</ul>
-</div>
-
-<div class="step">
-<b>Schritt 4 – Training starten</b><br>
-Epochen (Standard: 50), Bildgröße (Standard: 640) und Gerät einstellen,
-dann „⚡ Training starten". Das beste Modell (<code>best.pt</code>) wird
-automatisch angeboten zum Laden.
-</div>
-
-<div class="step">
-<b>Schritt 5 – Erkennung auf neuen Bildern</b><br>
-Einzelbild: „Bild wählen" → Bounding Boxes werden eingezeichnet.<br>
-Ordner: Ordner wählen → „Erkennung starten" → Tabelle mit Ergebnissen.<br>
-CSV-Export für Weiterverarbeitung.
-</div>
-
-<h2>Tipps</h2>
-<div class="tip">
-<b>Mindestanforderung:</b> ~50–100 annotierte Bilder pro Klasse für zuverlässige Ergebnisse.
-Mehr Daten = bessere Genauigkeit.
-</div>
-<div class="tip">
-<b>Konfidenz-Schwelle:</b> 0.25 = Standard. Höher setzen (0.5+) um Fehlerkennungen
-zu reduzieren. Niedriger für maximalen Recall.
-</div>
 """),
 
 # ── 22  Data Drift ────────────────────────────────────────────────────────────
@@ -1681,7 +1545,7 @@ und in eine CSV-Datei geloggt — ideal für A/B-Vergleiche nach einem Re-Traini
 class HelpDialog(QDialog):
     """Help dialog with sidebar navigation and content browser."""
 
-    def __init__(self, page_index: int = 0, parent=None):
+    def __init__(self, page_index: int = 0, section_index: int = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Hilfe – Picture Studio")
         self.setMinimumSize(880, 600)
@@ -1730,8 +1594,10 @@ class HelpDialog(QDialog):
                 color: white;
             }
         """)
-        for icon, label in SECTIONS:
-            self._nav.addItem(f"{icon}  {label}")
+        for section_id, icon, label in SECTIONS:
+            item = QListWidgetItem(f"{icon}  {label}")
+            item.setData(Qt.UserRole, section_id)
+            self._nav.addItem(item)
         nav_vbox.addWidget(self._nav)
         root.addWidget(nav_frame)
 
@@ -1749,10 +1615,22 @@ class HelpDialog(QDialog):
 
         self._nav.currentRowChanged.connect(self._show)
 
-        # Jump to the section matching the current page
-        self._nav.setCurrentRow(PAGE_TO_SECTION.get(page_index, 0))
+        # Jump to the section matching the current page, or to an explicit
+        # help section selected from the Help menu.
+        target = section_index if section_index is not None else PAGE_TO_SECTION.get(page_index, 0)
+        self._select_section(target)
 
     def _show(self, row: int) -> None:
-        html = CONTENT.get(row, "<p style='color:#aaa;padding:20px'>Kein Inhalt.</p>")
+        item = self._nav.item(row)
+        section_id = item.data(Qt.UserRole) if item is not None else 0
+        html = CONTENT.get(section_id, "<p style='color:#aaa;padding:20px'>Kein Inhalt.</p>")
         self._browser.setHtml(html)
         self._browser.verticalScrollBar().setValue(0)
+
+    def _select_section(self, section_id: int) -> None:
+        for row in range(self._nav.count()):
+            item = self._nav.item(row)
+            if item.data(Qt.UserRole) == section_id:
+                self._nav.setCurrentRow(row)
+                return
+        self._nav.setCurrentRow(0)

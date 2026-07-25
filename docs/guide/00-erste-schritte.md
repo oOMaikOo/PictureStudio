@@ -1,6 +1,6 @@
 # 🚀 Erste Schritte
 
-> **PictureStudio v2.3.0** — Kompletter Workflow von den ersten Bildern bis zum trainierten Modell
+> **PictureStudio v2.5.1** — Kompletter Workflow von den ersten Bildern bis zum trainierten Modell
 
 ---
 

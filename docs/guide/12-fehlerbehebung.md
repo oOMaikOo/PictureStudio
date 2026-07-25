@@ -1,6 +1,6 @@
 # 🔧 Fehlerbehebung
 
-> **PictureStudio v2.3.0** — Häufige Probleme und ihre Lösungen
+> **PictureStudio v2.5.1** — Häufige Probleme und ihre Lösungen
 
 ---
 

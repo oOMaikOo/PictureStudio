@@ -1,6 +1,6 @@
 # PictureStudio – English Documentation
 
-> **PictureStudio v2.3.0** — Image labeling, ML training, and anomaly detection
+> **PictureStudio v2.5.1** — Image labeling, ML training, and anomaly detection
 
 Welcome to the English documentation for PictureStudio. This section covers the six most important topics. For topics not yet translated, see the [German wiki](../Home.md).
 

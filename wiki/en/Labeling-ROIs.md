@@ -1,6 +1,6 @@
 # Labeling & ROIs
 
-> **PictureStudio v2.3.0** — Annotate images, assign labels, and draw regions of interest
+> **PictureStudio v2.5.1** — Annotate images, assign labels, and draw regions of interest
 
 ---
 

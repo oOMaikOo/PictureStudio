@@ -346,7 +346,7 @@ class MainWindow(QMainWindow):
             (tr("menu.help.modeladvanced"),   19),
         ]:
             a = QAction(label, self)
-            a.triggered.connect(lambda _, i=page_idx: self._show_help(i))
+            a.triggered.connect(lambda _, i=page_idx: self._show_help(section_idx=i))
             hm.addAction(a)
         hm.addSeparator()
         log_a = QAction(tr("menu.help.log"), self)
@@ -813,11 +813,11 @@ class MainWindow(QMainWindow):
         wiz.mode_selected.connect(self._set_ui_mode)
         wiz.exec()
 
-    def _show_help(self, page_idx: int = None) -> None:
+    def _show_help(self, page_idx: int = None, *, section_idx: int = None) -> None:
         """Open the help dialog on the page matching *page_idx* (defaults to current page)."""
         from gui.help_dialog import HelpDialog
         idx = page_idx if page_idx is not None else self.stack.currentIndex()
-        dlg = HelpDialog(page_index=idx, parent=self)
+        dlg = HelpDialog(page_index=idx, section_index=section_idx, parent=self)
         dlg.exec()
 
     def _start_tour(self) -> None:
@@ -880,7 +880,7 @@ class MainWindow(QMainWindow):
         from utils.reproducibility import get_software_versions
         vers = get_software_versions()
         from utils.i18n import tr
-        text = f"{APP_NAME} v{APP_VERSION}\n{tr('about.beta_warning')}\n\nBibliotheken:\n"
+        text = f"{APP_NAME} v{APP_VERSION}\n\nBibliotheken:\n"
         for k, v in vers.items():
             text += f"  {k}: {v}\n"
         QMessageBox.about(self, f"Über {APP_NAME}", text)

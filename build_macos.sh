@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build the Picture Studio macOS .app bundle and a DMG (BETA, local/ad-hoc).
+# Build the Picture Studio macOS .app bundle and a DMG (local/ad-hoc).
 #
 # Usage:
 #   ./build_macos.sh            # full build: .app + .dmg
@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="Picture Studio"
 APP_PATH="dist/${APP_NAME}.app"
-DMG_PATH="dist/Picture-Studio-2.5.0-beta.dmg"
+DMG_PATH="dist/Picture-Studio-2.5.1.dmg"
 PY="${PYTHON:-.venv/bin/python}"
 
 echo "▶ 1/4  Clean previous build…"

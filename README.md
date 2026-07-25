@@ -1,10 +1,8 @@
-# Picture Studio v2.5.0-beta
+# Picture Studio v2.5.1
 
 [![CI](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml/badge.svg)](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml)
 
-> ⚠ **Beta-Version** — Funktionsumfang vollständig, noch nicht für den produktiven Einsatz freigegeben.
-
-Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Objekterkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.
+Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Anomalieerkennung, Data-Drift-Überwachung und Active Learning — entwickelt mit **PySide6** und **PyTorch**.
 
 ---
 
@@ -24,14 +22,12 @@ Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Ano
 | **Hyperparameter-Suche** | Optuna-basiert (lr, batch_size, architecture, optimizer), beste Parameter direkt in die UI übernommen, Live-Log-Dialog |
 | **Augmentation-Pipeline** | Rotation, Flip H/V, Helligkeit, Kontrast, Blur, Rauschen; konfigurierbare Kopien pro Bild |
 | **Anomalie-Erkennung** | Unüberwachter Conv-Autoencoder; Live-Scoring, Heatmap, Bounding Box, Grad-CAM-Overlay, konfigurierbarer Schwellwert, Kalibrierungsdialog, Event-Log (CSV), MQTT-Alarm, **Auto-Retraining-Banner** (nach N Alarmen), **Shadow Mode / A/B-Vergleich** (zwei Modelle parallel, Divergenz-CSV) |
-| **Objekterkennung (YOLOv8)** | Bounding-Box-Training auf Projekt-ROIs; Modellgrößen n/s/m/l; Ordner-Inferenz mit konfigurierbarem Konfidenz-Schwellwert; CSV-Export; optional (`pip install ultralytics`) |
 | **Data Drift Detection** | Z-Score-basierter Vergleich von Produktionsbildern zur Trainingsdistribution; Merkmale: Farbe, Schärfe (Laplacian), Kantendichte (Canny), Histogramm; Baseline speicher-/ladbar; farbkodierte Ergebnistabelle |
 | **Kamera-Einstellungen** | Helligkeit, Kontrast, Sättigung, Schärfe, Belichtung live anpassen (USB/UVC); Zurücksetzen auf Neutral |
 | **Vorverarbeitungsfilter** | Graustufen, Canny-Kanten, Sobel-Gradient, Laplacian vor Anzeige und optional vor Scoring |
 | **Modellbibliothek** | Versioniertes Registry, ONNX-Export (Opset 17/INT8), TorchScript-Export, CoreML-Export (macOS), sortierbare Vergleichs-Tabelle, Run-History, Archivieren/Löschen |
 | **Modell-Kalibrierung** | Temperature Scaling (scipy) für korrekte Konfidenzwerte post-hoc |
 | **Inferenz** | Batch-Inferenz, Top-K-Anzeige, Test-Time Augmentation (TTA), Ensemble-Inferenz, Semi-automatisches Labeling, Konfidenz-Farbkodierung, ROI-Fallback |
-| **Anomalie-Clustering** | K-Means/DBSCAN auf Autoencoder-Latentspace; Cluster-Übersicht mit Galerie |
 | **Fleet-Management** | Zentrale Überwachung mehrerer remote `monitor.py`-Instanzen; Remote-Training und -Deploy direkt aus der GUI |
 | **Docker-Deployment** | Einzeilen-Generator für `Dockerfile`, `docker-compose.yml`, Startskript und README |
 | **Metriken & Berichte** | Accuracy, F1, gewichteter F1, ROC/AUC, Top-K, HTML- und Excel-Trainingsbericht, Konfusionsmatrix |
@@ -48,7 +44,6 @@ Eine Desktop-Anwendung zur Bildannotation, Videoanalyse, CNN-Modelltraining, Ano
 |---|---|---|---|---|
 | Klassifikation | ✅ | ✅ | ✅ | ✅ |
 | Anomalie-Erkennung | ✅ | ❌ | ✅ | ✅ |
-| Object Detection | ✅ | ✅ | ✅ | ✅ |
 | OPC-UA / Modbus | ✅ | ❌ | ❌ | ✅ |
 | Fleet / Edge-Deployment | ✅ | teilweise | ✅ | ✅ |
 | Pre-Labeling | ✅ | ✅ | ✅ | — |
@@ -146,7 +141,7 @@ Vorschläge unter dem Schwellwert oder mit unbekannten Labels werden automatisch
 
 ### Data Drift Detection — Produktionsüberwachung (v2.3.8)
 
-Erkennt automatisch, wenn sich Produktionsbilder von der Trainingsdistribution unterscheiden (Seite **Data Drift**, Stack 16):
+Erkennt automatisch, wenn sich Produktionsbilder von der Trainingsdistribution unterscheiden (Seite **Data Drift**, Stack 14):
 
 - **Baseline erstellen** aus Projektbildern oder beliebigem Ordner — analysiert Farbe, Schärfe (Laplacian-Varianz), Kantendichte (Canny), Graustufenhistogramm
 - **Z-Score-Vergleich** neuer Bilder zur Baseline — kein Data Scientist benötigt
@@ -155,28 +150,6 @@ Erkennt automatisch, wenn sich Produktionsbilder von der Trainingsdistribution u
 - CSV-Export für Weiterverarbeitung
 
 Keine zusätzlichen Abhängigkeiten — nur numpy + Pillow (bereits enthalten).
-
----
-
-### Objekterkennung (YOLOv8) — Stack 15 (v2.3.7)
-
-Neue Seite **Objekterkennung** für Bild-Projekte:
-
-1. **Bilder mit ROIs annotieren** (Labeling-Seite — jeder ROI + Label = eine Bounding-Box-Annotation)
-2. **Dataset vorbereiten** — automatische Konvertierung ins YOLO-Format (normalisierte Koordinaten, Train-/Val-Split)
-3. **Modell wählen & trainieren** — yolov8n / s / m / l, Epochen/Batch/Gerät konfigurierbar
-4. **Erkennung auf neuen Bildern** — Einzelbild mit Bounding-Box-Preview oder Ordner-Inferenz mit Ergebnistabelle
-
-| Modell | Parameter | Empfehlung |
-|---|---|---|
-| yolov8n | ~3 M | CPU, sehr schnell |
-| yolov8s | ~11 M | Gutes Gleichgewicht |
-| yolov8m | ~26 M | Empfohlen für Produktion |
-| yolov8l | ~44 M | Maximale Genauigkeit (GPU) |
-
-```bash
-pip install ultralytics   # optional
-```
 
 ---
 
@@ -240,7 +213,6 @@ python main.py
 
 | Paket | Feature |
 |---|---|
-| `ultralytics` | YOLOv8 Objekterkennung |
 | `optuna` | Hyperparameter-Suche (Klassifikation + Anomalie) |
 | `imagehash` | Perceptual-Duplikaterkennung in Datensatz-Statistiken |
 | `scipy` | Temperature Scaling + KS-Test für Data Drift |
@@ -249,7 +221,7 @@ python main.py
 | `onnxruntime` | ONNX-Inferenz in monitor.py |
 
 ```bash
-pip install ultralytics optuna imagehash scipy paho-mqtt onnxruntime
+pip install optuna imagehash scipy paho-mqtt onnxruntime
 ```
 
 ---
@@ -431,45 +403,7 @@ pip install ultralytics optuna imagehash scipy paho-mqtt onnxruntime
 
 ---
 
-### Anleitung B — Objekterkennung (YOLOv8)
-
-> Ziel: Mehrere Objekte gleichzeitig in einem Bild lokalisieren und klassifizieren.
-
----
-
-#### Schritt 1 — Bilder annotieren (ROIs mit Labels)
-
-1. Bildprojekt öffnen, Bilder importieren
-2. Labels definieren (jedes Label = eine Objektklasse)
-3. Seite **Labeling** → Für jedes Bild ROIs zeichnen + Label zuweisen
-   - Mehrere ROIs pro Bild möglich (jeder ROI = eine Bounding Box)
-
----
-
-#### Schritt 2 — Dataset vorbereiten + Training
-
-1. Seite **Objekterkennung** öffnen
-2. `Dataset vorbereiten` — konvertiert ROIs ins YOLO-Format (80 %/20 % Split)
-3. Modellgröße wählen (yolov8n für schnellen Test, yolov8m für Produktion)
-4. `⚡ Training starten` — Fortschritt und Losses werden live angezeigt
-5. Bestes Modell (`best.pt`) wird automatisch angeboten
-
----
-
-#### Schritt 3 — Neue Bilder analysieren
-
-- **Einzelbild:** `Bild wählen` → Bounding Boxes werden eingezeichnet
-- **Ordner:** Ordner wählen → `Erkennung starten` → Tabelle mit Ergebnissen
-- Konfidenz-Schwellwert anpassen (0,25 = Standard; 0,5+ für weniger Fehlerkennungen)
-- `CSV exportieren` für Weiterverarbeitung
-
-```bash
-pip install ultralytics   # einmalig installieren
-```
-
----
-
-### Anleitung C — Videoanalyse & Anomalieerkennung
+### Anleitung B — Videoanalyse & Anomalieerkennung
 
 > Ziel: Einen Prozess per Kamera oder Video überwachen und grobe Abweichungen vom Normalzustand automatisch erkennen.
 
@@ -679,13 +613,12 @@ python monitor.py --channels kanäle.json
 | 8 | Live & Anomalie | Video |
 | 9 | Batch-Inferenz | Bild |
 | 10 | Multi-Kamera | Video |
-| 11 | Anomalie-Clustering | beide |
-| 12 | Datensatz-Statistiken | Bild |
-| 13 | Video-Annotation | Video |
-| 14 | Fleet | Video |
-| 15 | Objekterkennung | Bild |
-| 16 | Data Drift | Bild |
-| 17 | Anomalie-Training | Video |
+| 11 | Datensatz-Statistiken | Bild |
+| 12 | Video-Annotation | Video |
+| 13 | Fleet | Video |
+| 14 | Data Drift | Bild |
+| 15 | Anomalie-Training | Video |
+| 16 | Live-Klassifikation | Bild |
 
 > **Active Learning** ist kein eigener Stack-Index — der AL-Scan-Tab befindet sich auf der Training-Seite (Index 3); das AL-Review-Panel ist in die Labeling-Seite (Index 2) integriert.
 
@@ -707,13 +640,10 @@ Picture/
 │   ├── pre_labeling.py     # PreLabeler: Modell-Vorschläge für ungelabelte Bilder
 │   ├── active_learning.py  # ActiveLearningSampler + ActiveLearningThread
 │   ├── data_drift.py       # DriftDetector: Z-Score-basierter Drift-Vergleich
-│   ├── object_detection.py # ObjectDetector: YOLOv8-Wrapper + QThread
-│   ├── detection_dataset.py# YOLO-Dataset-Konvertierung aus Projekt-ROIs
 │   ├── metrics.py          # Accuracy, F1, ROC/AUC, Top-K
 │   ├── export.py           # Excel-Export
 │   ├── model_manager.py    # Registry, ONNX/TorchScript/CoreML-Export
 │   ├── anomaly_detector.py # Conv-Autoencoder: Training, Scoring, Bounding Box
-│   ├── anomaly_clustering.py
 │   ├── hyperparameter_tuning.py  # HPTWorker + AnomalyHPTWorker (Optuna)
 │   ├── remote_ssh.py       # SSHManager, Training-Bundle
 │   ├── remote_training.py  # RemoteTrainingThread
@@ -744,14 +674,14 @@ Picture/
 │   │   ├── models_page.py
 │   │   ├── inference_page.py     # TTA, Ensemble, ROI-Fallback
 │   │   ├── batch_inference_page.py
-│   │   ├── object_detection_page.py  # Stack 15
-│   │   ├── data_drift_page.py        # Stack 16
+│   │   ├── live_classification_page.py
+│   │   ├── data_drift_page.py
 │   │   ├── export_page.py
 │   │   ├── camera_page.py
 │   │   ├── multi_camera_page.py
-│   │   ├── anomaly_clustering_page.py
 │   │   ├── dataset_stats_page.py
 │   │   ├── video_annotation_page.py
+│   │   ├── anomaly_training_page.py
 │   │   ├── fleet_page.py
 │   │   └── settings_page.py
 │   └── widgets/
@@ -762,12 +692,11 @@ Picture/
 ├── scripts/
 │   └── remote_train.py     # Standalone-Skript für SSH-Ferntraining
 │
-└── tests/                  # 756 Tests (Unit + Integration)
+└── tests/                  # 1102 Tests (Unit + Integration)
     ├── conftest.py
     ├── test_project.py
     ├── test_dataset.py
     ├── test_metrics.py
-    ├── test_object_detection.py
     ├── test_data_drift.py
     ├── test_pre_labeling.py
     └── test_integration.py
@@ -781,7 +710,6 @@ Picture/
 |---|---|
 | Anwendung startet nicht | `pip install PySide6`; Linux: `apt install libxcb-cursor0` |
 | Training sehr langsam | Gerät `cuda` oder `mps` wählen; Bildgröße auf 128 px reduzieren |
-| `ImportError: ultralytics` | `pip install ultralytics` (nur für Objekterkennung nötig) |
 | `ImportError: openpyxl` | `pip install openpyxl` |
 | `ImportError: paramiko` | `pip install paramiko` (nur SSH-Ferntraining) |
 | Diagramme fehlen | `pip install matplotlib` |
@@ -789,7 +717,6 @@ Picture/
 | Viele Fehlalarme (Anomalie) | Schwellwert erhöhen (`📊 Schwellwert kalibrieren`); Beleuchtung stabilisieren |
 | Data Drift zeigt alles rot | Schwellwert erhöhen; sicherstellen dass Baseline repräsentative Bilder enthält |
 | Pre-Labeling keine Vorschläge | Konfidenz-Schwellwert senken; Modell auf gleiche Klassen wie Projekt prüfen |
-| YOLO-Training startet nicht | `pip install ultralytics`; mindestens 1 annotiertes Bild mit Label nötig |
 | Projektdatei beschädigt | `.bak`-Backup im Projektverzeichnis in `.json` umbenennen |
 | MQTT verbindet nicht | Broker-Adresse und Port prüfen; `pip install paho-mqtt` |
 
@@ -798,15 +725,14 @@ Picture/
 ## Tests ausführen
 
 ```bash
-# Alle Tests (942 Tests, ~210 s)
+# Alle Tests (1102 Tests inkl. Integration)
 .venv/bin/python -m pytest tests/ -v
 
-# Nur Unit-Tests (schnell, < 5 s)
+# Ohne ML-Integrationstests
 .venv/bin/python -m pytest tests/ -q --ignore=tests/test_integration.py
 
 # Einzelne Test-Datei
 .venv/bin/python -m pytest tests/test_data_drift.py -v
-.venv/bin/python -m pytest tests/test_object_detection.py -v
 .venv/bin/python -m pytest tests/test_pre_labeling.py -v
 
 # Mit Coverage

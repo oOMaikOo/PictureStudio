@@ -1,6 +1,6 @@
 # 🌐 Fleet-Management
 
-> **PictureStudio v2.3.0** — Mehrere Monitor-Instanzen zentral überwachen
+> **PictureStudio v2.5.1** — Mehrere Monitor-Instanzen zentral überwachen
 
 ---
 

@@ -8,6 +8,8 @@ All notable changes to PictureStudio are documented here.
 
 ### Changed
 
+- **Funktionsumfang bereinigt** — Objekterkennung (YOLOv8) und Anomalie-Clustering wurden aus der aktuellen App-Oberfläche, integrierten Hilfe, README- und Wiki-/Guide-Navigation entfernt. COCO/YOLO-Annotationsexporte bleiben in der Daten-Seite erhalten.
+- **Release-Metadaten synchronisiert** — App-Version, README, PyInstaller-Bundle-Version und DMG-Dateiname auf `2.5.1` vereinheitlicht; Beta-Hinweise entfernt.
 - **Fleet-Workflow vereinfacht** — `_RemoteTrainDialog` in `gui/pages/fleet_page.py` auf 2 Tabs reduziert (war 3). Kanal-Auswahl entfernt; Dialog öffnet direkt mit Status-Check (`GET /api/status`).
 - **Frame-Download statt JPEG-Polling** — `_FrameCollectThread` (150 Einzel-Requests) ersetzt durch `_FrameDownloadThread`: lädt alle Frames in einem einzigen `GET /api/frames?n=N`-Request als ZIP herunter, entpackt sie lokal und füttert den `AnomalyDetector`.
 - **Unified API-Port** — `monitor.py` REST-API auf Port **8766** (default), kein separater Setup-Port für den Deploy-Workflow mehr nötig.

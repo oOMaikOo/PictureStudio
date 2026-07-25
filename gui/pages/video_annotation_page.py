@@ -132,7 +132,7 @@ class VideoAnnotationPage(QWidget):
         self._interval_spin = QSpinBox()
         self._interval_spin.setRange(1, 100)
         self._interval_spin.setValue(5)
-        self._interval_spin.setToolTip(tr("objdet.tip_interval"))
+        self._interval_spin.setToolTip(tr("videoannotation.interval_tip"))
         self._interval_spin.setFixedWidth(70)
         top_bar.addWidget(self._interval_spin)
         root.addLayout(top_bar)

@@ -1,6 +1,6 @@
 # 📁 Daten
 
-> **PictureStudio v2.3.0** — Bilder laden, Datensatz analysieren und Annotationen exportieren
+> **PictureStudio v2.5.1** — Bilder laden, Datensatz analysieren und Annotationen exportieren
 
 ---
 

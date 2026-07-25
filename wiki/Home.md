@@ -1,6 +1,6 @@
 # PictureStudio Wiki
 
-> **PictureStudio v2.3.0** — KI-gestützte Bildanalyse & Anomalieerkennung
+> **PictureStudio v2.5.1** — KI-gestützte Bildanalyse & Anomalieerkennung
 
 ---
 
@@ -21,7 +21,6 @@
 - [🔧 Fehlerbehebung](Fehlerbehebung) — Häufige Probleme und ihre Lösungen
 - [💻 Monitor-Client](Monitor-Client) — Eigenständiges CLI-Tool für den Produktionseinsatz
 - [📹 Multi-Kamera](Multi-Kamera) — Bis zu 9 Kamerakanäle gleichzeitig überwachen
-- [🔬 Anomalie-Clustering](Anomalie-Clustering) — Alarm-Bilder automatisch nach visueller Ähnlichkeit gruppieren
 - [📈 Datensatz-Statistiken](Datensatz-Statistiken) — Klassenverteilung, Duplikate und Label-Rate analysieren
 - [🎬 Video-Annotation](Video-Annotation) — Frame-für-Frame Annotation direkt aus Videodateien
 - [🌐 Fleet-Management](Fleet-Management) — Mehrere Monitor-Instanzen zentral überwachen

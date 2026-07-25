@@ -1,6 +1,6 @@
 # ⌨ Tastenkürzel
 
-> **PictureStudio v2.3.0** — Alle Tastenkürzel für schnelles Arbeiten
+> **PictureStudio v2.5.1** — Alle Tastenkürzel für schnelles Arbeiten
 
 ---
 

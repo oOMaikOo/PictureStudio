@@ -1,6 +1,6 @@
 # ⚡ Modelle Erweitert
 
-> **PictureStudio v2.3.0** — Hyperparameter-Suche, Kalibrierung, INT8, CoreML und Docker-Deployment
+> **PictureStudio v2.5.1** — Hyperparameter-Suche, Kalibrierung, INT8, CoreML und Docker-Deployment
 
 ---
 
