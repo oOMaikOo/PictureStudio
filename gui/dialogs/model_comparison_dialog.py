@@ -15,20 +15,25 @@ class ModelComparisonDialog(QDialog):
 
     def __init__(self, runs: list, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Modellvergleich")
+        from utils.i18n import tr
+        self.setWindowTitle(tr("modelcmp.title"))
         self.setMinimumSize(640, 320)
         self._runs = runs
         self._build_ui()
 
     def _build_ui(self) -> None:
+        from utils.i18n import tr
         layout = QVBoxLayout(self)
 
-        hdr = QLabel(f"Vergleich: {len(self._runs)} Modelle")
+        hdr = QLabel(tr("modelcmp.header", n=len(self._runs)))
         hdr.setStyleSheet("font-size: 14px; font-weight: bold; color: #388BFD; padding: 4px;")
         layout.addWidget(hdr)
 
         self.table = QTableWidget(len(self._runs), 5)
-        self.table.setHorizontalHeaderLabels(["Modell", "Acc %", "F1 %", "Architektur", "★"])
+        self.table.setHorizontalHeaderLabels([
+            tr("modelcmp.col.model"), tr("modelcmp.col.acc"), tr("modelcmp.col.f1"),
+            tr("modelcmp.col.arch"), "★",
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 5):
             self.table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
@@ -42,7 +47,7 @@ class ModelComparisonDialog(QDialog):
             f1  = run.get("macro_f1", 0.0) * 100
             is_best = bool(run.get("is_best", False))
             items = [
-                QTableWidgetItem(run.get("name", f"Run {row}")),
+                QTableWidgetItem(run.get("name", tr("modelcmp.unnamed_run", n=row))),
                 QTableWidgetItem(f"{acc:.2f}"),
                 QTableWidgetItem(f"{f1:.2f}"),
                 QTableWidgetItem(run.get("architecture", "?")),
@@ -62,7 +67,7 @@ class ModelComparisonDialog(QDialog):
         self.table.setSortingEnabled(True)
         layout.addWidget(self.table)
 
-        footer = QLabel("★ = Als bestes Modell markiert  |  Klick auf Spaltenheader = Sortieren")
+        footer = QLabel(tr("modelcmp.footer"))
         footer.setStyleSheet("color: #8B949E; font-size: 10px; padding: 2px;")
         layout.addWidget(footer)
 

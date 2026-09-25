@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPixmap, QIcon
 
+from utils.i18n import tr
+
 
 class QAReviewDialog(QDialog):
     """
@@ -21,7 +23,7 @@ class QAReviewDialog(QDialog):
     def __init__(self, project, parent=None):
         super().__init__(parent)
         self.project = project
-        self.setWindowTitle("Label-Qualitätssicherung (QA-Review)")
+        self.setWindowTitle(tr("qa.title"))
         self.resize(920, 580)
         self._build_ui()
         self._load_items()
@@ -58,7 +60,7 @@ class QAReviewDialog(QDialog):
         self._preview.setStyleSheet(
             "background:#111;border-radius:6px;color:#666;"
         )
-        self._preview.setText("Kein Bild ausgewählt")
+        self._preview.setText(tr("qa.no_image"))
         right.addWidget(self._preview)
 
         self._img_info = QLabel()
@@ -67,45 +69,41 @@ class QAReviewDialog(QDialog):
         right.addWidget(self._img_info)
 
         self._comment_edit = QLineEdit()
-        self._comment_edit.setPlaceholderText("Kommentar (optional)…")
+        self._comment_edit.setPlaceholderText(tr("qa.comment_placeholder"))
         self._comment_edit.setStyleSheet("font-size:10px;")
         right.addWidget(self._comment_edit)
 
         btn_row = QHBoxLayout()
 
-        self._confirm_btn = QPushButton("✓ Label bestätigen")
+        self._confirm_btn = QPushButton(tr("qa.confirm_btn"))
         self._confirm_btn.setStyleSheet(
             "background:#27AE60;color:white;padding:7px 14px;"
             "font-weight:bold;border-radius:4px;"
         )
-        self._confirm_btn.setToolTip(
-            "Existierendes Label als korrekt markieren und Flag entfernen"
-        )
+        self._confirm_btn.setToolTip(tr("qa.confirm_tip"))
         self._confirm_btn.clicked.connect(self._confirm_current)
         btn_row.addWidget(self._confirm_btn)
 
-        self._change_btn = QPushButton("✕ Label ändern…")
+        self._change_btn = QPushButton(tr("qa.change_btn"))
         self._change_btn.setStyleSheet(
             "background:#E74C3C;color:white;padding:7px 14px;"
             "font-weight:bold;border-radius:4px;"
         )
-        self._change_btn.setToolTip(
-            "Anderes Label auswählen und Flag entfernen"
-        )
+        self._change_btn.setToolTip(tr("qa.change_tip"))
         self._change_btn.clicked.connect(self._change_current)
         btn_row.addWidget(self._change_btn)
 
-        self._skip_btn = QPushButton("→ Überspringen")
-        self._skip_btn.setToolTip("Zum nächsten unsicheren Bild, ohne Änderung")
+        self._skip_btn = QPushButton(tr("qa.skip_btn"))
+        self._skip_btn.setToolTip(tr("qa.skip_tip"))
         self._skip_btn.clicked.connect(self._skip_current)
         btn_row.addWidget(self._skip_btn)
 
         right.addLayout(btn_row)
 
-        confirm_all_btn = QPushButton("✓ Alle bestätigen")
+        confirm_all_btn = QPushButton(tr("qa.confirm_all_btn"))
         confirm_all_btn.setFlat(True)
         confirm_all_btn.setStyleSheet("color:#2ECC71;font-size:10px;padding:2px;")
-        confirm_all_btn.setToolTip("Alle verbleibenden unsicheren Labels als korrekt markieren")
+        confirm_all_btn.setToolTip(tr("qa.confirm_all_tip"))
         confirm_all_btn.clicked.connect(self._confirm_all)
         right.addWidget(confirm_all_btn)
         right.addStretch()
@@ -114,7 +112,7 @@ class QAReviewDialog(QDialog):
         splitter.setSizes([320, 600])
         v.addWidget(splitter)
 
-        close_btn = QPushButton("Schließen")
+        close_btn = QPushButton(tr("common.close"))
         close_btn.clicked.connect(self.accept)
         v.addWidget(close_btn)
 
@@ -125,17 +123,16 @@ class QAReviewDialog(QDialog):
         uncertain = self.project.get_uncertain_images()
         n = len(uncertain)
         self._header.setText(
-            f"{n} unsichere{'s' if n == 1 else ''} Label{'s' if n != 1 else ''} "
-            "zur Überprüfung"
+            tr("qa.header_one") if n == 1 else tr("qa.header_many", n=n)
         )
         for img_path in uncertain:
             fname = os.path.basename(img_path)
             lbl = self.project.get_image_label(img_path)
             flag = self.project.get_label_flag(img_path)
             comment = flag.get("comment", "")
-            lines = [fname, f"  Label: {lbl or '(kein)'}"]
+            lines = [fname, tr("qa.list_label", label=lbl or tr("qa.no_label"))]
             if comment:
-                lines.append(f"  Kommentar: {comment}")
+                lines.append(tr("qa.list_comment", comment=comment))
             item = QListWidgetItem("\n".join(lines))
             item.setData(Qt.UserRole, img_path)
             item.setForeground(QColor("#E67E22"))
@@ -159,7 +156,7 @@ class QAReviewDialog(QDialog):
     def _on_row_changed(self, row: int) -> None:
         item = self._list.item(row)
         if not item:
-            self._preview.setText("Kein Bild ausgewählt")
+            self._preview.setText(tr("qa.no_image"))
             self._img_info.clear()
             self._comment_edit.clear()
             self._update_buttons()
@@ -178,13 +175,14 @@ class QAReviewDialog(QDialog):
             self._preview.setText("")
         else:
             self._preview.clear()
-            self._preview.setText("Bild konnte nicht geladen werden")
+            self._preview.setText(tr("qa.load_failed"))
 
-        self._img_info.setText(
-            f"<b>{os.path.basename(img_path)}</b><br>"
-            f"Label: <b>{lbl or '(kein)'}</b><br>"
-            f"<span style='color:#555'>{img_path}</span>"
-        )
+        self._img_info.setText(tr(
+            "qa.img_info",
+            name=os.path.basename(img_path),
+            label=lbl or tr("qa.no_label"),
+            path=img_path,
+        ))
         self._comment_edit.setText(comment)
         self._update_buttons()
 
@@ -196,8 +194,7 @@ class QAReviewDialog(QDialog):
         self._load_items()
         if self._list.count() == 0:
             QMessageBox.information(
-                self, "QA abgeschlossen",
-                "Alle unsicheren Labels wurden überprüft."
+                self, tr("qa.done_title"), tr("qa.done_msg")
             )
 
     def _change_current(self) -> None:
@@ -217,7 +214,7 @@ class QAReviewDialog(QDialog):
             action.setIcon(QIcon(pix))
             action.setData(lbl_name)
         menu.addSeparator()
-        no_lbl = menu.addAction("(kein Label)")
+        no_lbl = menu.addAction(tr("qa.menu_no_label"))
         no_lbl.setData("")
 
         chosen = menu.exec(
@@ -239,13 +236,12 @@ class QAReviewDialog(QDialog):
         if not uncertain:
             return
         reply = QMessageBox.question(
-            self, "Alle bestätigen",
-            f"Alle {len(uncertain)} unsicheren Labels als korrekt markieren\n"
-            "und Flags entfernen?",
+            self, tr("qa.confirm_all_title"),
+            tr("qa.confirm_all_msg", n=len(uncertain)),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             for img_path in list(uncertain):
                 self.project.clear_label_flag(img_path)
             self._load_items()
-            QMessageBox.information(self, "Fertig", "Alle Flags wurden entfernt.")
+            QMessageBox.information(self, tr("qa.cleared_title"), tr("qa.cleared_msg"))

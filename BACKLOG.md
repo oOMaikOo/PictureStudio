@@ -6,7 +6,7 @@ Verbesserungen, die noch nicht umgesetzt wurden. Sortiert nach Aufwand.
 
 ## Sofort sinnvoll
 
-A–E sind Teilmengen eines größeren Befunds: projektweit stehen **386 hartkodierte UI-Strings** in `gui/` (Stand 2026-09-25). Der größte Einzelposten fehlt in A–E und steht als **R**.
+A–E sind Teilmengen eines größeren Befunds: beim Audit am 2026-09-25 standen projektweit **386 hartkodierte UI-Strings** in `gui/`. Der größte Einzelposten (Kamera-Dialog, 208 Strings) ist mit **R** erledigt; A–E sind die verbleibenden Seiten.
 
 | ID | Beschreibung | Datei(en) |
 |----|-------------|-----------|
@@ -22,13 +22,12 @@ A–E sind Teilmengen eines größeren Befunds: projektweit stehen **386 hartkod
 ## Aufräumen / Technische Schulden
 
 Ergebnisse des Code-Audits vom 2026-09-25 (Stand v2.5.1). Innerhalb der Sektion nach Aufwand sortiert.
-IDs M (tote Module), N (tote Abhängigkeiten), P (Stack-Index als `IntEnum`) und Q (`CameraSettingsGroup`) sind erledigt — siehe CHANGELOG [Unreleased].
+IDs M (tote Module), N (tote Abhängigkeiten), P (Stack-Index als `IntEnum`) Q (`CameraSettingsGroup`) und R (i18n Kamera-Dialog + unübersetzte Dialoge) sind erledigt — siehe CHANGELOG [Unreleased].
 ID O (angeblich unerreichbare Seiten 11/14) war ein Fehlbefund und wurde zurückgezogen: beide Seiten sind über **Ansicht → Datensatz-Stats / Data Drift** erreichbar (`main_window.py:301-302`); sie stehen seit `30099de` bewusst nur im Menü statt in der Sidebar.
 
 | ID | Beschreibung | Datei(en) |
 |----|-------------|-----------|
 | U | **Eigene Hilfesektion für Live-Klassifikation** — `PAGE_TO_SECTION[Page.LIVE_CLASSIFY]` zeigt behelfsweise auf Sektion 7 („Klassifikation"). Die Seite hat eigene Bedienelemente (Kamera/Video-Quelle, Top-k-Overlay, Mindest-Konfidenz, „Frame ins Projekt übernehmen") und eine eigene Tour, aber keine eigene Hilfe. Analog zur Batch-Sektion anlegen; die freie Sektions-ID 21 bietet sich an | `gui/help_dialog.py`, `gui/main_window.py`, locales |
-| R | **i18n camera_capture_dialog + nie übersetzte Dialoge** — größter i18n-Posten im Projekt und in A–E nicht enthalten: `camera_capture_dialog.py` 114 hartkodierte Strings gegen 38 `tr()`. Dazu zwei Dialoge komplett ohne `tr()`: `qa_review_dialog.py` (14 Strings, 0 `tr()`) und `dialogs/model_comparison_dialog.py` (6 Strings, 0 `tr()`) | `gui/camera_capture_dialog.py`, `gui/qa_review_dialog.py`, `gui/dialogs/model_comparison_dialog.py`, locales |
 | S | **Breite `except`-Blöcke projektweit** — 173 Handler, die weder loggen noch weiterreichen, davon 37 reines `except: pass`. Schwerpunkte: `api/rest_server.py` (11), `monitor/runner.py` (9), `core/industrial_notifier.py` (8), `core/data_drift.py` (8), `gui/pages/fleet_page.py` (8), `gui/camera_capture_dialog.py` (7). Legitime Fälle ausnehmen (`utils/reproducibility.py` probiert optionale Imports), Rest mindestens auf `log.debug()` heben. **F** ist die camera_page-Teilmenge | projektweit |
 | T | **Exporte in data_page auf QThread** — `_export_coco` (`:427`) und `_export_yolo` (`:441`) laufen synchron; `core/dataset.py:467` und `:517` öffnen darin jedes Bild einzeln mit PIL. Die Analyse daneben läuft korrekt im `AnalysisThread` — die Exporte wurden nicht mitgezogen | `gui/pages/data_page.py`, `core/dataset.py` |
 

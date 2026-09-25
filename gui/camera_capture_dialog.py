@@ -228,7 +228,7 @@ class CameraCaptureDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle("Kamera aufnehmen")
+        self.setWindowTitle(tr("capdlg.title"))
         self.setMinimumSize(1200, 720)
 
         self._initial_cam_props: dict = cam_props or {}
@@ -313,71 +313,68 @@ class CameraCaptureDialog(QDialog):
 
         usb_w = QWidget()
         usb_l = QVBoxLayout(usb_w)
-        usb_l.addWidget(QLabel("Verfügbare USB-Kameras:"))
+        usb_l.addWidget(QLabel(tr("capdlg.usb_available")))
         self._usb_combo = QComboBox()
-        self._usb_combo.addItem("Suche läuft…")
+        self._usb_combo.addItem(tr("camera.search_running"))
         usb_l.addWidget(self._usb_combo)
-        refresh_btn = QPushButton("Kameras neu suchen")
+        refresh_btn = QPushButton(tr("camera.refresh_tooltip"))
         refresh_btn.clicked.connect(self._scan_usb_cameras)
         usb_l.addWidget(refresh_btn)
         usb_l.addStretch()
-        self._src_tabs.addTab(usb_w, "USB Kamera")
+        self._src_tabs.addTab(usb_w, tr("capdlg.tab_usb"))
 
         ip_w = QWidget()
         ip_l = QVBoxLayout(ip_w)
-        ip_l.addWidget(QLabel("Kamera-URL (RTSP / HTTP):"))
+        ip_l.addWidget(QLabel(tr("camera.ip_dialog_prompt")))
         self._ip_edit = QLineEdit()
-        self._ip_edit.setPlaceholderText("rtsp://user:pass@192.168.1.100:554/stream")
+        self._ip_edit.setPlaceholderText(tr("capdlg.ip_placeholder"))
         ip_l.addWidget(self._ip_edit)
-        examples = QLabel(
-            "<small>rtsp://192.168.1.100:554/live<br>"
-            "http://192.168.1.100:8080/video</small>"
-        )
+        examples = QLabel(tr("capdlg.ip_examples"))
         examples.setWordWrap(True)
         ip_l.addWidget(examples)
         ip_l.addStretch()
-        self._src_tabs.addTab(ip_w, "IP Kamera")
+        self._src_tabs.addTab(ip_w, tr("capdlg.tab_ip"))
 
         # Video-Datei tab
         vid_w = QWidget()
         vid_l = QVBoxLayout(vid_w)
         vid_pick_row = QHBoxLayout()
-        self._vid_path_lbl = QLabel("Keine Datei gewählt")
+        self._vid_path_lbl = QLabel(tr("capdlg.no_file"))
         self._vid_path_lbl.setWordWrap(True)
         self._vid_path_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
-        vid_pick_btn = QPushButton("Datei wählen…")
+        vid_pick_btn = QPushButton(tr("capdlg.pick_file_btn"))
         vid_pick_btn.clicked.connect(self._pick_video_file)
         vid_pick_row.addWidget(vid_pick_btn)
         vid_l.addLayout(vid_pick_row)
         vid_l.addWidget(self._vid_path_lbl)
         fps_row = QHBoxLayout()
-        fps_row.addWidget(QLabel("Wiedergabe:"))
+        fps_row.addWidget(QLabel(tr("capdlg.playback_label")))
         self._vid_fps_spin = QDoubleSpinBox()
         self._vid_fps_spin.setRange(0.0, 120.0)
         self._vid_fps_spin.setValue(0.0)
         self._vid_fps_spin.setDecimals(1)
-        self._vid_fps_spin.setSuffix(" fps")
-        self._vid_fps_spin.setToolTip("0 = originale Videogeschwindigkeit")
+        self._vid_fps_spin.setSuffix(tr("capdlg.fps_suffix"))
+        self._vid_fps_spin.setToolTip(tr("capdlg.fps_tip"))
         self._vid_fps_spin.setSpecialValueText("Original fps")
         fps_row.addWidget(self._vid_fps_spin)
         fps_row.addStretch()
         vid_l.addLayout(fps_row)
         self._vid_progress = QProgressBar()
         self._vid_progress.setVisible(False)
-        self._vid_progress.setFormat("%v / %m Frames")
+        self._vid_progress.setFormat(tr("capdlg.frame_progress_fmt"))
         vid_l.addWidget(self._vid_progress)
         vid_l.addStretch()
-        self._src_tabs.addTab(vid_w, "Video-Datei")
+        self._src_tabs.addTab(vid_w, tr("capdlg.tab_video"))
 
         lv.addWidget(self._src_tabs)
 
         # ── Connect / status ─────────────────────────────────────────────────
         conn_row = QHBoxLayout()
-        self._connect_btn = QPushButton("Verbinden")
+        self._connect_btn = QPushButton(tr("camera.connect_btn"))
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
         self._connect_btn.clicked.connect(self._toggle_connection)
         conn_row.addWidget(self._connect_btn)
-        self._status_lbl = QLabel("Nicht verbunden")
+        self._status_lbl = QLabel(tr("capdlg.not_connected"))
         self._status_lbl.setStyleSheet("color:#E74C3C;")
         conn_row.addWidget(self._status_lbl)
         lv.addLayout(conn_row)
@@ -391,23 +388,23 @@ class CameraCaptureDialog(QDialog):
         lv.addWidget(self._cam_settings)
 
         # ── Capture controls ─────────────────────────────────────────────────
-        cap_group = QGroupBox("Aufnahme")
+        cap_group = QGroupBox(tr("capdlg.capture_group"))
         cg = QVBoxLayout(cap_group)
 
-        self._single_btn = QPushButton("Bild aufnehmen  [Leertaste]")
+        self._single_btn = QPushButton(tr("capdlg.single_btn"))
         self._single_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
         self._single_btn.clicked.connect(self._capture_single)
         cg.addWidget(self._single_btn)
 
         burst_row = QHBoxLayout()
         burst_row.setSpacing(4)
-        burst_row.addWidget(QLabel("Burst:"))
+        burst_row.addWidget(QLabel(tr("capdlg.burst_label")))
         self._burst_count = QSpinBox()
         self._burst_count.setRange(2, 500)
         self._burst_count.setValue(10)
         self._burst_count.setFixedWidth(68)
         burst_row.addWidget(self._burst_count)
-        burst_row.addWidget(QLabel("Bilder,"))
+        burst_row.addWidget(QLabel(tr("capdlg.images_comma")))
         self._burst_interval = QDoubleSpinBox()
         self._burst_interval.setRange(0.1, 10.0)
         self._burst_interval.setValue(0.5)
@@ -417,7 +414,7 @@ class CameraCaptureDialog(QDialog):
         burst_row.addStretch()
         cg.addLayout(burst_row)
 
-        self._burst_btn = QPushButton("Burst starten")
+        self._burst_btn = QPushButton(tr("capdlg.burst_btn"))
         self._burst_btn.clicked.connect(self._start_burst)
         cg.addWidget(self._burst_btn)
 
@@ -426,13 +423,13 @@ class CameraCaptureDialog(QDialog):
         cg.addWidget(self._burst_progress)
 
         rec_row = QHBoxLayout()
-        self._rec_btn = QPushButton("⏺ Aufnahme starten")
-        self._rec_btn.setToolTip("Live-Stream als MP4 aufzeichnen")
+        self._rec_btn = QPushButton(tr("capdlg.rec_start_btn"))
+        self._rec_btn.setToolTip(tr("capdlg.rec_tip"))
         self._rec_btn.clicked.connect(self._toggle_recording)
         self._rec_fps_spin = QSpinBox()
         self._rec_fps_spin.setRange(1, 60)
         self._rec_fps_spin.setValue(15)
-        self._rec_fps_spin.setSuffix(" fps")
+        self._rec_fps_spin.setSuffix(tr("capdlg.fps_suffix"))
         rec_row.addWidget(self._rec_btn)
         rec_row.addWidget(self._rec_fps_spin)
         cg.addLayout(rec_row)
@@ -442,13 +439,13 @@ class CameraCaptureDialog(QDialog):
         lv.addWidget(cap_group)
 
         # ── Timestamp ────────────────────────────────────────────────────────
-        ts_group = QGroupBox("Zeitstempel")
+        ts_group = QGroupBox(tr("capdlg.ts_group"))
         tg = QVBoxLayout(ts_group)
-        self._ts_preview_cb = QCheckBox("Im Vorschaubild anzeigen")
-        self._ts_preview_cb.setToolTip("Blendet Systemzeit und -datum im Live-Bild ein")
+        self._ts_preview_cb = QCheckBox(tr("capdlg.ts_preview_cb"))
+        self._ts_preview_cb.setToolTip(tr("capdlg.ts_preview_tip"))
         tg.addWidget(self._ts_preview_cb)
-        self._ts_save_cb = QCheckBox("In gespeichertes Bild einbrennen")
-        self._ts_save_cb.setToolTip("Brennt den Zeitstempel dauerhaft in die PNG-Datei ein")
+        self._ts_save_cb = QCheckBox(tr("capdlg.ts_burn_cb"))
+        self._ts_save_cb.setToolTip(tr("capdlg.ts_burn_tip"))
         tg.addWidget(self._ts_save_cb)
         lv.addWidget(ts_group)
 
@@ -456,7 +453,7 @@ class CameraCaptureDialog(QDialog):
         lv.addWidget(self._build_anomaly_group())
 
         # ── Save location ────────────────────────────────────────────────────
-        save_group = QGroupBox("Speicherort")
+        save_group = QGroupBox(tr("capdlg.savedir_group"))
         sg = QVBoxLayout(save_group)
         dir_row = QHBoxLayout()
         self._dir_edit = QLineEdit(self._save_dir)
@@ -470,17 +467,17 @@ class CameraCaptureDialog(QDialog):
         lv.addWidget(save_group)
 
         # ── Captured list ────────────────────────────────────────────────────
-        list_group = QGroupBox("Aufgenommene Bilder")
+        list_group = QGroupBox(tr("capdlg.shots_group"))
         lg = QVBoxLayout(list_group)
         self._captured_list = QListWidget()
         self._captured_list.setMaximumHeight(130)
         self._captured_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._captured_list.customContextMenuRequested.connect(self._on_captured_list_menu)
         lg.addWidget(self._captured_list)
-        del_btn = QPushButton("Markierte entfernen")
+        del_btn = QPushButton(tr("capdlg.remove_selected_btn"))
         del_btn.clicked.connect(self._delete_selected)
         lg.addWidget(del_btn)
-        clear_btn = QPushButton("Alle löschen")
+        clear_btn = QPushButton(tr("capdlg.clear_all_btn"))
         clear_btn.clicked.connect(self._clear_all)
         lg.addWidget(clear_btn)
         lv.addWidget(list_group)
@@ -512,7 +509,7 @@ class CameraCaptureDialog(QDialog):
         live_w = QWidget()
         live_l = QVBoxLayout(live_w)
         live_l.setContentsMargins(0, 0, 0, 0)
-        self._preview_lbl = QLabel("Kein Signal")
+        self._preview_lbl = QLabel(tr("capdlg.no_signal"))
         self._preview_lbl.setAlignment(Qt.AlignCenter)
         self._preview_lbl.setMinimumSize(_PREVIEW_W, _PREVIEW_H)
         self._preview_lbl.setStyleSheet(
@@ -521,13 +518,13 @@ class CameraCaptureDialog(QDialog):
         self._preview_lbl.setMouseTracking(True)
         self._preview_lbl.installEventFilter(self)
         live_l.addWidget(self._preview_lbl)
-        self._preview_tabs.addTab(live_w, "📷  Live")
+        self._preview_tabs.addTab(live_w, tr("capdlg.tab_live"))
 
         # Tab 1 – Modell (Rekonstruktion des Autoencoders)
         model_w = QWidget()
         model_l = QVBoxLayout(model_w)
         model_l.setContentsMargins(0, 0, 0, 0)
-        self._recon_lbl = QLabel("Modell noch nicht trainiert.\nNach dem Training erscheint hier die Rekonstruktion.")
+        self._recon_lbl = QLabel(tr("capdlg.model_untrained"))
         self._recon_lbl.setAlignment(Qt.AlignCenter)
         self._recon_lbl.setMinimumSize(_PREVIEW_W, _PREVIEW_H)
         self._recon_lbl.setStyleSheet(
@@ -538,29 +535,29 @@ class CameraCaptureDialog(QDialog):
         self._recon_info.setAlignment(Qt.AlignCenter)
         self._recon_info.setStyleSheet("color:#7F8C8D; font-size:10px; padding:2px;")
         model_l.addWidget(self._recon_info)
-        self._preview_tabs.addTab(model_w, "🔮  Modell")
+        self._preview_tabs.addTab(model_w, tr("capdlg.tab_model"))
 
         # Batch-Analyse tab
         batch_w = QWidget()
         batch_l = QVBoxLayout(batch_w)
         batch_pick_row = QHBoxLayout()
-        pick_folder_btn = QPushButton("Ordner wählen…")
+        pick_folder_btn = QPushButton(tr("capdlg.pick_folder_btn"))
         pick_folder_btn.clicked.connect(self._batch_pick_folder)
-        pick_files_btn = QPushButton("Dateien wählen…")
+        pick_files_btn = QPushButton(tr("capdlg.pick_files_btn"))
         pick_files_btn.clicked.connect(self._batch_pick_files)
         batch_pick_row.addWidget(pick_folder_btn)
         batch_pick_row.addWidget(pick_files_btn)
         batch_l.addLayout(batch_pick_row)
-        self._batch_file_lbl = QLabel("Keine Dateien ausgewählt")
+        self._batch_file_lbl = QLabel(tr("capdlg.no_files_selected"))
         self._batch_file_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
         batch_l.addWidget(self._batch_file_lbl)
         batch_ctrl_row = QHBoxLayout()
-        self._batch_start_btn = QPushButton("Analyse starten")
+        self._batch_start_btn = QPushButton(tr("capdlg.analyze_btn"))
         self._batch_start_btn.clicked.connect(self._batch_start)
-        self._batch_stop_btn = QPushButton("Stopp")
+        self._batch_stop_btn = QPushButton(tr("capdlg.stop_btn"))
         self._batch_stop_btn.clicked.connect(self._batch_stop)
         self._batch_stop_btn.setEnabled(False)
-        self._batch_export_btn = QPushButton("CSV exportieren")
+        self._batch_export_btn = QPushButton(tr("capdlg.export_csv_btn"))
         self._batch_export_btn.clicked.connect(self._batch_export_csv)
         self._batch_export_btn.setEnabled(False)
         batch_ctrl_row.addWidget(self._batch_start_btn)
@@ -577,7 +574,7 @@ class CameraCaptureDialog(QDialog):
         self._batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._batch_table.setSelectionBehavior(QTableWidget.SelectRows)
         batch_l.addWidget(self._batch_table, stretch=1)
-        self._preview_tabs.addTab(batch_w, "📁  Batch")
+        self._preview_tabs.addTab(batch_w, tr("capdlg.tab_batch"))
 
         rv.addWidget(self._preview_tabs, stretch=1)
 
@@ -597,7 +594,7 @@ class CameraCaptureDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
         btn_row.addStretch()
-        self._accept_btn = QPushButton("In Projekt übernehmen (0)")
+        self._accept_btn = QPushButton(tr("capdlg.adopt_btn_zero"))
         self._accept_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
         self._accept_btn.setEnabled(False)
         self._accept_btn.clicked.connect(self._on_accept_clicked)
@@ -609,11 +606,11 @@ class CameraCaptureDialog(QDialog):
 
     def _build_anomaly_group(self) -> QGroupBox:
         """Build and return the anomaly-detection GroupBox."""
-        grp = QGroupBox("Anomalie-Erkennung (Autoencoder)")
+        grp = QGroupBox(tr("capdlg.ae_group"))
         g = QVBoxLayout(grp)
         g.setSpacing(5)
 
-        self._ae_scoring_btn = QPushButton("▶  Live-Scoring starten")
+        self._ae_scoring_btn = QPushButton(tr("capdlg.scoring_start_btn"))
         self._ae_scoring_btn.setCheckable(True)
         self._ae_scoring_btn.setEnabled(False)
         self._ae_scoring_btn.setFixedHeight(36)
@@ -629,53 +626,49 @@ class CameraCaptureDialog(QDialog):
         g.addWidget(self._ae_scoring_btn)
 
         # ── ROI ──────────────────────────────────────────────────────────────
-        roi_grp = QGroupBox("0 · Analysebereich (ROI) – optional")
+        roi_grp = QGroupBox(tr("capdlg.roi_group"))
         rl = QVBoxLayout(roi_grp)
-        roi_hint = QLabel("Im Vorschaubild einen Bereich aufziehen.\n"
-                          "Nur dieser Bereich fließt in Training & Scoring ein.")
+        roi_hint = QLabel(tr("capdlg.roi_hint"))
         roi_hint.setStyleSheet("color:#7F8C8D; font-size:10px;")
         roi_hint.setWordWrap(True)
         rl.addWidget(roi_hint)
         roi_btn_row = QHBoxLayout()
-        self._roi_draw_btn = QPushButton("ROI aufziehen")
+        self._roi_draw_btn = QPushButton(tr("capdlg.roi_draw_btn"))
         self._roi_draw_btn.setCheckable(True)
-        self._roi_draw_btn.setToolTip("Klicken, dann im Vorschaubild Rechteck ziehen")
+        self._roi_draw_btn.setToolTip(tr("capdlg.roi_draw_tip"))
         self._roi_draw_btn.toggled.connect(self._on_roi_draw_toggled)
         roi_btn_row.addWidget(self._roi_draw_btn)
-        self._roi_clear_btn = QPushButton("ROI löschen")
+        self._roi_clear_btn = QPushButton(tr("capdlg.roi_clear_btn"))
         self._roi_clear_btn.setEnabled(False)
         self._roi_clear_btn.clicked.connect(self._clear_roi)
         roi_btn_row.addWidget(self._roi_clear_btn)
         rl.addLayout(roi_btn_row)
-        self._roi_lbl = QLabel("Kein ROI – ganzes Bild wird analysiert")
+        self._roi_lbl = QLabel(tr("capdlg.roi_none"))
         self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
         rl.addWidget(self._roi_lbl)
         g.addWidget(roi_grp)
 
         # ── Collection ───────────────────────────────────────────────────────
-        coll_grp = QGroupBox("1 · Normalframes aufnehmen")
+        coll_grp = QGroupBox(tr("capdlg.collect_group"))
         cl = QVBoxLayout(coll_grp)
         cnt_row = QHBoxLayout()
-        cnt_row.addWidget(QLabel("Anzahl:"))
+        cnt_row.addWidget(QLabel(tr("capdlg.count_label")))
         self._ae_collect_n = QSpinBox()
         self._ae_collect_n.setRange(20, 25000)
         self._ae_collect_n.setValue(150)
-        self._ae_collect_n.setSuffix(" Frames")
+        self._ae_collect_n.setSuffix(tr("capdlg.frames_suffix"))
         cnt_row.addWidget(self._ae_collect_n)
         cl.addLayout(cnt_row)
 
         # Optional: only collect frames that actually contain motion
         mc_row = QHBoxLayout()
-        self._ae_motion_collect_cb = QCheckBox("Nur bei Bewegung aufnehmen")
+        self._ae_motion_collect_cb = QCheckBox(tr("capdlg.motion_collect_cb"))
         self._ae_motion_collect_cb.setToolTip(
-            "Es werden nur Frames in den Trainingspuffer übernommen, in denen sich\n"
-            "etwas im Bild verändert hat. Statische Frames werden übersprungen und\n"
-            "zählen NICHT zur Zielanzahl. Nützlich, um gezielt Bewegungs-Frames zu\n"
-            "trainieren statt langer statischer Phasen."
+            tr("capdlg.motion_collect_tip")
         )
         self._ae_motion_collect_cb.toggled.connect(self._on_collect_motion_toggled)
         mc_row.addWidget(self._ae_motion_collect_cb)
-        self._ae_motion_sens_lbl = QLabel("Sens.:")
+        self._ae_motion_sens_lbl = QLabel(tr("capdlg.sens_label"))
         self._ae_motion_sens_lbl.setEnabled(False)
         mc_row.addWidget(self._ae_motion_sens_lbl)
         self._ae_motion_sens_spin = QSpinBox()
@@ -684,19 +677,16 @@ class CameraCaptureDialog(QDialog):
         self._ae_motion_sens_spin.setSuffix(" %")
         self._ae_motion_sens_spin.setEnabled(False)
         self._ae_motion_sens_spin.setToolTip(
-            "Bewegungssensitivität: minimaler Anteil veränderter Pixel (in %),\n"
-            "ab dem ein Frame als Bewegung gilt und aufgenommen wird.\n"
-            "Klein = sehr sensitiv, Groß = nur grobe Bewegungen."
-        )
+            tr("capdlg.motion_collect_sens_tip")        )
         mc_row.addWidget(self._ae_motion_sens_spin)
         mc_row.addStretch()
         cl.addLayout(mc_row)
 
         collect_row = QHBoxLayout()
-        self._ae_collect_btn = QPushButton("Aufnehmen starten")
+        self._ae_collect_btn = QPushButton(tr("capdlg.collect_start_btn"))
         self._ae_collect_btn.clicked.connect(self._start_collecting)
         collect_row.addWidget(self._ae_collect_btn)
-        ae_clear_btn = QPushButton("Löschen")
+        ae_clear_btn = QPushButton(tr("capdlg.collect_clear_btn"))
         ae_clear_btn.setMaximumWidth(60)
         ae_clear_btn.clicked.connect(self._clear_ae_frames)
         collect_row.addWidget(ae_clear_btn)
@@ -706,28 +696,26 @@ class CameraCaptureDialog(QDialog):
         self._ae_collect_bar.setVisible(False)
         cl.addWidget(self._ae_collect_bar)
 
-        self._ae_collect_lbl = QLabel("0 Frames gesammelt")
+        self._ae_collect_lbl = QLabel(tr("capdlg.collected_zero"))
         self._ae_collect_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
         cl.addWidget(self._ae_collect_lbl)
         g.addWidget(coll_grp)
 
         # ── Training ─────────────────────────────────────────────────────────
-        train_grp = QGroupBox("2 · Autoencoder trainieren")
+        train_grp = QGroupBox(tr("capdlg.train_group"))
         tl = QVBoxLayout(train_grp)
         ep_row = QHBoxLayout()
-        ep_row.addWidget(QLabel("Epochen:"))
+        ep_row.addWidget(QLabel(tr("capdlg.epochs_label")))
         self._ae_epochs = QSpinBox()
         self._ae_epochs.setRange(5, 200)
         self._ae_epochs.setValue(40)
         ep_row.addWidget(self._ae_epochs)
         tl.addLayout(ep_row)
 
-        self._ae_hpt_btn = QPushButton("⚙ Hyperparameter-Suche…")  # not in key list, keep as-is
+        self._ae_hpt_btn = QPushButton(tr("capdlg.hpt_btn"))  # not in key list, keep as-is
         self._ae_hpt_btn.setEnabled(False)
         self._ae_hpt_btn.setToolTip(
-            "Optuna-basierte Suche nach optimalen Autoencoder-Parametern\n"
-            "(base_ch, lr, batch_size). Benötigt: pip install optuna\n"
-            "Voraussetzung: Frames aufgenommen."
+            tr("capdlg.hpt_tip")
         )
         self._ae_hpt_btn.setStyleSheet(
             "QPushButton{background:#5D4037;color:white;border-radius:4px;padding:4px 10px;}"
@@ -753,21 +741,17 @@ class CameraCaptureDialog(QDialog):
         g.addWidget(train_grp)
 
         # ── Live scoring ─────────────────────────────────────────────────────
-        score_grp = QGroupBox("3 · Live-Erkennung")
+        score_grp = QGroupBox(tr("capdlg.detect_group"))
         sl = QVBoxLayout(score_grp)
 
         self._ae_heatmap_cb = QCheckBox(tr("camera.heatmap_cb"))
         self._ae_heatmap_cb.setToolTip(
-            "Überlagert das Live-Bild mit einer Wärmekarte der Rekonstruktionsfehler.\n"
-            "Rot = hoher Fehler = potenzielle Anomalie.\n"
-            "Wechsle zum Tab '🔮 Modell' um die Rekonstruktion zu sehen."
-        )
+            tr("capdlg.heatmap_tip")      )
         sl.addWidget(self._ae_heatmap_cb)
 
         self._ae_gradcam_cb = QCheckBox(tr("camera.gradcam_cb"))
         self._ae_gradcam_cb.setToolTip(
-            "Grad-CAM Aktivierungskarte über dem Live-Frame.\n"
-            "Zeigt welche Regionen den Rekonstruktionsfehler verursachen."
+            tr("capdlg.gradcam_tip")
         )
         sl.addWidget(self._ae_gradcam_cb)
 
@@ -776,12 +760,9 @@ class CameraCaptureDialog(QDialog):
         self._ae_smooth_n = QSpinBox()
         self._ae_smooth_n.setRange(1, 20)
         self._ae_smooth_n.setValue(5)
-        self._ae_smooth_n.setSuffix(" Frames")
+        self._ae_smooth_n.setSuffix(tr("capdlg.frames_suffix"))
         self._ae_smooth_n.setToolTip(
-            "Alarm erst nach N aufeinanderfolgenden Frames über dem Schwellwert.\n"
-            "Verhindert Fehlalarme durch kurze Erschütterungen oder Kamerawackler.\n"
-            "1 = sofortiger Alarm, 5 = robuster gegen Einzelstörer."
-        )
+            tr("capdlg.smooth_tip")        )
         smooth_row.addWidget(self._ae_smooth_n)
         smooth_row.addStretch()
         sl.addLayout(smooth_row)
@@ -793,9 +774,7 @@ class CameraCaptureDialog(QDialog):
         self._dedup_spin.setValue(30)
         self._dedup_spin.setSuffix(" s")
         self._dedup_spin.setToolTip(
-            "Mindestabstand zwischen zwei Alarm-Events in Sekunden.\n"
-            "Verhindert dass derselbe Anomaliebereich hunderte Einträge erzeugt.\n"
-            "0 = kein Deduplication-Filter."
+            tr("capdlg.dedup_tip")
         )
         dedup_row.addWidget(self._dedup_spin)
         dedup_row.addStretch()
@@ -809,14 +788,12 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.setSingleStep(0.001)
         self._ae_threshold_spin.setValue(0.02)
         self._ae_threshold_spin.setToolTip(
-            "Nach dem Training automatisch gesetzt (Mittelwert + 2,5 × Std-Abw).\n"
-            "Erhöhen = weniger sensitiv, senken = sensitiver."
-        )
+            tr("capdlg.threshold_tip")        )
         self._ae_threshold_spin.valueChanged.connect(self._on_threshold_changed)
         thr_row.addWidget(self._ae_threshold_spin)
         sl.addLayout(thr_row)
 
-        self._ae_score_lbl = QLabel("Score: –")
+        self._ae_score_lbl = QLabel(tr("camera.score_none"))
         self._ae_score_lbl.setAlignment(Qt.AlignCenter)
         self._ae_score_lbl.setStyleSheet(
             "font-weight:bold;font-size:12px;padding:5px;"
@@ -824,17 +801,15 @@ class CameraCaptureDialog(QDialog):
         )
         sl.addWidget(self._ae_score_lbl)
 
-        self._ae_save_anomaly_cb = QCheckBox("Anomalie-Frames automatisch speichern")
-        self._ae_save_anomaly_cb.setToolTip("Speichert jeden Frame bei dem der Score den Schwellwert überschreitet.")
+        self._ae_save_anomaly_cb = QCheckBox(tr("capdlg.autosave_cb"))
+        self._ae_save_anomaly_cb.setToolTip(tr("capdlg.autosave_tip"))
         sl.addWidget(self._ae_save_anomaly_cb)
 
         # Motion filter
         motion_row = QHBoxLayout()
-        self._motion_filter_cb = QCheckBox("Nur bei Bewegung prüfen")
+        self._motion_filter_cb = QCheckBox(tr("capdlg.motion_score_cb"))
         self._motion_filter_cb.setToolTip(
-            "Frames ohne Bewegung werden übersprungen — der Anomalie-Detektor\n"
-            "läuft nur wenn sich etwas im Bild verändert hat.\n"
-            "Spart CPU und verhindert Fehlalarme bei statischen Szenen."
+            tr("capdlg.motion_score_tip")
         )
         self._motion_filter_cb.toggled.connect(self._on_motion_filter_toggled)
         motion_row.addWidget(self._motion_filter_cb)
@@ -843,12 +818,9 @@ class CameraCaptureDialog(QDialog):
         self._motion_sens_spin.setValue(15)
         self._motion_sens_spin.setSuffix(" %")
         self._motion_sens_spin.setToolTip(
-            "Bewegungssensitivität: minimaler Unterschied (in % der Pixel)\n"
-            "zwischen zwei Frames, der als Bewegung gilt.\n"
-            "Klein = sehr sensitiv, Groß = nur grobe Bewegungen."
-        )
+            tr("capdlg.motion_score_sens_tip")        )
         self._motion_sens_spin.setEnabled(False)
-        self._motion_sens_lbl = QLabel("Sens.:")
+        self._motion_sens_lbl = QLabel(tr("capdlg.sens_label"))
         self._motion_sens_lbl.setEnabled(False)
         motion_row.addWidget(self._motion_sens_lbl)
         motion_row.addWidget(self._motion_sens_spin)
@@ -861,24 +833,24 @@ class CameraCaptureDialog(QDialog):
         self._motion_status_lbl.setVisible(False)
         sl.addWidget(self._motion_status_lbl)
 
-        calib_btn = QPushButton("📊 Schwellwert kalibrieren…")
-        calib_btn.setToolTip("Score-Verteilung der letzten Frames anzeigen und Schwellwert anpassen.")
+        calib_btn = QPushButton(tr("capdlg.calibrate_btn"))
+        calib_btn.setToolTip(tr("capdlg.calibrate_tip"))
         calib_btn.clicked.connect(self._open_calibration)
         sl.addWidget(calib_btn)
 
         # Score time-series chart
         from gui.widgets.score_chart import ScoreChart
         self._score_chart = ScoreChart()
-        self._score_chart.setToolTip("Live-Verlauf der Anomalie-Scores (grün = OK, rot = Alarm)")
+        self._score_chart.setToolTip(tr("capdlg.chart_tip"))
         sl.addWidget(self._score_chart)
 
         # Event log row
         log_row = QHBoxLayout()
-        self._event_log_lbl = QLabel("Events: –")
+        self._event_log_lbl = QLabel(tr("capdlg.events_none"))
         self._event_log_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
         log_row.addWidget(self._event_log_lbl)
         log_row.addStretch()
-        self._open_log_btn = QPushButton("Log öffnen")
+        self._open_log_btn = QPushButton(tr("camera.log_btn"))
         self._open_log_btn.setFixedWidth(90)
         self._open_log_btn.setEnabled(False)
         self._open_log_btn.clicked.connect(self._open_event_log)
@@ -888,39 +860,37 @@ class CameraCaptureDialog(QDialog):
         g.addWidget(score_grp)
 
         # ── Model save / load ─────────────────────────────────────────────────
-        io_grp = QGroupBox("Modell speichern / laden / exportieren")
+        io_grp = QGroupBox(tr("capdlg.model_io_group"))
         il = QVBoxLayout(io_grp)
         btn_row1 = QHBoxLayout()
-        save_ae_btn = QPushButton("Speichern…")
+        save_ae_btn = QPushButton(tr("capdlg.save_btn"))
         save_ae_btn.clicked.connect(self._save_ae_model)
-        load_ae_btn = QPushButton("Laden…")
+        load_ae_btn = QPushButton(tr("capdlg.load_btn"))
         load_ae_btn.clicked.connect(self._load_ae_model)
-        info_ae_btn = QPushButton("ℹ Info")
-        info_ae_btn.setToolTip("Trainings-Metadaten des geladenen Modells anzeigen")
+        info_ae_btn = QPushButton(tr("capdlg.info_btn"))
+        info_ae_btn.setToolTip(tr("capdlg.info_tip"))
         info_ae_btn.clicked.connect(self._show_model_info)
         btn_row1.addWidget(save_ae_btn)
         btn_row1.addWidget(load_ae_btn)
         btn_row1.addWidget(info_ae_btn)
         il.addLayout(btn_row1)
         btn_row2 = QHBoxLayout()
-        export_onnx_btn = QPushButton("→ ONNX")
-        export_onnx_btn.setToolTip("Autoencoder als ONNX exportieren (für Deployment)")
+        export_onnx_btn = QPushButton(tr("capdlg.onnx_btn"))
+        export_onnx_btn.setToolTip(tr("capdlg.onnx_tip"))
         export_onnx_btn.clicked.connect(self._export_ae_onnx)
-        export_ts_btn = QPushButton("→ TorchScript")
-        export_ts_btn.setToolTip("Autoencoder als TorchScript (.pt) exportieren")
+        export_ts_btn = QPushButton(tr("capdlg.ts_btn"))
+        export_ts_btn.setToolTip(tr("capdlg.ts_tip"))
         export_ts_btn.clicked.connect(self._export_ae_torchscript)
         btn_row2.addWidget(export_onnx_btn)
         btn_row2.addWidget(export_ts_btn)
         il.addLayout(btn_row2)
         btn_row3 = QHBoxLayout()
-        export_profile_btn = QPushButton("📋 Profil exportieren…")
+        export_profile_btn = QPushButton(tr("capdlg.profile_export_btn"))
         export_profile_btn.setToolTip(
-            "Speichert Modell, Kamera, Schwellwert etc. als JSON-Profil\n"
-            "für den headless monitor_daemon.py"
-        )
+            tr("capdlg.profile_export_tip")        )
         export_profile_btn.clicked.connect(self._export_monitoring_profile)
-        load_profile_btn = QPushButton("📂 Profil laden…")
-        load_profile_btn.setToolTip("Lädt ein zuvor exportiertes Monitoring-Profil")
+        load_profile_btn = QPushButton(tr("capdlg.profile_load_btn"))
+        load_profile_btn.setToolTip(tr("capdlg.profile_load_tip"))
         load_profile_btn.clicked.connect(self._load_monitoring_profile)
         btn_row3.addWidget(export_profile_btn)
         btn_row3.addWidget(load_profile_btn)
@@ -935,7 +905,7 @@ class CameraCaptureDialog(QDialog):
         """Start an async USB camera scan and update the combo when finished."""
         self._prev_usb_cam = self._usb_combo.currentData()  # save BEFORE clearing
         self._usb_combo.clear()
-        self._usb_combo.addItem("Suche läuft…")
+        self._usb_combo.addItem(tr("camera.search_running"))
         self._usb_combo.setEnabled(False)
         self._scan_thread = _UsbScanThread(self)
         self._scan_thread.cameras_found.connect(self._on_usb_scan_done)
@@ -951,7 +921,7 @@ class CameraCaptureDialog(QDialog):
             for idx, label in cameras:
                 self._usb_combo.addItem(label, userData=idx)
         else:
-            self._usb_combo.addItem("Keine USB-Kamera gefunden")
+            self._usb_combo.addItem(tr("camera.no_camera"))
         # Restore previous selection so a refresh doesn't silently reset the user's choice
         if prev is not None:
             for i in range(self._usb_combo.count()):
@@ -964,8 +934,8 @@ class CameraCaptureDialog(QDialog):
     def _pick_video_file(self) -> None:
         """Open a file chooser and store the chosen video path for later playback."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Video-Datei wählen", "",
-            "Videos (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;Alle Dateien (*)"
+            self, tr("capdlg.video_file_dlg"), "",
+            tr("capdlg.video_filter")
         )
         if path:
             self._video_file_path = path
@@ -988,7 +958,7 @@ class CameraCaptureDialog(QDialog):
         tab = self._src_tabs.currentIndex()
         if tab == 2:  # Video-Datei
             if not self._video_file_path or not os.path.isfile(self._video_file_path):
-                QMessageBox.warning(self, "Keine Datei", "Bitte zuerst eine Video-Datei auswählen.")
+                QMessageBox.warning(self, tr("capdlg.no_file_title"), tr("capdlg.no_file_msg"))
                 return
             fps = self._vid_fps_spin.value()
             self._video_thread = _VideoFileThread(self._video_file_path, fps=fps, parent=self)
@@ -1017,7 +987,7 @@ class CameraCaptureDialog(QDialog):
                 self._frame_thread.set_cam_props(current_props)
         self._connect_btn.setText(tr("common.stop"))
         self._connect_btn.setStyleSheet("background:#E74C3C;color:white;padding:6px;font-weight:bold;")
-        self._status_lbl.setText("Verbinde…")
+        self._status_lbl.setText(tr("capdlg.connecting"))
         self._status_lbl.setStyleSheet("color:#F39C12;")
 
     def _disconnect(self) -> None:
@@ -1035,9 +1005,9 @@ class CameraCaptureDialog(QDialog):
             self._audit_log.log_unloaded("Kamera getrennt")
         self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
-        self._status_lbl.setText("Nicht verbunden")
+        self._status_lbl.setText(tr("capdlg.not_connected"))
         self._status_lbl.setStyleSheet("color:#E74C3C;")
-        self._preview_lbl.setText("Kein Signal")
+        self._preview_lbl.setText(tr("capdlg.no_signal"))
         self._current_frame = None
 
     @Slot(int, int)
@@ -1053,7 +1023,7 @@ class CameraCaptureDialog(QDialog):
         self._vid_progress.setVisible(False)
         self._connect_btn.setText(tr("camera.connect_btn"))
         self._connect_btn.setStyleSheet("background:#2ECC71;color:white;padding:6px;font-weight:bold;")
-        self._status_lbl.setText("Video fertig analysiert")
+        self._status_lbl.setText(tr("capdlg.video_done"))
         self._status_lbl.setStyleSheet("color:#3FB950;")
 
     def _apply_cam_prop(self, prop_name: str, value: int) -> None:
@@ -1078,12 +1048,12 @@ class CameraCaptureDialog(QDialog):
         if self._src_tabs.currentIndex() == 0:
             data = self._usb_combo.currentData()
             if data is None:
-                QMessageBox.warning(self, "Keine Kamera", "Keine USB-Kamera ausgewählt.")
+                QMessageBox.warning(self, tr("capdlg.no_cam_title"), tr("capdlg.no_cam_msg"))
                 return None
             return int(data)
         url = self._ip_edit.text().strip()
         if not url:
-            QMessageBox.warning(self, "Keine URL", "Bitte eine Kamera-URL eingeben.")
+            QMessageBox.warning(self, tr("capdlg.no_url_title"), tr("capdlg.no_url_msg"))
             return None
         return url
 
@@ -1151,7 +1121,7 @@ class CameraCaptureDialog(QDialog):
                 self._ae_collect_remaining -= 1
                 n = self._detector.n_collected()
                 self._ae_collect_bar.setValue(n)
-                self._ae_collect_lbl.setText(f"{n} Frames gesammelt")
+                self._ae_collect_lbl.setText(tr("capdlg.collected_n", n=n))
                 if self._ae_collect_remaining <= 0:
                     self._ae_collecting = False
                     self._ae_collect_bar.setVisible(False)
@@ -1161,7 +1131,7 @@ class CameraCaptureDialog(QDialog):
             elif self._ae_motion_collect_cb.isChecked():
                 pct_txt = "—" if changed_pct is None else f"{changed_pct:.1f}%"
                 self._ae_collect_lbl.setText(
-                    f"{self._detector.n_collected()} Frames — ⏸ warte auf Bewegung ({pct_txt})"
+                    tr("capdlg.collected_waiting", n=self._detector.n_collected(), pct=pct_txt)
                 )
 
         # ── Motion filter (optional pre-check before anomaly scoring) ────────
@@ -1179,7 +1149,7 @@ class CameraCaptureDialog(QDialog):
                 )
             else:
                 motion_detected = False  # no prev frame yet → skip first frame
-                self._motion_status_lbl.setText("Bewegung: warte auf 2. Frame…")
+                self._motion_status_lbl.setText(tr("capdlg.motion_waiting"))
 
         # ── Anomaly scoring (every 3rd frame to reduce CPU load) ──────────────
         if self._ae_scoring_btn.isChecked() and self._detector and self._detector.trained and motion_detected:
@@ -1220,7 +1190,7 @@ class CameraCaptureDialog(QDialog):
                             score, self._detector.threshold, saved_path
                         )
                         self._event_log_lbl.setText(
-                            f"Events: {self._event_logger.event_count}"
+                            tr("capdlg.events_n", n=self._event_logger.event_count)
                         )
                     if dedup_ok and self._mqtt_client is not None:
                         self._mqtt_client.publish_alarm(
@@ -1264,7 +1234,7 @@ class CameraCaptureDialog(QDialog):
         pix = QPixmap.fromImage(frame_to_qimage(display))
         pix = pix.scaled(self._preview_lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self._preview_lbl.setPixmap(pix)
-        self._status_lbl.setText("Verbunden")
+        self._status_lbl.setText(tr("capdlg.connected"))
         self._status_lbl.setStyleSheet("color:#2ECC71;")
         self._frame_info.setText(f"{w}×{h} px")
 
@@ -1331,7 +1301,7 @@ class CameraCaptureDialog(QDialog):
         path = os.path.join(self._save_dir, filename)
         save_frame = self._apply_timestamp(frame) if self._ts_save_cb.isChecked() else frame
         if not cv2.imwrite(path, save_frame):
-            QMessageBox.critical(self, "Speicherfehler", f"Konnte nicht speichern:\n{path}")
+            QMessageBox.critical(self, tr("capdlg.save_error"), tr("capdlg.save_failed_msg", path=path))
             return None
         return path
 
@@ -1369,7 +1339,7 @@ class CameraCaptureDialog(QDialog):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2, cv2.LINE_AA,
             )
         if not cv2.imwrite(path, save_frame):
-            QMessageBox.critical(self, "Speicherfehler", f"Konnte nicht speichern:\n{path}")
+            QMessageBox.critical(self, tr("capdlg.save_error"), tr("capdlg.save_failed_msg", path=path))
             return None
 
         # ── JSON sidecar: full provenance record ─────────────────────────────
@@ -1402,7 +1372,7 @@ class CameraCaptureDialog(QDialog):
 
     def _batch_pick_folder(self) -> None:
         """Choose a folder; populate ``_batch_paths`` with all supported image files inside."""
-        folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
+        folder = QFileDialog.getExistingDirectory(self, tr("capdlg.pick_img_folder_dlg"))
         if not folder:
             return
         exts = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"}
@@ -1411,7 +1381,7 @@ class CameraCaptureDialog(QDialog):
             if os.path.splitext(p)[1].lower() in exts
         )
         self._batch_file_lbl.setText(
-            f"{len(self._batch_paths)} Bilder aus: {os.path.basename(folder)}"
+            tr("capdlg.batch_from_folder", n=len(self._batch_paths), folder=os.path.basename(folder))
         )
         self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
 
@@ -1423,17 +1393,17 @@ class CameraCaptureDialog(QDialog):
         )
         if paths:
             self._batch_paths = sorted(paths)
-            self._batch_file_lbl.setText(f"{len(self._batch_paths)} Bilder gewählt")
+            self._batch_file_lbl.setText(tr("capdlg.batch_selected", n=len(self._batch_paths)))
             self._batch_file_lbl.setStyleSheet("color:#E0E0E0; font-size:10px;")
 
     def _batch_start(self) -> None:
         """Start the batch-analysis thread and switch the preview to the Batch tab."""
         self._ensure_detector()
         if not self._detector.trained:
-            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren oder laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("capdlg.train_or_load_first"))
             return
         if not self._batch_paths:
-            QMessageBox.warning(self, "Keine Bilder", "Bitte zuerst Bilder oder Ordner wählen.")
+            QMessageBox.warning(self, tr("common.no_images"), tr("capdlg.no_input_msg"))
             return
         self._batch_results.clear()
         self._batch_table.setRowCount(0)
@@ -1488,7 +1458,7 @@ class CameraCaptureDialog(QDialog):
         self._batch_export_btn.setEnabled(bool(self._batch_results))
         n_anom = sum(1 for _, _, a in self._batch_results if a)
         self._batch_file_lbl.setText(
-            f"Fertig: {len(self._batch_results)} Bilder — {n_anom} Anomalien gefunden"
+            tr("capdlg.batch_done", n=len(self._batch_results), anom=n_anom)
         )
 
     def _batch_export_csv(self) -> None:
@@ -1496,7 +1466,7 @@ class CameraCaptureDialog(QDialog):
         if not self._batch_results:
             return
         import csv
-        path, _ = QFileDialog.getSaveFileName(self, "CSV exportieren", "", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, tr("capdlg.export_csv_btn"), "", tr("capdlg.csv_filter"))
         if not path:
             return
         try:
@@ -1506,9 +1476,9 @@ class CameraCaptureDialog(QDialog):
                 thr = self._detector.threshold
                 for img_path, score, is_anomaly in self._batch_results:
                     w.writerow([img_path, f"{score:.6f}", "JA" if is_anomaly else "nein", f"{thr:.6f}"])
-            QMessageBox.information(self, "Exportiert", f"CSV gespeichert:\n{path}")
+            QMessageBox.information(self, tr("common.exported"), tr("capdlg.csv_saved", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     # ================================================================== RECORDING
 
@@ -1522,11 +1492,11 @@ class CameraCaptureDialog(QDialog):
     def _start_recording(self) -> None:
         """Open a save dialog, initialise the ``cv2.VideoWriter`` and start recording frames."""
         if self._current_frame is None:
-            QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
+            QMessageBox.warning(self, tr("capdlg.no_signal"), tr("capdlg.connect_first"))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Video speichern unter", self._save_dir,
-            "MP4 Video (*.mp4);;AVI Video (*.avi)"
+            self, tr("capdlg.video_save_dlg"), self._save_dir,
+            tr("capdlg.video_out_filter")
         )
         if not path:
             return
@@ -1535,20 +1505,20 @@ class CameraCaptureDialog(QDialog):
         fourcc = cv2.VideoWriter_fourcc(*"mp4v") if path.endswith(".mp4") else cv2.VideoWriter_fourcc(*"XVID")
         self._video_writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
         if not self._video_writer.isOpened():
-            QMessageBox.critical(self, "Fehler", "VideoWriter konnte nicht initialisiert werden.")
+            QMessageBox.critical(self, tr("common.error"), tr("capdlg.videowriter_failed"))
             self._video_writer = None
             return
         self._recording_path = path
-        self._rec_btn.setText("⏹ Aufnahme stoppen")
+        self._rec_btn.setText(tr("capdlg.rec_stop_btn"))
         self._rec_btn.setStyleSheet("background:#E74C3C;color:white;")
-        self._rec_lbl.setText(f"REC  {os.path.basename(path)}")
+        self._rec_lbl.setText(tr("capdlg.rec_indicator", name=os.path.basename(path)))
 
     def _stop_recording(self) -> None:
         """Release the VideoWriter and reset the recording UI elements."""
         if self._video_writer:
             self._video_writer.release()
             self._video_writer = None
-        self._rec_btn.setText("⏺ Aufnahme starten")
+        self._rec_btn.setText(tr("capdlg.rec_start_btn"))
         self._rec_btn.setStyleSheet("")
         path = self._recording_path or ""
         self._rec_lbl.setText(f"Gespeichert: {os.path.basename(path)}" if path else "")
@@ -1561,7 +1531,7 @@ class CameraCaptureDialog(QDialog):
         item.setData(Qt.UserRole, path)
         self._captured_list.addItem(item)
         self._captured_list.scrollToBottom()
-        self._accept_btn.setText(f"In Projekt übernehmen ({len(self.captured_paths)})")
+        self._accept_btn.setText(tr("capdlg.adopt_btn_n", n=len(self.captured_paths)))
         self._accept_btn.setEnabled(True)
 
     def _on_captured_list_menu(self, pos) -> None:
@@ -1613,7 +1583,7 @@ class CameraCaptureDialog(QDialog):
     def _start_burst(self) -> None:
         """Initiate a burst capture: set up a repeating QTimer that calls ``_burst_tick``."""
         if self._current_frame is None:
-            QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
+            QMessageBox.warning(self, tr("capdlg.no_signal"), tr("capdlg.connect_first"))
             return
         count = self._burst_count.value()
         interval = self._burst_interval.value()
@@ -1654,21 +1624,21 @@ class CameraCaptureDialog(QDialog):
             if path in self.captured_paths:
                 self.captured_paths.remove(path)
             self._captured_list.takeItem(self._captured_list.row(item))
-        self._accept_btn.setText(f"In Projekt übernehmen ({len(self.captured_paths)})")
+        self._accept_btn.setText(tr("capdlg.adopt_btn_n", n=len(self.captured_paths)))
         self._accept_btn.setEnabled(len(self.captured_paths) > 0)
 
     def _clear_all(self) -> None:
         """Clear the entire captured-images list and disable the accept button."""
         self.captured_paths.clear()
         self._captured_list.clear()
-        self._accept_btn.setText("In Projekt übernehmen (0)")
+        self._accept_btn.setText(tr("capdlg.adopt_btn_zero"))
         self._accept_btn.setEnabled(False)
 
     # ================================================================== SAVE DIR
 
     def _choose_save_dir(self) -> None:
         """Open a directory chooser and update ``_save_dir`` and the displayed path."""
-        folder = QFileDialog.getExistingDirectory(self, "Speicherordner wählen", self._save_dir)
+        folder = QFileDialog.getExistingDirectory(self, tr("capdlg.pick_savedir_dlg"), self._save_dir)
         if folder:
             self._save_dir = folder
             self._dir_edit.setText(folder)
@@ -1684,7 +1654,7 @@ class CameraCaptureDialog(QDialog):
     def _start_collecting(self) -> None:
         """Begin collecting normal frames from the live stream into the autoencoder buffer."""
         if self._current_frame is None:
-            QMessageBox.warning(self, "Kein Signal", "Bitte zuerst Kamera verbinden.")
+            QMessageBox.warning(self, tr("capdlg.no_signal"), tr("capdlg.connect_first"))
             return
         self._ensure_detector()
         n = self._ae_collect_n.value()
@@ -1704,7 +1674,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_collecting = False
         self._ae_collect_remaining = 0
         self._ae_collect_bar.setVisible(False)
-        self._ae_collect_lbl.setText("0 Frames gesammelt")
+        self._ae_collect_lbl.setText(tr("capdlg.collected_zero"))
         self._ae_collect_btn.setEnabled(True)
         self._ae_train_btn.setEnabled(False)
         self._ae_hpt_btn.setEnabled(False)
@@ -1713,8 +1683,8 @@ class CameraCaptureDialog(QDialog):
         """Inject camera metadata and start the autoencoder training thread."""
         self._ensure_detector()
         if self._detector.n_collected() < 10:
-            QMessageBox.warning(self, "Zu wenig Frames",
-                                "Bitte mindestens 10 Normalframes sammeln.")
+            QMessageBox.warning(self, tr("capdlg.too_few_frames_title"),
+                                tr("capdlg.too_few_frames_msg"))
             return
         epochs = self._ae_epochs.value()
 
@@ -1730,7 +1700,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_bar.setRange(0, epochs)
         self._ae_train_bar.setValue(0)
         self._ae_train_bar.setVisible(True)
-        self._ae_train_lbl.setText("Training läuft…")
+        self._ae_train_lbl.setText(tr("capdlg.training_running"))
 
         lr = self._lr_override if self._lr_override is not None else 1e-3
         batch_size = self._batch_override if self._batch_override is not None else 16
@@ -1746,7 +1716,7 @@ class CameraCaptureDialog(QDialog):
     def _on_ae_epoch(self, epoch: int, total: int, loss: float) -> None:
         """Update the training progress bar and loss label at the end of each epoch."""
         self._ae_train_bar.setValue(epoch)
-        self._ae_train_lbl.setText(f"Epoche {epoch}/{total}  |  Loss: {loss:.5f}")
+        self._ae_train_lbl.setText(tr("capdlg.epoch_progress", epoch=epoch, total=total, loss=f"{loss:.5f}"))
 
     @Slot(float)
     def _on_ae_trained(self, threshold: float) -> None:
@@ -1760,7 +1730,7 @@ class CameraCaptureDialog(QDialog):
         self._ae_threshold_spin.blockSignals(False)
         self._ae_scoring_btn.setEnabled(True)
         self._recon_lbl.setText(
-            "Modell trainiert — Live-Scoring starten\num die Rekonstruktion zu sehen."
+            tr("capdlg.model_trained_hint")
         )
         log.info(f"Autoencoder trained, threshold={threshold:.5f}")
         self._audit_log.log_trained(self._detector.metadata)
@@ -1773,14 +1743,12 @@ class CameraCaptureDialog(QDialog):
             self._auto_saved_model_path = auto_path
             self._ae_model_path = auto_path
             self._ae_train_lbl.setText(
-                f"✓ Fertig!  Schwellwert: {threshold:.5f}\n"
-                f"Modell gespeichert → autoencoder_latest.pth\n"
-                f"Im Live-Monitoring direkt verwendbar."
+                tr("capdlg.train_done_full", threshold=f"{threshold:.5f}")
             )
             self._ae_train_lbl.setStyleSheet("color:#2ECC71; font-size:10px;")
             log.info(f"Model auto-saved to {auto_path}")
         except Exception as exc:
-            self._ae_train_lbl.setText(f"Fertig! Schwellwert: {threshold:.5f}")
+            self._ae_train_lbl.setText(tr("capdlg.train_done_short", threshold=f"{threshold:.5f}"))
             log.warning(f"Auto-save failed: {exc}")
 
     @property
@@ -1799,7 +1767,7 @@ class CameraCaptureDialog(QDialog):
         if self._detector and self._detector.trained:
             default = os.path.join(self._save_dir, "autoencoder.pth")
             path, _ = QFileDialog.getSaveFileName(
-                self, "Modell speichern", default, "PyTorch-Modell (*.pth)"
+                self, tr("capdlg.model_save_dlg"), default, tr("capdlg.pth_filter_long")
             )
             if path:
                 try:
@@ -1808,7 +1776,7 @@ class CameraCaptureDialog(QDialog):
                     self._ae_model_path = path
                     log.info(f"Model saved to {path}")
                 except Exception as exc:
-                    QMessageBox.critical(self, "Fehler beim Speichern", str(exc))
+                    QMessageBox.critical(self, tr("capdlg.save_failed_title"), str(exc))
                     return
             # Cancelled file dialog → accept without re-saving (auto-save still available)
         self.accept()
@@ -1820,19 +1788,19 @@ class CameraCaptureDialog(QDialog):
         self._ae_train_btn.setEnabled(True)
         self._ae_collect_btn.setEnabled(True)
         self._ae_hpt_btn.setEnabled(True)
-        self._ae_train_lbl.setText(f"Fehler: {msg}")
-        QMessageBox.critical(self, "Trainingsfehler", msg)
+        self._ae_train_lbl.setText(tr("capdlg.error_msg", msg=msg))
+        QMessageBox.critical(self, tr("capdlg.train_error_title"), msg)
 
     def _start_ae_hpt(self) -> None:
         """Launch AnomalyHPTThread and apply best params to the detector."""
         try:
             from core.hyperparameter_tuning import AnomalyHPTThread
         except ImportError:
-            QMessageBox.warning(self, "HPT", "Optuna nicht installiert:\npip install optuna")
+            QMessageBox.warning(self, tr("capdlg.hpt_title"), tr("capdlg.optuna_missing"))
             return
 
         if self._detector is None or self._detector.n_collected() == 0:
-            QMessageBox.warning(self, "HPT", "Zuerst Frames aufnehmen.")
+            QMessageBox.warning(self, tr("capdlg.hpt_title"), tr("capdlg.collect_frames_first"))
             return
 
         n_trials, ok = QInputDialog.getInt(
@@ -1873,7 +1841,7 @@ class CameraCaptureDialog(QDialog):
                 f"Bester Wert: {result['best_value']:.5f}",
             ]
             reply = QMessageBox.question(
-                self, "HPT abgeschlossen — Parameter übernehmen?",
+                self, tr("capdlg.hpt_done_q"),
                 "\n".join(lines) + "\n\nBeste Parameter jetzt anwenden?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,
@@ -1884,7 +1852,7 @@ class CameraCaptureDialog(QDialog):
         def _on_error(msg: str) -> None:
             _ae_hpt_cleanup()
             prog.close()
-            QMessageBox.critical(self, "HPT-Fehler", msg)
+            QMessageBox.critical(self, tr("capdlg.hpt_error_title"), msg)
 
         hpt.finished.connect(_on_done)
         hpt.error.connect(_on_error)
@@ -1907,8 +1875,7 @@ class CameraCaptureDialog(QDialog):
 
         n = self._detector.n_collected()
         self._ae_collect_lbl.setText(
-            f"{n} Frames gesammelt  |  base_ch={base_ch}  lr={self._lr_override:.5f}"
-            f"  batch={self._batch_override}"
+            tr("capdlg.hpt_result", n=n, base_ch=base_ch, lr=f"{self._lr_override:.5f}", batch=self._batch_override)
         )
         self._ae_train_btn.setEnabled(n > 0)
         self._ae_hpt_btn.setEnabled(n > 0)
@@ -1948,8 +1915,8 @@ class CameraCaptureDialog(QDialog):
         """Open the threshold calibration dialog with the collected score history."""
         if not self._score_history:
             QMessageBox.information(
-                self, "Keine Daten",
-                "Bitte erst Live-Erkennung starten, damit Scores gesammelt werden."
+                self, tr("capdlg.no_data_title"),
+                tr("capdlg.no_scores_msg")
             )
             return
         thr = self._detector.threshold if self._detector else 0.02
@@ -1966,10 +1933,10 @@ class CameraCaptureDialog(QDialog):
         """Prompt for a path, save the detector to disk and write a JSON sidecar with ROI info."""
         self._ensure_detector()
         if not self._detector.trained:
-            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("capdlg.train_first"))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Autoencoder-Modell speichern", self._save_dir, "PyTorch (*.pth)"
+            self, tr("capdlg.ae_save_dlg"), self._save_dir, tr("capdlg.pth_filter")
         )
         if not path:
             return
@@ -1985,12 +1952,12 @@ class CameraCaptureDialog(QDialog):
         self._ae_model_path = path
         self._save_model_meta(path)
         self._audit_log.log_saved(path, self._detector.metadata)
-        QMessageBox.information(self, "Gespeichert", f"Modell gespeichert:\n{path}")
+        QMessageBox.information(self, tr("common.saved"), tr("capdlg.model_saved_msg", path=path))
 
     def _load_ae_model(self) -> None:
         """Load a saved detector checkpoint and restore any persisted ROI metadata sidecar."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Autoencoder-Modell laden", self._save_dir, "PyTorch (*.pth)"
+            self, tr("capdlg.ae_load_dlg"), self._save_dir, tr("capdlg.pth_filter")
         )
         if not path:
             return
@@ -2002,13 +1969,13 @@ class CameraCaptureDialog(QDialog):
             self._audit_log.log_loaded(path, self._detector.metadata)
             self._show_model_info(loaded_from=path)
         except Exception as exc:
-            QMessageBox.critical(self, "Ladefehler", str(exc))
+            QMessageBox.critical(self, tr("capdlg.load_error_title"), str(exc))
 
     def _show_model_info(self, loaded_from: str = "") -> None:
         """Show a dialog with the model's training metadata."""
         meta = self._detector.metadata
         if not meta:
-            QMessageBox.information(self, "Modell-Info", "Keine Metadaten verfügbar (altes Modell).")
+            QMessageBox.information(self, tr("capdlg.model_info_title"), tr("capdlg.no_metadata_msg"))
             return
         lines = []
         if loaded_from:
@@ -2041,8 +2008,8 @@ class CameraCaptureDialog(QDialog):
             ts = meta["loaded_at"].replace("T", "  ").replace("+00:00", " UTC")
             lines.append(f"Geladen am:   {ts}")
         dlg = QMessageBox(self)
-        dlg.setWindowTitle("Modell-Info")
-        dlg.setText("Modell-Metadaten")
+        dlg.setWindowTitle(tr("capdlg.model_info_title"))
+        dlg.setText(tr("capdlg.model_metadata_hdr"))
         dlg.setDetailedText("\n".join(lines))
         dlg.exec()
 
@@ -2050,35 +2017,35 @@ class CameraCaptureDialog(QDialog):
         """Export the trained autoencoder as an ONNX model for deployment."""
         self._ensure_detector()
         if not self._detector.trained:
-            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("capdlg.train_first"))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Autoencoder als ONNX exportieren", self._save_dir, "ONNX (*.onnx)"
+            self, tr("capdlg.onnx_export_dlg"), self._save_dir, tr("capdlg.onnx_filter")
         )
         if not path:
             return
         try:
             self._detector.export_onnx(path)
-            QMessageBox.information(self, "ONNX exportiert", f"Gespeichert:\n{path}")
+            QMessageBox.information(self, tr("capdlg.onnx_done_title"), tr("capdlg.saved_msg", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "ONNX-Fehler", str(exc))
+            QMessageBox.critical(self, tr("capdlg.onnx_error_title"), str(exc))
 
     def _export_ae_torchscript(self) -> None:
         """Export the trained autoencoder as a TorchScript ``.pt`` module."""
         self._ensure_detector()
         if not self._detector.trained:
-            QMessageBox.warning(self, "Kein Modell", "Erst Autoencoder trainieren.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("capdlg.train_first"))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Autoencoder als TorchScript exportieren", self._save_dir, "PyTorch Script (*.pt)"
+            self, tr("capdlg.ts_export_dlg"), self._save_dir, tr("capdlg.ts_filter")
         )
         if not path:
             return
         try:
             self._detector.export_torchscript(path)
-            QMessageBox.information(self, "TorchScript exportiert", f"Gespeichert:\n{path}")
+            QMessageBox.information(self, tr("capdlg.ts_done_title"), tr("capdlg.saved_msg", path=path))
         except Exception as exc:
-            QMessageBox.critical(self, "TorchScript-Fehler", str(exc))
+            QMessageBox.critical(self, tr("capdlg.ts_error_title"), str(exc))
 
     # ================================================================== MODEL META (ROI sidecar)
 
@@ -2114,13 +2081,13 @@ class CameraCaptureDialog(QDialog):
             self._roi_clear_btn.setEnabled(True)
             pw = int((self._roi[2] - self._roi[0]) * 100)
             ph = int((self._roi[3] - self._roi[1]) * 100)
-            self._roi_lbl.setText(f"ROI: {pw}% × {ph}% des Bildes (wiederhergestellt)")
+            self._roi_lbl.setText(tr("capdlg.roi_pct_restored", pw=pw, ph=ph))
             self._roi_lbl.setStyleSheet("color:#00E5FF; font-size:10px; font-weight:bold;")
         else:
             # Model was trained without ROI — clear any existing ROI to avoid mismatch
             self._roi = None
             self._roi_clear_btn.setEnabled(False)
-            self._roi_lbl.setText("Kein ROI – ganzes Bild wird analysiert")
+            self._roi_lbl.setText(tr("capdlg.roi_none"))
             self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
 
     # ================================================================== MONITORING PROFILE
@@ -2130,8 +2097,8 @@ class CameraCaptureDialog(QDialog):
         from core.monitoring_profile import default_profile, save_profile
         if not (self._detector and self._detector.trained):
             QMessageBox.warning(
-                self, "Kein Modell",
-                "Bitte erst einen Autoencoder trainieren oder laden."
+                self, tr("common.no_model"),
+                tr("capdlg.train_or_load_first2")
             )
             return
         profile = default_profile()
@@ -2151,35 +2118,33 @@ class CameraCaptureDialog(QDialog):
         if self._mqtt_client is not None:
             profile["mqtt"]["enabled"] = True
         path, _ = QFileDialog.getSaveFileName(
-            self, "Monitoring-Profil exportieren",
+            self, tr("capdlg.profile_export_dlg"),
             os.path.join(self._save_dir, "monitor_profile.json"),
-            "JSON (*.json)"
+            tr("capdlg.json_filter")
         )
         if not path:
             return
         try:
             save_profile(profile, path)
             QMessageBox.information(
-                self, "Profil exportiert",
-                f"Monitoring-Profil gespeichert:\n{path}\n\n"
-                "Starten mit:\n  python scripts/monitor_daemon.py "
-                f"--profile \"{path}\""
+                self, tr("capdlg.profile_exported_title"),
+                tr("capdlg.profile_saved_msg", path=path)
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Fehler", str(exc))
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _load_monitoring_profile(self) -> None:
         """Load a monitoring profile JSON and apply its settings (threshold, ROI, model path, etc.)."""
         from core.monitoring_profile import load_profile
         path, _ = QFileDialog.getOpenFileName(
-            self, "Monitoring-Profil laden", self._save_dir, "JSON (*.json)"
+            self, tr("capdlg.profile_load_dlg"), self._save_dir, tr("capdlg.json_filter")
         )
         if not path:
             return
         try:
             profile = load_profile(path)
         except Exception as exc:
-            QMessageBox.critical(self, "Ladefehler", str(exc))
+            QMessageBox.critical(self, tr("capdlg.load_error_title"), str(exc))
             return
         # Apply threshold
         self._ae_threshold_spin.setValue(float(profile.get("threshold", 0.02)))
@@ -2200,9 +2165,9 @@ class CameraCaptureDialog(QDialog):
                 self._ae_threshold_spin.blockSignals(True)
                 self._ae_threshold_spin.setValue(self._detector.threshold)
                 self._ae_threshold_spin.blockSignals(False)
-                self._ae_train_lbl.setText(f"Modell geladen | Schwellwert: {self._detector.threshold:.5f}")
+                self._ae_train_lbl.setText(tr("capdlg.model_loaded_msg", threshold=f"{self._detector.threshold:.5f}"))
             except Exception as exc:
-                QMessageBox.warning(self, "Modell-Ladefehler", str(exc))
+                QMessageBox.warning(self, tr("capdlg.model_load_error_title"), str(exc))
         # Camera source
         src = profile.get("camera_source", 0)
         if isinstance(src, str):
@@ -2216,31 +2181,31 @@ class CameraCaptureDialog(QDialog):
             self._roi = tuple(roi)
             self._roi_clear_btn.setEnabled(True)
             self._roi_lbl.setText(
-                f"ROI: ({roi[0]:.2f},{roi[1]:.2f}) – ({roi[2]:.2f},{roi[3]:.2f})"
+                tr("capdlg.roi_coords", x1=f"{roi[0]:.2f}", y1=f"{roi[1]:.2f}", x2=f"{roi[2]:.2f}", y2=f"{roi[3]:.2f}")
             )
-        QMessageBox.information(self, "Profil geladen", f"Profil geladen:\n{path}")
+        QMessageBox.information(self, tr("capdlg.profile_loaded_title"), tr("capdlg.profile_loaded_msg", path=path))
 
     # ================================================================== SCORING TOGGLE
 
     def _on_scoring_toggled(self, checked: bool) -> None:
         """Start or stop live scoring; create an event logger on start and clear the heatmap on stop."""
         if checked:
-            self._ae_scoring_btn.setText("⏹  Live-Scoring stoppen")
+            self._ae_scoring_btn.setText(tr("capdlg.scoring_stop_btn"))
             self._ae_score_streak = 0
             from core.anomaly_logger import AnomalyEventLogger
             log_path = os.path.join(self._save_dir, "anomaly_events.csv")
             self._event_logger = AnomalyEventLogger(log_path)
-            self._event_log_lbl.setText(f"Events: {self._event_logger.event_count}")
+            self._event_log_lbl.setText(tr("capdlg.events_n", n=self._event_logger.event_count))
             self._open_log_btn.setEnabled(True)
             if self._api_server is not None:
                 self._api_server.set_event_log_path(log_path)
         else:
-            self._ae_scoring_btn.setText("▶  Live-Scoring starten")
+            self._ae_scoring_btn.setText(tr("capdlg.scoring_start_btn"))
             self._set_preview_border_normal()
             self._alarm_banner.setVisible(False)
             self._last_heatmap = None
             self._recon_lbl.setText(
-                "Live-Scoring gestoppt.\nScoring starten um die Rekonstruktion zu sehen."
+                tr("capdlg.scoring_stopped_hint")
             )
             self._recon_info.setText("")
 
@@ -2259,8 +2224,7 @@ class CameraCaptureDialog(QDialog):
         thr = self._detector.threshold if self._detector else 0
         pct = int(score / thr * 100) if thr > 0 else 0
         self._recon_info.setText(
-            f"Rekonstruktion (128×128)  |  Score: {score:.5f}  ({pct}% des Schwellwerts)  "
-            f"—  Abweichungen zwischen Live und Modell = Anomalie-Kandidaten"
+            tr("capdlg.reconstruction_info", score=f"{score:.5f}", pct=pct)
         )
 
     # ================================================================== ROI
@@ -2270,13 +2234,13 @@ class CameraCaptureDialog(QDialog):
         if checked:
             self._roi_drawing = True
             self._preview_lbl.setCursor(Qt.CrossCursor)
-            self._roi_draw_btn.setText("ROI aufziehen … (Klick + Ziehen)")
+            self._roi_draw_btn.setText(tr("capdlg.roi_drawing"))
         else:
             self._roi_drawing = False
             self._roi_start = None
             self._roi_end = None
             self._preview_lbl.setCursor(Qt.ArrowCursor)
-            self._roi_draw_btn.setText("ROI aufziehen")
+            self._roi_draw_btn.setText(tr("capdlg.roi_draw_btn"))
 
     def _clear_roi(self) -> None:
         """Reset the ROI to None (full-frame analysis) and update the label."""
@@ -2284,7 +2248,7 @@ class CameraCaptureDialog(QDialog):
         self._roi_start = None
         self._roi_end = None
         self._roi_clear_btn.setEnabled(False)
-        self._roi_lbl.setText("Kein ROI – ganzes Bild wird analysiert")
+        self._roi_lbl.setText(tr("capdlg.roi_none"))
         self._roi_lbl.setStyleSheet("color:#7F8C8D; font-size:10px;")
 
     def _crop_roi(self, frame: np.ndarray) -> np.ndarray:
@@ -2381,7 +2345,7 @@ class CameraCaptureDialog(QDialog):
         self._roi_clear_btn.setEnabled(True)
         pw = int((x2n - x1n) * 100)
         ph = int((y2n - y1n) * 100)
-        self._roi_lbl.setText(f"ROI: {pw}% × {ph}% des Bildes")
+        self._roi_lbl.setText(tr("capdlg.roi_pct", pw=pw, ph=ph))
         self._roi_lbl.setStyleSheet("color:#00E5FF; font-size:10px; font-weight:bold;")
 
     # ================================================================== CLEANUP
