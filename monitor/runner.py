@@ -1,6 +1,7 @@
 """Single- and multi-channel monitor run loops (with model hot-swap)."""
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -15,6 +16,8 @@ from monitor.camera import _CameraThread, _VIDEO_EXTENSIONS, find_camera_index
 from monitor.imaging import apply_roi, composite_overlay, draw_hud, save_alarm
 from monitor.state import _MonitorState
 from monitor.api_server import _MonitorApiServer
+
+log = logging.getLogger(__name__)
 
 try:
     from core.onnx_anomaly_scorer import OnnxAnomalyScorer, HAS_ORT
@@ -127,11 +130,14 @@ def run_monitor(
             from PySide6.QtCore import QCoreApplication
             _app = QCoreApplication.instance() or QCoreApplication([])
             notifier = AlarmNotifier(AppSettings().get_alarm_notifier_config())
-        except Exception:
+        except Exception as exc:
+            log.debug("Alarm-Notifier mit Einstellungen nicht verfügbar: %s", exc)
             try:
                 from core.alarm_notifier import AlarmNotifier
                 notifier = AlarmNotifier()
-            except Exception:
+            except Exception as exc2:
+                log.warning("Alarm-Notifier nicht verfügbar — Alarme werden nicht "
+                            "verschickt: %s", exc2)
                 notifier = None
 
     # ── MQTT client ────────────────────────────────────────────────────────────
@@ -206,7 +212,8 @@ def run_monitor(
         cropped = apply_roi(frame, roi)
         try:
             score, _rec, overlay_crop, _bbox = det.score_detailed(cropped)
-        except Exception:
+        except Exception as exc:
+            log.warning("Scoring für Frame fehlgeschlagen: %s", exc)
             return
 
         is_anomaly = score > threshold
@@ -447,7 +454,8 @@ def run_monitor_multi(
                 cropped = apply_roi(frame, croi)
                 try:
                     score = detector.score(cropped)
-                except Exception:
+                except Exception as exc:
+                    log.warning("Kanal %d: Scoring fehlgeschlagen: %s", cid, exc)
                     return
                 state.push_score(score, cthr)
                 if headless:
@@ -468,8 +476,9 @@ def run_monitor_multi(
                             try:
                                 fpath = os.path.join(output_dir, fname) if fname else ""
                                 mqtt_client.publish_alarm(score, cthr, frame_path=fpath)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                log.warning("Kanal %d: MQTT-Alarm nicht gesendet: %s",
+                                            cid, exc)
             return on_frame
 
         cb = _make_callback(ch_id, det, roi, threshold, log_path)

@@ -112,8 +112,8 @@ class AuditTrail:
                             entries.append(json.loads(line))
                         except json.JSONDecodeError:
                             pass
-        except OSError:
-            pass
+        except OSError as exc:
+            log.warning("Audit-Log %s nicht lesbar: %s", self._file, exc)
         return entries[-limit:]
 
     def get_label_history(self, label_name: str) -> List[Dict]:

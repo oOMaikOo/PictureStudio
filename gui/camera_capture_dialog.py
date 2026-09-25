@@ -48,8 +48,8 @@ class _ModelAuditLogger:
         try:
             with open(self._path, "a", encoding="utf-8") as f:
                 f.write(self._json.dumps(record, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("Anomalie-Event konnte nicht protokolliert werden: %s", exc)
 
     def log_trained(self, metadata: dict) -> None:
         self._write("TRAINED", {k: metadata.get(k) for k in (
@@ -1228,8 +1228,8 @@ class CameraCaptureDialog(QDialog):
             try:
                 display_frame = display
                 display = compute_gradcam_anomaly(self._detector, display_frame)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Grad-CAM-Overlay fehlgeschlagen: %s", exc)
         display = self._draw_roi_overlay(display)
         pix = QPixmap.fromImage(frame_to_qimage(display))
         pix = pix.scaled(self._preview_lbl.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
@@ -1363,8 +1363,9 @@ class CameraCaptureDialog(QDialog):
         try:
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(sidecar, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass  # sidecar is optional — don't block frame save
+        except Exception as exc:
+            # sidecar is optional — don't block frame save
+            log.debug("Sidecar %s nicht geschrieben: %s", json_path, exc)
 
         return path
 
@@ -1569,8 +1570,9 @@ class CameraCaptureDialog(QDialog):
                 data["false_positive"] = is_fp
                 with open(json_path, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("False-Positive-Markierung nicht gespeichert (%s): %s",
+                            json_path, exc)
         if is_fp:
             item.setBackground(QColor(60, 60, 20))
             item.setText(os.path.basename(path) + "  [FP]")
@@ -2061,8 +2063,9 @@ class CameraCaptureDialog(QDialog):
         try:
             with open(self._meta_path(model_path), "w", encoding="utf-8") as f:
                 json.dump(meta, f)
-        except Exception:
-            pass  # meta is optional; don't block the save
+        except Exception as exc:
+            # meta is optional; don't block the save
+            log.debug("Modell-Metadaten nicht geschrieben: %s", exc)
 
     def _load_model_meta(self, model_path: str) -> None:
         """Load the ROI sidecar for a model file and restore the ROI state in the dialog."""
@@ -2073,7 +2076,8 @@ class CameraCaptureDialog(QDialog):
         try:
             with open(mp, encoding="utf-8") as f:
                 meta = json.load(f)
-        except Exception:
+        except Exception as exc:
+            log.debug("Modell-Metadaten %s nicht lesbar: %s", mp, exc)
             return
         roi = meta.get("roi")
         if roi and len(roi) == 4:

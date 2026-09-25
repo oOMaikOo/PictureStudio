@@ -3,6 +3,7 @@ Live classification page: run the trained image classifier on a live camera or
 video stream in real time (top-k overlay), and capture interesting frames back
 into the project dataset — closing the loop video → classification → labeling.
 """
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -20,6 +21,8 @@ from PySide6.QtWidgets import (
 from core.camera import CameraFrameThread, list_usb_cameras
 from core.inference import Inferencer
 from utils.i18n import tr
+
+log = logging.getLogger(__name__)
 
 
 class LiveClassificationPage(QWidget):
@@ -201,7 +204,8 @@ class LiveClassificationPage(QWidget):
         self._cam_combo.clear()
         try:
             cams = list_usb_cameras()
-        except Exception:
+        except Exception as exc:
+            log.warning("Kamera-Suche fehlgeschlagen: %s", exc)
             cams = []
         for idx, label in cams:
             self._cam_combo.addItem(label, userData=idx)

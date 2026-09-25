@@ -1253,7 +1253,8 @@ class CameraPage(QWidget):
                             week_count += 1
                     except ValueError:
                         continue
-        except Exception:
+        except Exception as exc:
+            log.debug("Alarm-Statistik konnte nicht berechnet werden: %s", exc)
             return
         self._stats_today_lbl.setText(tr("camera.stats_today", n=today_count))
         self._stats_week_lbl.setText(tr("camera.stats_week", n=week_count))

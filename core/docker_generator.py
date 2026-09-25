@@ -1,6 +1,9 @@
 from __future__ import annotations
+import logging
 import os
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 class DockerGenerator:
@@ -109,8 +112,8 @@ echo "Dashboard: http://localhost:{api_port}/dashboard"
             f.write(content)
         try:
             os.chmod(path, 0o755)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s konnte nicht ausführbar gemacht werden: %s", path, exc)
         return path
 
     def _write_readme(self, out: str, model_name: str, api_port: int) -> str:

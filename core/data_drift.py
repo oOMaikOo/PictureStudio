@@ -232,8 +232,9 @@ class DriftDetector:
         for p in image_paths:
             try:
                 prod_feats.append(_extract_features(p))
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Drift: Merkmale für %s nicht extrahierbar (%s) — "
+                            "Bild fließt nicht in die Auswertung ein", p, exc)
         if not prod_feats:
             return {}
         prod = np.stack(prod_feats)

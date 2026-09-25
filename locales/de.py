@@ -1262,4 +1262,6 @@ STRINGS: dict = {
     "capdlg.video_out_filter":           "MP4 Video (*.mp4);;AVI Video (*.avi)",
     "capdlg.video_save_dlg":             "Video speichern unter",
     "capdlg.videowriter_failed":         "VideoWriter konnte nicht initialisiert werden.",
+    "videoanno.save_failed":             "{n} Frames wurden kopiert, aber das Projekt konnte nicht gespeichert werden:\n{err}\n\nDie Übernahme ist damit nicht dauerhaft. Bitte das Projekt manuell speichern.",
+    "videoanno.frames_failed":           "{n} Frame(s) konnten nicht übernommen werden — Details im Fehlerlog.",
 }

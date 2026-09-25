@@ -187,8 +187,9 @@ class ModelManager:
         if delete_file and os.path.exists(m.model_path):
             try:
                 os.remove(m.model_path)
-            except OSError:
-                pass
+            except OSError as exc:
+                log.warning("Modelldatei %s konnte nicht gelöscht werden: %s",
+                            m.model_path, exc)
         self._models = [x for x in self._models if x.model_id != model_id]
         self._save()
 

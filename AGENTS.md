@@ -1,0 +1,343 @@
+# AGENTS.md
+
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+# Run the application
+source .venv/bin/activate
+python main.py
+
+# Run all tests (1102 collected; integration tests take ~30 s each)
+.venv/bin/python -m pytest tests/ -v
+
+# Skip slow ML integration tests
+.venv/bin/python -m pytest tests/ -q --ignore=tests/test_integration.py
+
+# Run a single test class or function
+.venv/bin/python -m pytest tests/test_project.py::TestQAFlags -v
+.venv/bin/python -m pytest tests/test_project.py::TestSaveLoad::test_load_roundtrip -v
+
+# Quick syntax check on a file
+python3 -c "import ast; ast.parse(open('gui/pages/camera_page.py').read()); print('OK')"
+
+# Run the standalone monitor daemon
+python monitor.py                      # interactive camera scan + browser setup wizard
+python monitor.py --model anomalie.pth
+python monitor.py --setup             # multi-channel setup wizard (web UI on :8765)
+python monitor.py --channels cfg.json # load pre-configured channels
+```
+
+Integration tests (`test_integration.py`) train a small model on 12 synthetic images on CPU and take ~10–30 seconds each. All other tests run in milliseconds.
+
+## Architecture
+
+### Project types and sidebar pages
+
+The app has two project types — **Image** (classification) and **Video** (anomaly/stream) — and two UI modes, **Beginner** and **Expert**. The sidebar (`gui/sidebar.py`) picks one of three lists: `_BEGINNER_PAGES` (beginner mode, any project type), else `_IMAGE_PAGES` or `_VIDEO_PAGES`. `MainWindow` holds a single `QStackedWidget`; sidebar entries are `(label_key, icon, stack_index)` tuples.
+
+**UI mode**: persisted via `AppSettings.get_ui_mode()` / `set_ui_mode()` ("beginner" | "expert"), switchable live from the View menu (`MainWindow._set_ui_mode()`, no restart). In beginner mode `MainWindow._switch_page()` ignores any index outside `_BEGINNER_ALLOWED = {0, 1, 2, 3, 5, 7}`, so shortcuts, the Help menu and the wizard cannot escape the label → train → classify workflow. When adding a page that beginners must reach, add its index to `_BEGINNER_ALLOWED` **and** to `_BEGINNER_PAGES`.
+
+Not every page is in a sidebar list: 11 and 14 are reached from the View menu in `MainWindow._build_menu()`, which wires actions with `lambda _, i=idx: self._switch_page(i)`. Grepping for `_switch_page(<literal>)` will therefore miss them — check the View menu before concluding a page is unreachable.
+
+**Section headers** use `stack_idx = None` as a sentinel — these render as a labeled divider and are never added to `self._buttons`, so `set_locked()` / `set_page()` / `_select_by_stack()` work without modification. When adding a new page, add a nav tuple to the correct list; when adding a new section, insert a `("sidebar.section.yourkey", "", None)` tuple and add the key to both locale files.
+
+Stack indices live in **`gui/page_index.py`** as an `IntEnum Page` — the single source of truth. `MainWindow._build_ui()` maps each member to its widget and adds them in `sorted(Page)` order, so the enum value *is* the index rather than a description of it; a member with no widget raises `KeyError` at startup. All consumers key off `Page`: the three nav lists in `gui/sidebar.py`, `TOUR_STEPS` in `gui/guide_tour.py`, `PAGE_TO_SECTION` in `gui/help_dialog.py`, the wizard's `stack_idx` values, and every `_switch_page()` call. `tests/test_page_index.py` fails if any of them drifts.
+
+To add a page: append a member to `Page`, map it to its widget in `MainWindow._build_ui()`, add a sidebar nav tuple, and give it a `TOUR_STEPS` entry plus a `PAGE_TO_SECTION` mapping (the last two are asserted by the tests). `Page` members are `IntEnum`, so they compare and hash like plain ints and can be passed straight to `setCurrentIndex()`.
+
+Current numbering:
+
+| Index | Page class | Reachable from |
+|-------|-----------|------------|
+| 0 | `DashboardPage` | both, beginner |
+| 1 | `DataPage` | both, beginner |
+| 2 | `LabelingPage` | image, beginner |
+| 3 | `TrainingPage` | image, beginner |
+| 4 | `ModelsPage` | image |
+| 5 | `InferencePage` | image, beginner |
+| 6 | `ExportPage` | both |
+| 7 | `SettingsPage` | both, beginner |
+| 8 | `CameraPage` | video |
+| 9 | `BatchInferencePage` | image |
+| 10 | `MultiCameraPage` | video |
+| 11 | `DatasetStatsPage` | View menu only (`Ansicht → Datensatz-Stats`) — deliberately not in the sidebar since `30099de` |
+| 12 | `VideoAnnotationPage` | video |
+| 13 | `FleetPage` | video |
+| 14 | `DataDriftPage` | View menu only (`Ansicht → Data Drift`) — same as 11 |
+| 15 | `AnomalyTrainingPage` | video |
+| 16 | `LiveClassificationPage` | image (`nav.liveclassify`) |
+
+### Central data model: `core/project.py`
+
+`Project` is the single source of truth. All pages receive it via `set_project(project, audit=None)`. Key attributes:
+
+- `images`, `labels`, `image_labels`, `image_multi_labels`, `rois` — labeling state
+- `image_label_flags` — QA uncertain flags `{uncertain, comment}`
+- `active_learning_queue` — AL review queue
+- `config.multi_label` — single vs multi-label mode
+- `config.project_type` — `"image"` or `"video"`
+
+Project JSON uses atomic writes (temp file + `os.replace()`). `Project.load(path)` is a classmethod.
+
+### Internationalisation (i18n): `utils/i18n.py`
+
+All UI strings go through `tr(key, **kwargs)` — never hardcode user-visible text in page files.
+
+**Init order is critical**: `init_i18n(lang)` must be called in `main.py` **after** `QApplication` is created and **before** `MainWindow` is instantiated. Pages are constructed inside MainWindow, so all `tr()` calls in page `__init__` methods run after init.
+
+```python
+# main.py (correct order)
+app = QApplication(sys.argv)
+init_i18n(AppSettings().get_language())   # "de" or "en"
+win = MainWindow()
+```
+
+**Never call `tr()` at module level** (e.g. as a default argument or class-level constant) — `_strings` will be empty. Call it inside methods only.
+
+```python
+# Correct — import inside the method that uses it
+def _build_ui(self):
+    from utils.i18n import tr
+    self.btn.setText(tr("my.key"))
+
+# Wrong — module-level call
+LABEL = tr("my.key")   # crashes: i18n not yet initialised
+```
+
+Format args use `.format(**kwargs)`: `tr("fleet.deploy_success", path=p)` → `"…{path}…".format(path=p)`.
+
+Locale files: `locales/de.py` and `locales/en.py` — both export a `STRINGS` dict with dot-notation keys. Keys missing from `en.py` fall back to the key string itself (visible as raw key, not a crash). When adding a string, add it to **both** files.
+
+### Quick-Start Wizard: `gui/quick_start_wizard.py`
+
+`QuickStartWizard(QDialog)` guides new users through their first project. Two workflows: `"image"` (6 steps) and `"video"` (5 steps). Shown automatically on first launch via QSettings key `"wizard/shown_v1"`.
+
+Signals: `navigate_requested(int)` → `MainWindow._switch_page()`, `new_project_requested()`, `open_project_requested()`. Static helpers: `should_show_on_startup()` / `mark_shown()`.
+
+`MainWindow` opens it via `_open_wizard(workflow)`. First-launch check runs on `QTimer.singleShot(400, _maybe_show_wizard)` so the main window renders before the dialog appears. Also reachable from Help menu and from the Dashboard quick-start panel (`DashboardPage.open_wizard_requested` signal).
+
+### GUI: `gui/main_window.py`
+
+`_load_project()` calls `set_project()` on every page in sequence and switches the sidebar to the correct page list. Label changes go through a `QDialog` that emits `labels_changed` → `labeling_page.on_labels_changed()`.
+
+### Labeling mutations — undo/redo
+
+All label/ROI changes go through `QUndoStack` via command objects in `gui/labeling_commands.py`:
+1. A public method pushes a `QUndoCommand` subclass.
+2. The command's `redo()`/`undo()` call a `_do_*` method on the page.
+3. The `_do_*` method mutates `Project` and updates the UI.
+
+Commands: `SetImageLabelCommand`, `BulkSetImageLabelCommand`, `SetMultiLabelsCommand`, `SetLabelFlagCommand`, `AddROICommand`, `DeleteROICommand`, `AssignROILabelCommand`, `MoveROICommand`.
+
+### Data loading: `gui/pages/data_page.py`
+
+`_load_images()` uses `os.walk()` to scan the selected folder **and all subfolders** recursively. Drag & drop also handles dropped folders recursively — no need to flatten image directories before import. Train/test split is applied automatically at training time; users do not pre-separate images.
+
+### Classification training pipeline
+
+`TrainingPage` wraps `TrainingWorker` (plain class) inside `TrainingThread(QThread)`. Multi-label mode detected in two places: `create_datasets()` in `core/dataset.py` and `TrainingWorker.run()` (switches loss to `BCEWithLogitsLoss`).
+
+Button order on `TrainingPage`: ① Hyperparameter-Suche → ② Training starten → ③ Training stoppen.
+
+**DINOv2 frozen backbone** (`models/classifier.py` → `DINOv2Classifier`): ViT-S/14 backbone loaded via `torch.hub`, frozen (`requires_grad=False`), linear head only (384 → N classes). `core/training.py` filters optimizer params with `[p for p in model.parameters() if p.requires_grad]` — this is safe for all architectures since non-frozen models have all params trainable. First use downloads ~85 MB.
+
+SSH remote training: `RemoteTrainingThread` (`core/remote_training.py`) zips images via `core/remote_ssh.py`, uploads, runs `scripts/remote_train.py` (self-contained, no local imports), streams logs, downloads checkpoint.
+
+Hyperparameter search: `HPTWorker` + `HPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `lr`, `batch_size`, `architecture`, `optimizer`. Requires `pip install optuna`.
+
+**Active Learning**: `ActiveLearningSampler` + `ActiveLearningThread` in `core/active_learning.py`. After training, TrainingPage shows a "🔄 Active Learning" tab — runs inference on all unlabeled project images and fills `project.active_learning_queue` with the most uncertain candidates (lowest confidence, below threshold). Review panel is in `LabelingPage` (already existed). Signal chain: `training_page.al_queue_updated` → `main_window._on_al_queue_updated()` → `labeling_page.refresh_al_queue_panel()`.
+
+### Anomaly detection pipeline
+
+`AnomalyDetector` (`core/anomaly_detector.py`) wraps a `_ConvAutoencoder` (configurable via `base_ch=16`). Key API:
+- `collect_frame(frame)` — accumulate training frames
+- `n_collected()` — frame count
+- `train(epochs, batch_size, lr)` — returns threshold float
+- `save(path)` / `load(path)` — checkpoint includes `base_ch` in metadata
+- `score_detailed(frame)` → `(score, reconstruction, heatmap_overlay, bbox)`
+
+The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPage`.
+
+**Auto-Retraining** (`CameraPage`): session alarm counter (`_session_alarm_count`) triggers a blue banner after `_RETRAIN_THRESHOLD = 20` alarms. "Jetzt trainieren" navigates to TrainingPage (stack 3); ✕ dismisses and resets the counter.
+
+**Shadow Mode** (`CameraPage`): a second `AnomalyDetector` (`_shadow_detector`) runs in parallel on the same ROI-cropped frame. Divergence (primary alarm ≠ shadow alarm) is shown as `⚡ Divergenz` and logged to `anomaly_events/shadow_divergences.csv`.
+
+**HPT for anomaly**: `AnomalyHPTWorker` + `AnomalyHPTThread` in `core/hyperparameter_tuning.py` — Optuna study over `base_ch` (8/16/32), `lr`, `batch_size`. Triggered from `CameraCaptureDialog`.
+
+**Grad-CAM**: `core/gradcam.py` — `compute_gradcam_anomaly(detector, frame_bgr)` targets `model.encoder[4]`, returns BGR overlay. Available as checkbox in `CameraPage` and `CameraCaptureDialog`.
+
+### Camera and preprocessing
+
+`core/camera.py` provides:
+- `CameraFrameThread(QThread)` — emits `frame_ready(np.ndarray)`, supports `set_cam_props(dict)` for live property updates
+- `apply_cam_props(cap, props)` — maps names (`brightness`, `contrast`, `saturation`, `sharpness`, `exposure`, `gain`) to `cv2.CAP_PROP_*`
+- `apply_frame_filter(frame, name)` — returns BGR frame after `"grayscale"` / `"canny"` / `"sobel"` / `"laplacian"` (or original for `"none"`)
+- `list_usb_cameras()` — enumerates USB cameras; on macOS uses a Swift subprocess for reliable names
+
+`CameraPage` (stack 8) has two GroupBoxes in the left panel:
+- **Kamera-Einstellungen** — sliders forwarded live via `set_cam_props()`
+- **Vorverarbeitung** — filter dropdown; settings are passed to `CameraCaptureDialog` as start values on open
+
+Both the page and `CameraCaptureDialog` embed the same `CameraSettingsGroup` (`gui/widgets/camera_settings_group.py`) — slider ranges, defaults and filter entries are defined once, in its `SLIDERS` / `FILTERS` class attributes. The widget only reports changes (`prop_changed`, `props_reset`, `filter_changed`); applying them stays with the owner, which is what differs (`CameraPage._camera_thread` vs. `CameraCaptureDialog._frame_thread`). Owner-specific extras go in via `add_filter_row()` — that is how CameraPage adds its "also apply to scoring" checkbox. The settings are available regardless of which page opens the dialog (DataPage or CameraPage). Button order inside the dialog: ① Hyperparameter-Suche → ② Training starten. After training, model is auto-loaded back into `CameraPage` without a confirmation dialog.
+
+### Multi-camera
+
+`MultiCameraPage` (stack 10) shows a dynamic grid (1–9 channels, 2×2 per page). Each channel has its own `CameraFrameThread` + `AnomalyDetector`. Alarm events are forwarded to `IndustrialNotifier`. REST endpoints: `GET /api/mc/channels`, `/api/mc/scores?channel=N`, `/api/mc/latest_alarm?channel=N`.
+
+### Fleet & Edge deployment
+
+`FleetPage` (stack 13) polls remote `monitor.py` daemons via `GET /api/status`. Devices are persisted in `QSettings`. Two per-device actions:
+- **Einrichten** — opens `monitor.py --setup` web UI in browser
+- **Training** — opens `_RemoteTrainDialog` (2 tabs):
+  - *Frames & Training*: downloads buffered frames via `GET /api/frames?n=N` (ZIP of JPEGs) using `_FrameDownloadThread`, then trains `AnomalyDetector` locally via `_LocalTrainThread`
+  - *Deployen*: uploads the `.pth` via `POST /api/deploy` (multipart); `monitor.py` hot-swaps the model without restart
+
+Edge export (`core/edge_export.py`): `EdgeExporter.export_quantized_onnx()` (ONNX INT8) and `export_coreml()` (macOS only, requires `coremltools`).
+
+Docker deployment (`core/docker_generator.py`): generates `Dockerfile`, `docker-compose.yml`, `requirements_monitor.txt`, `run_monitor.sh`, `README_deploy.md`.
+
+### Standalone monitor daemon: `monitor.py` → `monitor/` package
+
+`monitor.py` at the repo root is a 24-line entry point only — it puts the project root on `sys.path` and calls `monitor.cli.main()`. The implementation lives in the `monitor/` package (split from a single 2482-line module):
+
+| Module | Responsibility |
+|--------|----------------|
+| `monitor/cli.py` | `build_parser()`, `main()` — argument parsing and mode dispatch |
+| `monitor/runner.py` | `run_monitor()` / `run_monitor_multi()` — the single- and multi-channel loops |
+| `monitor/state.py` | `_MonitorState` + the JPEG frame ring buffer |
+| `monitor/camera.py` | `_discover_cameras()`, `_terminal_camera_select()`, `find_camera_index()`, `_CameraThread` |
+| `monitor/imaging.py` | `apply_roi()`, `composite_overlay()`, `draw_hud()`, `save_alarm()` |
+| `monitor/api_server.py` | `MonitorApiServer` — REST API on `core.http_router` |
+| `monitor/setup_server.py` | `SetupApiServer`, `run_setup()` — setup wizard on `core.http_router` |
+| `monitor/web.py` | `load_html(name)` — loads `monitor_web/<name>.html`, PyInstaller-aware via `sys._MEIPASS` |
+
+`monitor/__init__.py` re-exports the public names (and the old `_`-prefixed ones) so `from monitor import X` keeps working for existing tests and tooling.
+
+Runs without the GUI. Designed for headless Windows/Linux deployment. Key modes:
+
+- **No arguments**: scans USB cameras via `_discover_cameras()`, shows interactive terminal selection (`_terminal_camera_select()`), auto-opens browser to setup wizard
+- **Normal** (`--model path`): single-camera anomaly detection
+- **Multi-channel** (`--channels cfg.json`): `run_monitor_multi()` with N parallel channels
+- **Setup wizard** (`--setup`): web UI on `--setup-port` (default 8765) — camera preview (JPEG polling at `/setup/channels/{id}/frame.jpg`), ROI drawing, model deploy via multipart POST; no training on the daemon
+
+Both web frontends are plain files in `monitor_web/` (`dashboard.html`, `setup.html`), loaded through `monitor.web.load_html()` — not inline Python strings. Edit the HTML there; `load_html` is `lru_cache`d, so a running daemon must be restarted to pick up changes.
+
+The setup wizard web UI exposes `/setup/cameras` (GET) which returns the pre-scanned camera list for one-click channel creation buttons.
+
+On macOS, `cv2.VideoCapture` for the built-in camera needs up to 60 read() calls before the first frame arrives — the `_CameraThread` warmup limit is set accordingly. Camera permission must be granted to Terminal in System Settings → Privacy & Security → Camera.
+
+**Frame ring buffer**: `_MonitorState` keeps up to 200 JPEG frames (`_FRAME_BUF_MAX=200`, sampled at ~2 fps via `_FRAME_BUF_INTERVAL=0.5`). `GET /api/frames?n=N` returns a ZIP archive of up to N frames — used by PictureStudio's `_FrameDownloadThread` to collect training data in one request.
+
+**Hot-swap model deploy**: `POST /api/deploy` (multipart, field `model`) saves the `.pth` to disk and sets `state.pending_model_path`. The main loop calls `_check_hot_swap()` every 0.5 s, reloads the detector, and continues without restart.
+
+**Collection-only mode**: when `--camera` is given but `--model` is omitted, `monitor.py` runs in collection-only mode — it buffers frames and serves them via `GET /api/frames` but does not score. PictureStudio trains the model and deploys it via `POST /api/deploy`.
+
+Embedded REST API (`--api-port`, default 8766): `GET /api/status` (includes `frame_count`, `model_name`), `/api/scores`, `/api/latest_alarm`, `/api/frame/<file>`, `/api/frames?n=N`, `POST /api/deploy`, `/dashboard`. Auth via `--api-key`. MQTT publishing via `--mqtt-host`.
+
+Minimal dependencies for monitor-only deployment: `requirements_monitor.txt` (no PySide6, no GUI).
+
+### HTTP layer: `core/http_router.py`
+
+All three HTTP servers (`api/rest_server.py`, `monitor/api_server.py`, `monitor/setup_server.py`) share one stdlib-only router — no web framework dependency. It provides `Request`, `Response`, `Router` (path patterns with `<param>` segments), `make_handler(router)` and `RouterServer` (a `ThreadingHTTPServer`, so parallel requests don't block each other). JSON encoding, CORS and the `X-Api-Key` check live in the router, not in the route functions. When adding an endpoint, register a route on the relevant server's `Router`; don't subclass `BaseHTTPRequestHandler`.
+
+### REST API: `api/rest_server.py`
+
+`RestApiServer` runs in a background daemon thread on `core.http_router`; this module only defines the routes and the shared state they read. Call `set_project(project)` after load. Optional API key auth (`X-Api-Key` header); `/api/status` and `/dashboard` are always public.
+
+### Thumbnail list: `gui/widgets/thumbnail_list.py`
+
+`LazyThumbnailList` loads via `QThreadPool`. `filter()` accepts `label_set`, `roi_paths`, `uncertain_paths` (all `None` = show all). `update_flag(path, uncertain)` sets orange background for QA flags.
+
+## Test fixtures
+
+`conftest.py` provides:
+- `sample_project` — 15 fake image paths, 3 labels, 6 ROIs, saved to a temp dir.
+- `sample_images` — 12 real tiny PNG files (requires Pillow; skips otherwise).
+- `init_i18n("de")` is called at module level so `tr()` returns real German strings in all tests. **Do not remove this** — without it, button/label text checks silently compare against raw tr-keys instead of translated strings.
+
+Key facts that have caused test failures:
+- `compute_metrics` in `core/metrics.py` takes **integer** class indices, not label strings.
+- ROI removal is `project.remove_roi(path, roi_id)` — not `delete_roi`.
+- `QTableWidget` row-change signal is `itemSelectionChanged`, not `currentRowChanged`.
+- `QWidget.isVisible()` returns `False` when parent is not shown — use `not widget.isHidden()` instead.
+- `CameraCaptureDialog` calls `list_usb_cameras()` (subprocess) in `__init__` — patch it in tests to avoid macOS subprocess crashes.
+- `AnomalyDetector.load()` recreates `_ConvAutoencoder(base_ch)` if `base_ch` in checkpoint differs from current model.
+
+## Optional dependencies
+
+| Package | Feature |
+|---------|---------|
+| `optuna` | Hyperparameter search (classification + anomaly HPT) |
+| `imagehash` | Perceptual duplicate detection in DatasetStatsPage |
+| `scipy` | Temperature scaling calibration |
+| `coremltools` | CoreML export (macOS only) |
+| `paho-mqtt` | MQTT alarm publishing |
+| `onnxruntime` | ONNX inference in monitor.py |
+
+# AGENTS.md
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

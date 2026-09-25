@@ -77,8 +77,8 @@ class OpcUaNotifier:
                         self._disconnect_client(), self._loop
                     )
                     future.result(timeout=5)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("OPC-UA-Trennung fehlgeschlagen: %s", exc)
             self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread = None
         self._connected = False
@@ -112,8 +112,8 @@ class OpcUaNotifier:
         if self._client:
             try:
                 await self._client.disconnect()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("OPC-UA-Client-Trennung fehlgeschlagen: %s", exc)
         self._client = None
         self._connected = False
 

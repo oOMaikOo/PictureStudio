@@ -14,6 +14,10 @@ Strings not found in the current language dict fall back to the key itself
 so untranslated strings are visible rather than crashing.
 """
 
+import logging
+
+log = logging.getLogger(__name__)
+
 _strings: dict = {}
 _lang: str = "de"
 
@@ -38,7 +42,9 @@ def tr(key: str, **kwargs) -> str:
     if kwargs:
         try:
             return text.format(**kwargs)
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as exc:
+            log.warning("Übersetzung '%s' passt nicht zu den Argumenten %s: %s",
+                        key, sorted(kwargs), exc)
             return text
     return text
 

@@ -104,8 +104,8 @@ class VideoAnnotationPage(QWidget):
         if self._temp_dir and os.path.isdir(self._temp_dir):
             try:
                 shutil.rmtree(self._temp_dir)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Temp-Verzeichnis %s nicht entfernt: %s", self._temp_dir, exc)
         self._temp_dir = None
 
     def _build_ui(self) -> None:
@@ -322,6 +322,7 @@ class VideoAnnotationPage(QWidget):
         save_dir = os.path.join(os.path.dirname(self.project.project_path or "."), "video_frames")
         os.makedirs(save_dir, exist_ok=True)
         added = 0
+        failed = 0
         for idx, label in self._frame_labels.items():
             if idx >= len(self._frame_paths):
                 continue
@@ -335,14 +336,25 @@ class VideoAnnotationPage(QWidget):
                 if self.project.add_image(dst):
                     self.project.image_labels[dst] = label
                     added += 1
-            except Exception:
-                pass
+            except Exception as exc:
+                failed += 1
+                log.warning("Frame %s nicht übernommen: %s", src, exc)
         try:
             self.project.save()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Ohne gespeichertes Projekt ist die Übernahme nicht dauerhaft —
+            # das darf nicht als Erfolg gemeldet werden.
+            log.error("Projekt nach Frame-Übernahme nicht gespeichert: %s", exc)
+            QMessageBox.critical(
+                self, tr("common.error"),
+                tr("videoanno.save_failed", n=added, err=exc)
+            )
+            self._status_lbl.setText(tr("videoanno.transferred_count", added=added))
+            return
+        msg = tr("videoannotation.saved", n=added) + f":\n{save_dir}"
+        if failed:
+            msg += "\n\n" + tr("videoanno.frames_failed", n=failed)
         QMessageBox.information(
-            self, tr("videoannotation.saved_title"),
-            tr("videoannotation.saved", n=added) + f":\n{save_dir}"
+            self, tr("videoannotation.saved_title"), msg
         )
         self._status_lbl.setText(tr("videoanno.transferred_count", added=added))

@@ -86,8 +86,8 @@ class ProjectController(QObject):
                     project.project_path = path
                 try:
                     os.remove(tmp_path)
-                except OSError:
-                    pass
+                except OSError as exc:
+                    log.debug("Temporäre Datei %s nicht entfernt: %s", tmp_path, exc)
                 if reply == QMessageBox.Yes:
                     self._finalize_load(project)
                     return
@@ -157,8 +157,8 @@ class ProjectController(QObject):
                 else:
                     try:
                         os.remove(tmp)
-                    except OSError:
-                        pass
+                    except OSError as exc:
+                        log.debug("Temporäre Datei %s nicht entfernt: %s", tmp, exc)
 
     # ── internal helpers ──────────────────────────────────────────────────────
 

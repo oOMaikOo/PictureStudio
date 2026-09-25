@@ -466,8 +466,9 @@ def export_coco(project, output_path: str) -> None:
             try:
                 with PILImage.open(img_path) as im:
                     w, h = im.size
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("COCO-Export: Bildgröße von %s nicht lesbar (%s) — "
+                            "Eintrag mit 0×0 exportiert", img_path, exc)
         images.append({"id": img_id, "file_name": fname, "width": w, "height": h})
         for roi in project.get_rois(img_path):
             lbl = roi.get("label", "")
@@ -516,7 +517,9 @@ def export_yolo(project, output_dir: str) -> None:
             try:
                 with PILImage.open(img_path) as im:
                     w, h = im.size
-            except Exception:
+            except Exception as exc:
+                log.warning("YOLO-Export: %s übersprungen — Bildgröße nicht lesbar (%s)",
+                            img_path, exc)
                 continue
 
         lines = []

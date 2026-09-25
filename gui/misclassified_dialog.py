@@ -2,6 +2,7 @@
 Dialog showing thumbnails for one cell of the confusion matrix.
 Used for both misclassified (off-diagonal) and correctly classified (diagonal) cells.
 """
+import logging
 import os
 from typing import List, Dict
 
@@ -12,6 +13,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSize, QRunnable, QThreadPool, QObject, Signal
 from PySide6.QtGui import QPixmap, QIcon
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -39,8 +42,8 @@ class _ThumbLoader(QRunnable):
                     Qt.KeepAspectRatio, Qt.SmoothTransformation
                 )
                 self.signals.loaded.emit(self._path, pix)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Vorschau für %s nicht geladen: %s", self._path, exc)
 
 
 # ---------------------------------------------------------------------------

@@ -3,10 +3,13 @@ MQTT client for publishing anomaly alarm events to an MQTT broker.
 Uses paho-mqtt if available; silently disabled otherwise.
 Designed to be called from any thread (publish is thread-safe in paho).
 """
+import logging
 import json
 import threading
 from datetime import datetime
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 try:
     import paho.mqtt.client as mqtt
@@ -90,8 +93,8 @@ class MQTTAlarmClient:
             try:
                 self._client.loop_stop()
                 self._client.disconnect()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("MQTT-Trennung fehlgeschlagen: %s", exc)
         self._connected = False
 
     def publish_alarm(

@@ -2,10 +2,13 @@
 ONNX-based anomaly scorer — runs the exported autoencoder without PyTorch.
 Requires onnxruntime. Falls back gracefully if not available.
 """
+import logging
 import os
 import json
 import numpy as np
 import cv2
+
+log = logging.getLogger(__name__)
 
 try:
     import onnxruntime as ort
@@ -51,8 +54,9 @@ class OnnxAnomalyScorer:
                     data = json.load(f)
                 threshold = float(data.get("threshold", threshold))
                 metadata = dict(data.get("metadata", {}))
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Sidecar zu %s nicht lesbar (%s) — Standard-Schwellwert "
+                            "%.5f wird verwendet", onnx_path, exc, threshold)
         return cls(onnx_path, threshold=threshold, metadata=metadata)
 
     @property

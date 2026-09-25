@@ -53,8 +53,8 @@ def get_target_layer(model, model_type: str):
             for layer in reversed(layers):
                 if isinstance(layer, nn.Conv2d):
                     return layer
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Ziel-Layer-Suche fehlgeschlagen, nutze Fallback: %s", exc)
     # Fallback: find last Conv2d in the whole model
     import torch.nn as nn
     last = None

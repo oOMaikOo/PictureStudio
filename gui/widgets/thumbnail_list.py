@@ -1,6 +1,7 @@
 """
 Lazy-loading thumbnail list using QThreadPool.
 """
+import logging
 import os
 from collections import OrderedDict
 from typing import Dict, Optional, List
@@ -12,6 +13,8 @@ from PySide6.QtCore import Qt, Signal, QRunnable, QThreadPool, QObject, QSize
 from PySide6.QtGui import QPixmap, QIcon, QColor
 
 from utils.config import IMAGE_FORMATS
+
+log = logging.getLogger(__name__)
 
 
 class _LRUPixmapCache:
@@ -72,8 +75,8 @@ class ThumbnailLoader(QRunnable):
                 pix = pix.scaled(self.size, self.size * 3 // 4,
                                  Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.signals.loaded.emit(self.image_path, pix)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Thumbnail für %s nicht geladen: %s", self.image_path, exc)
 
 
 class LazyThumbnailList(QListWidget):

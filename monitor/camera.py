@@ -20,7 +20,8 @@ def _discover_cameras() -> list:
     try:
         cams = list_usb_cameras()
         return cams if cams else []
-    except Exception:
+    except Exception as exc:
+        log.warning("Kamera-Suche fehlgeschlagen: %s", exc)
         return []
 
 
@@ -226,7 +227,8 @@ def find_camera_index(camera_source: Optional[str]) -> int:
         return 0
     try:
         cameras = list_usb_cameras()
-    except Exception:
+    except Exception as exc:
+        log.warning("Kamera-Suche fehlgeschlagen: %s", exc)
         cameras = []
     for idx, label in cameras:
         if camera_source in label or label in camera_source:
