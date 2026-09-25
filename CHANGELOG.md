@@ -14,7 +14,7 @@ All notable changes to PictureStudio are documented here.
 
 ### Changed
 
-- **`CLAUDE.md` / `AGENTS.md` auf den Code-Stand nachgezogen** — Stack-Index 16 (`LiveClassificationPage`) in der Seitentabelle ergänzt und die Indizes 11/14 als derzeit nicht navigierbar markiert; Anfänger-/Experte-Modus (`_BEGINNER_PAGES`, `_BEGINNER_ALLOWED`, `AppSettings.get_ui_mode()`) dokumentiert; `monitor.py` als reiner Entry-Point mit Modul-Tabelle des `monitor/`-Packages beschrieben; neuer Abschnitt zum gemeinsamen `core/http_router.py`; Hinweis auf die HTML-Frontends in `monitor_web/`; Testanzahl auf 1102 aktualisiert.
+- **`CLAUDE.md` / `AGENTS.md` auf den Code-Stand nachgezogen** — Stack-Index 16 (`LiveClassificationPage`) in der Seitentabelle ergänzt und bei 11/14 vermerkt, dass sie nur über das Ansicht-Menü erreichbar sind (nicht über die Sidebar); Anfänger-/Experte-Modus (`_BEGINNER_PAGES`, `_BEGINNER_ALLOWED`, `AppSettings.get_ui_mode()`) dokumentiert; `monitor.py` als reiner Entry-Point mit Modul-Tabelle des `monitor/`-Packages beschrieben; neuer Abschnitt zum gemeinsamen `core/http_router.py`; Hinweis auf die HTML-Frontends in `monitor_web/`; Testanzahl auf 1102 aktualisiert.
 - **`BACKLOG.md` um die Sektion „Aufräumen / Technische Schulden"** (IDs O–T) aus dem Code-Audit vom 2026-09-25 erweitert; die Punkte F und I mit dem tatsächlich gemessenen Umfang präzisiert.
 
 ---

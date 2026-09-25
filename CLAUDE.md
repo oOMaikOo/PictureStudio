@@ -39,6 +39,8 @@ The app has two project types — **Image** (classification) and **Video** (anom
 
 **UI mode**: persisted via `AppSettings.get_ui_mode()` / `set_ui_mode()` ("beginner" | "expert"), switchable live from the View menu (`MainWindow._set_ui_mode()`, no restart). In beginner mode `MainWindow._switch_page()` ignores any index outside `_BEGINNER_ALLOWED = {0, 1, 2, 3, 5, 7}`, so shortcuts, the Help menu and the wizard cannot escape the label → train → classify workflow. When adding a page that beginners must reach, add its index to `_BEGINNER_ALLOWED` **and** to `_BEGINNER_PAGES`.
 
+Not every page is in a sidebar list: 11 and 14 are reached from the View menu in `MainWindow._build_menu()`, which wires actions with `lambda _, i=idx: self._switch_page(i)`. Grepping for `_switch_page(<literal>)` will therefore miss them — check the View menu before concluding a page is unreachable.
+
 **Section headers** use `stack_idx = None` as a sentinel — these render as a labeled divider and are never added to `self._buttons`, so `set_locked()` / `set_page()` / `_select_by_stack()` work without modification. When adding a new page, add a nav tuple to the correct list; when adding a new section, insert a `("sidebar.section.yourkey", "", None)` tuple and add the key to both locale files.
 
 Stack indices (add new pages here). The index is the position in the `for page in [...]` list in `MainWindow._build_ui()` — reordering that list renumbers everything, so `main_window.py`, `gui/sidebar.py` and `gui/guide_tour.py` must be changed together:
@@ -56,10 +58,10 @@ Stack indices (add new pages here). The index is the position in the `for page i
 | 8 | `CameraPage` | video |
 | 9 | `BatchInferencePage` | image |
 | 10 | `MultiCameraPage` | video |
-| 11 | `DatasetStatsPage` | **no nav entry** — instantiated and fed by `set_project()`, but no sidebar list or `_switch_page()` call reaches it |
+| 11 | `DatasetStatsPage` | View menu only (`Ansicht → Datensatz-Stats`) — deliberately not in the sidebar since `30099de` |
 | 12 | `VideoAnnotationPage` | video |
 | 13 | `FleetPage` | video |
-| 14 | `DataDriftPage` | **no nav entry** — same as 11 |
+| 14 | `DataDriftPage` | View menu only (`Ansicht → Data Drift`) — same as 11 |
 | 15 | `AnomalyTrainingPage` | video |
 | 16 | `LiveClassificationPage` | image (`nav.liveclassify`) |
 
