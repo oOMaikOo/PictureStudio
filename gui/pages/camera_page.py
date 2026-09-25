@@ -29,13 +29,13 @@ from PySide6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QCheckBox, QGroupBox, QSizePolicy,
     QComboBox, QSplitter, QScrollArea, QFrame, QProgressBar,
     QFileDialog, QMessageBox, QDialog, QTextBrowser, QInputDialog,
-    QSlider, QFormLayout,
 )
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, Slot
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 
 from utils.i18n import tr
 from gui.page_index import Page
+from gui.widgets.camera_settings_group import CameraSettingsGroup
 
 log = logging.getLogger(__name__)
 
@@ -467,70 +467,19 @@ class CameraPage(QWidget):
         except Exception:
             log.debug("ScoreChart not available, skipping")
 
-        # ── Camera settings ───────────────────────────────────────────────────
-        cam_settings_grp = QGroupBox(tr("camera.settings_group"))
-        cam_settings_grp.setCheckable(True)
-        cam_settings_grp.setChecked(False)  # collapsed by default
-        cs = QFormLayout(cam_settings_grp)
-        cs.setSpacing(4)
-
-        def _make_prop_slider(minimum, maximum, default, prop_name):
-            row = QHBoxLayout()
-            sl = QSlider(Qt.Horizontal)
-            sl.setRange(minimum, maximum)
-            sl.setValue(default)
-            sl.setFixedHeight(18)
-            val_lbl = QLabel(str(default))
-            val_lbl.setFixedWidth(30)
-            val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            row.addWidget(sl)
-            row.addWidget(val_lbl)
-            def _on_change(v):
-                val_lbl.setText(str(v))
-                self._apply_cam_prop(prop_name, v)
-            sl.valueChanged.connect(_on_change)
-            return row, sl
-
-        br_row, self._brightness_sl = _make_prop_slider(-64, 64, 0, "brightness")
-        cs.addRow(tr("camera.brightness_label"), br_row)
-        ct_row, self._contrast_sl = _make_prop_slider(0, 95, 0, "contrast")
-        cs.addRow(tr("camera.contrast_label"), ct_row)
-        sat_row, self._saturation_sl = _make_prop_slider(0, 100, 0, "saturation")
-        cs.addRow(tr("camera.saturation_label"), sat_row)
-        sh_row, self._sharpness_sl = _make_prop_slider(0, 7, 0, "sharpness")
-        cs.addRow(tr("camera.sharpness_label"), sh_row)
-        exp_row, self._exposure_sl = _make_prop_slider(-13, -1, -6, "exposure")
-        cs.addRow(tr("camera.exposure_label"), exp_row)
-
-        reset_cam_btn = QPushButton(tr("camera.reset_btn"))
-        reset_cam_btn.setFixedHeight(24)
-        reset_cam_btn.clicked.connect(self._reset_cam_settings)
-        cs.addRow("", reset_cam_btn)
-
-        lv.addWidget(cam_settings_grp)
-        self._cam_settings_grp = cam_settings_grp
-
-        # ── Preprocessing filter ──────────────────────────────────────────────
-        filter_grp = QGroupBox(tr("camera.filter_group"))
-        ff = QFormLayout(filter_grp)
-        ff.setSpacing(4)
-
-        self._filter_combo = QComboBox()
-        self._filter_combo.addItem(tr("camera.filter_none"), "none")
-        self._filter_combo.addItem(tr("camera.filter_grayscale"), "grayscale")
-        self._filter_combo.addItem(tr("camera.filter_canny"), "canny")
-        self._filter_combo.addItem(tr("camera.filter_sobel"), "sobel")
-        self._filter_combo.addItem(tr("camera.filter_laplacian"), "laplacian")
-        ff.addRow(tr("camera.filter_label"), self._filter_combo)
+        # ── Camera settings + preprocessing filter ────────────────────────────
+        self._cam_settings = CameraSettingsGroup()
+        self._cam_settings.prop_changed.connect(self._apply_cam_prop)
+        self._cam_settings.props_reset.connect(self._apply_cam_props)
 
         self._filter_scoring_cb = QCheckBox(tr("camera.filter_scoring_cb"))
         self._filter_scoring_cb.setToolTip(
             "Wenn aktiv, sieht der Autoencoder den gefilterten Frame.\n"
             "Nur sinnvoll wenn das Modell auch auf gefilterten Frames trainiert wurde."
         )
-        ff.addRow("", self._filter_scoring_cb)
+        self._cam_settings.add_filter_row("", self._filter_scoring_cb)
 
-        lv.addWidget(filter_grp)
+        lv.addWidget(self._cam_settings)
 
         lv.addStretch()
         left_scroll.setWidget(left)
@@ -784,7 +733,7 @@ class CameraPage(QWidget):
         self._last_frame = frame
 
         # Apply preprocessing filter to display frame
-        filter_key = self._filter_combo.currentData()
+        filter_key = self._cam_settings.filter_name()
         display = apply_frame_filter(frame, filter_key) if filter_key != "none" else frame
         # Optionally also filter the frame used for scoring
         score_input = display if self._filter_scoring_cb.isChecked() else frame
@@ -1189,16 +1138,8 @@ class CameraPage(QWidget):
 
         from gui.camera_capture_dialog import CameraCaptureDialog
 
-        # Collect current camera properties from sliders
-        current_cam_props = {}
-        prop_names = ["brightness", "contrast", "saturation", "sharpness", "exposure"]
-        for prop in prop_names:
-            sl = getattr(self, f"_{prop}_sl", None)
-            if sl is not None:
-                current_cam_props[prop] = sl.value()
-
-        # Current preprocessing filter
-        current_filter = getattr(self._filter_combo, "currentData", lambda: "none")() or "none"
+        current_cam_props = self._cam_settings.cam_props()
+        current_filter = self._cam_settings.filter_name()
 
         save_dir = None
         if self._project and getattr(self._project, "project_path", None):
@@ -1277,17 +1218,10 @@ class CameraPage(QWidget):
         if self._camera_thread and self._camera_thread.isRunning():
             self._camera_thread.set_cam_props({prop_name: value})
 
-    def _reset_cam_settings(self) -> None:
-        """Reset all camera sliders to neutral values and send reset to camera."""
-        defaults = {"brightness": 0, "contrast": 0, "saturation": 0, "sharpness": 0, "exposure": -6}
-        for prop_name, default_val in defaults.items():
-            sl = getattr(self, f"_{prop_name}_sl", None)
-            if sl:
-                sl.blockSignals(True)
-                sl.setValue(default_val)
-                sl.blockSignals(False)
+    def _apply_cam_props(self, props: dict) -> None:
+        """Forward a whole set of camera properties to the running camera thread."""
         if self._camera_thread and self._camera_thread.isRunning():
-            self._camera_thread.set_cam_props(defaults)
+            self._camera_thread.set_cam_props(props)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

@@ -180,7 +180,7 @@ The detector is used by `CameraPage`, `CameraCaptureDialog`, and `MultiCameraPag
 - **Kamera-Einstellungen** — sliders forwarded live via `set_cam_props()`
 - **Vorverarbeitung** — filter dropdown; settings are passed to `CameraCaptureDialog` as start values on open
 
-`CameraCaptureDialog` (`gui/camera_capture_dialog.py`) contains its own camera settings sliders and filter dropdown — these are available regardless of which page opens the dialog (DataPage or CameraPage). Button order inside the dialog: ① Hyperparameter-Suche → ② Training starten. After training, model is auto-loaded back into `CameraPage` without a confirmation dialog.
+Both the page and `CameraCaptureDialog` embed the same `CameraSettingsGroup` (`gui/widgets/camera_settings_group.py`) — slider ranges, defaults and filter entries are defined once, in its `SLIDERS` / `FILTERS` class attributes. The widget only reports changes (`prop_changed`, `props_reset`, `filter_changed`); applying them stays with the owner, which is what differs (`CameraPage._camera_thread` vs. `CameraCaptureDialog._frame_thread`). Owner-specific extras go in via `add_filter_row()` — that is how CameraPage adds its "also apply to scoring" checkbox. The settings are available regardless of which page opens the dialog (DataPage or CameraPage). Button order inside the dialog: ① Hyperparameter-Suche → ② Training starten. After training, model is auto-loaded back into `CameraPage` without a confirmation dialog.
 
 ### Multi-camera
 

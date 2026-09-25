@@ -69,12 +69,70 @@ def test_camera_page_filter_combo_has_five_options(qtbot):
     from gui.pages.camera_page import CameraPage
     page = CameraPage()
     qtbot.addWidget(page)
-    assert page._filter_combo.count() == 5
+    assert page._cam_settings.filter_combo.count() == 5
 
 def test_camera_page_cam_settings_group_exists(qtbot):
     from gui.pages.camera_page import CameraPage
     page = CameraPage()
     qtbot.addWidget(page)
-    assert hasattr(page, "_cam_settings_grp")
-    assert hasattr(page, "_brightness_sl")
-    assert hasattr(page, "_contrast_sl")
+    assert page._cam_settings.settings_group is not None
+    assert set(page._cam_settings.cam_props()) == {
+        "brightness", "contrast", "saturation", "sharpness", "exposure"}
+
+
+# ── CameraSettingsGroup (shared by CameraPage and CameraCaptureDialog) ───────
+
+def test_settings_group_starts_from_given_props(qtbot):
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup(cam_props={"brightness": 12}, filter_name="canny")
+    qtbot.addWidget(w)
+    assert w.cam_props()["brightness"] == 12
+    assert w.cam_props()["contrast"] == 0        # unspecified → default
+    assert w.filter_name() == "canny"
+
+def test_settings_group_unknown_filter_falls_back_to_none(qtbot):
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup(filter_name="does_not_exist")
+    qtbot.addWidget(w)
+    assert w.filter_name() == "none"
+
+def test_settings_group_slider_emits_prop_changed(qtbot):
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup()
+    qtbot.addWidget(w)
+    seen = []
+    w.prop_changed.connect(lambda p, v: seen.append((p, v)))
+    w._sliders["contrast"].setValue(42)
+    assert seen == [("contrast", 42)]
+
+def test_settings_group_reset_restores_defaults_once(qtbot):
+    """Reset emits a single props_reset, not one signal per slider."""
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup(cam_props={"brightness": 30, "exposure": -2})
+    qtbot.addWidget(w)
+    per_prop, resets = [], []
+    w.prop_changed.connect(lambda p, v: per_prop.append(p))
+    w.props_reset.connect(resets.append)
+    returned = w.reset()
+    assert returned == w.defaults() == w.cam_props()
+    assert returned["brightness"] == 0 and returned["exposure"] == -6
+    assert resets == [returned]
+    assert per_prop == []
+
+def test_settings_group_reset_updates_value_labels(qtbot):
+    """The number beside each slider must follow a reset, not go stale."""
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup(cam_props={"brightness": 30})
+    qtbot.addWidget(w)
+    assert w._value_labels["brightness"].text() == "30"
+    w.reset()
+    assert w._value_labels["brightness"].text() == "0"
+
+def test_settings_group_filter_change_emits_key(qtbot):
+    from gui.widgets.camera_settings_group import CameraSettingsGroup
+    w = CameraSettingsGroup()
+    qtbot.addWidget(w)
+    seen = []
+    w.filter_changed.connect(seen.append)
+    w.filter_combo.setCurrentIndex(w.filter_combo.findData("sobel"))
+    assert seen == ["sobel"]
