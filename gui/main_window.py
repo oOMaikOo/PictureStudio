@@ -333,6 +333,7 @@ class MainWindow(QMainWindow):
             (tr("menu.help.training"),        3),
             (tr("menu.help.models"),          4),
             (tr("menu.help.inference"),       5),
+            (tr("menu.help.batch"),           15),
             (tr("menu.help.export"),          6),
             (tr("menu.help.settings"),        7),
             (tr("menu.help.camera"),          10),

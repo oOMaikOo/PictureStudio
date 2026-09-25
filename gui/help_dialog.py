@@ -21,6 +21,7 @@ SECTIONS = [
     (5, "🧠", "Training"),
     (6, "📊", "Modellbibliothek"),
     (7, "🔍", "Klassifikation"),
+    (15, "📦", "Batch-Inferenz"),
     (8, "📤", "Excel-Export"),
     (9, "⚙", "Einstellungen"),
     (10, "📷", "Kamera & Videoanalyse"),
@@ -41,7 +42,7 @@ SECTIONS = [
 # Map sidebar page index → section index
 PAGE_TO_SECTION = {
     0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
-    8: 10, 10: 14, 11: 16,
+    8: 10, 9: 15, 10: 14, 11: 16,
     12: 17, 13: 18, 14: 22,
     15: 24, 16: 7,
 }
@@ -461,6 +462,69 @@ Danach Labeling-Seite zur Kontrolle öffnen.</div>
 <div class="tip">Einstellungen → Schwelle 'unsicher' (Standard: 0.70).<br>
 Niedrigerer Wert = mehr Bilder gelten als sicher.<br>
 Höherer Wert = strengere Qualitätskontrolle, mehr im Niedrig-Konfidenz-Tab.</div>
+"""),
+
+# ── 15  Batch-Inferenz ────────────────────────────────────────────────────────
+15: page("""
+<h1>📦 Batch-Inferenz</h1>
+<p>Einen ganzen Ordner in einem Durchlauf klassifizieren — Ergebnisse als sortierbare
+Tabelle, exportierbar als CSV. Im Gegensatz zur <i>Klassifikation</i>-Seite ist die
+Batch-Seite auf Durchsatz und Auswertung ausgelegt: kein Bildvorschau-Panel, dafür
+Filter, Warnschwelle und Wahrscheinlichkeiten je Klasse im Export.</p>
+
+<h2>Schritt-für-Schritt</h2>
+<div class="step"><b>1 – Modell laden</b><br>
+Dropdown <i>Modell</i> → <i>Ausgewähltes Modell laden</i> (Modelle aus dem Projekt).<br>
+Alternativ <i>Externe .pth laden…</i> für ein Modell von außerhalb des Projekts.</div>
+
+<div class="step"><b>2 – Eingabe wählen</b><br>
+<i>Ordner wählen…</i> für einen beliebigen Bildordner, oder
+<i>Projektbilder verwenden</i> für alle Bilder des geladenen Projekts.</div>
+
+<div class="step"><b>3 – Batch starten</b><br>
+<i>▶ Batch starten</i> — läuft im Hintergrund mit Fortschrittsbalken,
+jederzeit über <i>Abbrechen</i> stoppbar. Die Oberfläche bleibt bedienbar.</div>
+
+<div class="warn"><b>Ordnerscan ist nicht rekursiv</b><br>
+Es wird nur die oberste Ebene des gewählten Ordners gelesen — Unterordner bleiben
+außen vor. Das unterscheidet die Batch-Seite vom Datenimport auf der
+<i>Daten</i>-Seite, der rekursiv arbeitet. Unterstützt werden
+<code>.jpg .jpeg .png .bmp .tif .tiff .webp</code>.</div>
+
+<h2>Filter &amp; Schwellwert</h2>
+<table>
+<tr><th>Feld</th><th>Wirkung</th></tr>
+<tr><td><b>Min. Confidence</b></td><td>Blendet Ergebnisse unterhalb dieses Werts aus der Tabelle aus. <code>0.00</code> = alles anzeigen.</td></tr>
+<tr><td><b>Warnschwelle</b></td><td>Standard <code>0.70</code>. Ergebnisse darunter werden rot hinterlegt und in der Fehlerspalte als <i>⚠ Niedrig</i> markiert.</td></tr>
+<tr><td><b>Klassen-Filter</b></td><td>Zeigt nur eine vorhergesagte Klasse. <i>Alle</i> hebt den Filter auf.</td></tr>
+</table>
+<p>Änderungen greifen erst nach <i>Filter anwenden</i> — der Batch muss dafür nicht
+erneut laufen, gefiltert wird auf dem vorhandenen Ergebnis.</p>
+
+<h2>Farbkodierung der Confidence-Spalte</h2>
+<table>
+<tr><th>Farbe</th><th>Bereich</th><th>Bedeutung</th></tr>
+<tr><td>🟢 Grün</td><td>≥ 90 %</td><td>Sichere Vorhersage</td></tr>
+<tr><td>🟡 Gelb</td><td>Warnschwelle … 90 %</td><td>Brauchbar, Stichprobe sinnvoll</td></tr>
+<tr><td>🔴 Rot</td><td>&lt; Warnschwelle</td><td>Unsicher — manuell prüfen</td></tr>
+</table>
+
+<h2>Export</h2>
+<div class="step"><b>CSV exportieren…</b><br>
+Vollständiges Ergebnis. Spalten: <code>filename</code>, <code>path</code>,
+<code>predicted</code>, <code>confidence</code>, <code>error</code> — dazu
+<b>eine Spalte <code>p_&lt;Klasse&gt;</code> je Klasse</b> mit der
+Einzelwahrscheinlichkeit. Damit lassen sich Grenzfälle extern auswerten.</div>
+
+<div class="step"><b>Unsichere exportieren…</b><br>
+Nur die Ergebnisse unterhalb der Warnschwelle, Spalten <code>filename</code>,
+<code>path</code>, <code>predicted</code>, <code>confidence</code>.</div>
+
+<div class="tip"><b>Arbeitsablauf-Tipp</b><br>
+<i>Unsichere exportieren…</i> liefert genau die Bilder, bei denen das Modell schwach
+ist. Diese gezielt ins Projekt aufnehmen, auf der <i>Labeling</i>-Seite korrekt
+labeln und neu trainieren — derselbe Gedanke wie beim Active Learning, nur für
+Bildbestände außerhalb des Projekts.</div>
 """),
 
 # ── 8  Export ─────────────────────────────────────────────────────────────────

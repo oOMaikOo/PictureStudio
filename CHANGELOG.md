@@ -6,6 +6,14 @@ All notable changes to PictureStudio are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Eigene Hilfesektion „Batch-Inferenz"** (`gui/help_dialog.py`, Sektion 15) — die Batch-Seite hatte bisher keine Hilfe. Beschreibt den Ablauf (Modell laden → Eingabe wählen → Batch starten), die Felder unter *Filter & Schwellwert* (Min. Confidence, Warnschwelle 0.70, Klassen-Filter), die Farbkodierung der Confidence-Spalte (≥ 90 % grün / ≥ Warnschwelle gelb / darunter rot) und beide CSV-Exporte inkl. der `p_<Klasse>`-Spalten. Enthält einen Warnhinweis, dass der Ordnerscan **nicht rekursiv** ist (`os.listdir`) — anders als der Datenimport auf der Daten-Seite. Erreichbar über *Hilfe → Batch-Inferenz – Hilfe* (neuer i18n-Key `menu.help.batch` in DE und EN).
+
+### Fixed
+
+- **F1 auf der Batch-Inferenz-Seite öffnete „Erste Schritte"** — `PAGE_TO_SECTION` in `gui/help_dialog.py` hatte keinen Eintrag für Stack-Index 9, sodass `.get(page_index, 0)` auf die Einstiegssektion zurückfiel. Mapping `9: 15` ergänzt; damit sind jetzt alle 17 Stack-Seiten einer Hilfesektion zugeordnet.
+
 ### Removed
 
 - **Tote Module entfernt (808 Zeilen)** — vier Dateien, die kein Modul und kein Test importierte: `gui/training_panel.py` (416 Z.) und `gui/inference_panel.py` (291 Z.) waren die Vorgänger der heutigen `gui/pages/training_page.py` bzw. `gui/pages/inference_page.py`; `gui/image_viewer.py` (63 Z.) wurde laut Docstring vom ROI-Editor genutzt, der es nicht mehr importiert; `core/roi.py` (38 Z.) war ein Wrapper um ROI-Daten, die längst als dicts im `Project` liegen.
