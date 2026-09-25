@@ -1,6 +1,6 @@
 # Troubleshooting
 
-> **PictureStudio v2.5.1** — Common problems and their solutions
+> **PictureStudio v2.5.2** — Common problems and their solutions
 
 ---
 

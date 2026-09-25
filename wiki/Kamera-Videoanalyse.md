@@ -1,6 +1,6 @@
 # 📷 Kamera & Videoanalyse
 
-> **PictureStudio v2.5.1** — Live-Aufnahme, Anomalieerkennung und Batch-Analyse mit Kamera oder Video
+> **PictureStudio v2.5.2** — Live-Aufnahme, Anomalieerkennung und Batch-Analyse mit Kamera oder Video
 
 ---
 

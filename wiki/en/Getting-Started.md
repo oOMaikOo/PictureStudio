@@ -1,6 +1,6 @@
 # Getting Started
 
-> **PictureStudio v2.5.1** — Complete workflow from your first images to a trained model
+> **PictureStudio v2.5.2** — Complete workflow from your first images to a trained model
 
 ---
 

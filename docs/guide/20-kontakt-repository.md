@@ -1,6 +1,6 @@
 # 🔗 Kontakt & Repository
 
-> **PictureStudio v2.5.1** — GitHub-Repository, Issues und Beiträge
+> **PictureStudio v2.5.2** — GitHub-Repository, Issues und Beiträge
 
 ---
 

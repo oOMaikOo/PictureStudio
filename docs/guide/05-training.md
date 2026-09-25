@@ -1,6 +1,6 @@
 # 🧠 Training
 
-> **PictureStudio v2.5.1** — CNN-Modell lokal oder remote per SSH trainieren
+> **PictureStudio v2.5.2** — CNN-Modell lokal oder remote per SSH trainieren
 
 ---
 

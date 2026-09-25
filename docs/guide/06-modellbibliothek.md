@@ -1,6 +1,6 @@
 # 📊 Modellbibliothek
 
-> **PictureStudio v2.5.1** — Trainierte Modelle verwalten, vergleichen und exportieren
+> **PictureStudio v2.5.2** — Trainierte Modelle verwalten, vergleichen und exportieren
 
 ---
 

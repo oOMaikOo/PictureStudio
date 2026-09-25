@@ -1,6 +1,6 @@
 # PictureStudio — Dokumentation
 
-> **PictureStudio v2.5.1** — KI-gestützte Bildanalyse & Anomalieerkennung
+> **PictureStudio v2.5.2** — KI-gestützte Bildanalyse & Anomalieerkennung
 
 ---
 

@@ -1,6 +1,6 @@
 # Camera & Video Analysis
 
-> **PictureStudio v2.5.1** — Live capture, anomaly detection, and batch analysis with a camera or video file
+> **PictureStudio v2.5.2** — Live capture, anomaly detection, and batch analysis with a camera or video file
 
 ---
 

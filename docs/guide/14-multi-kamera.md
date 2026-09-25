@@ -1,6 +1,6 @@
 # 📹 Multi-Kamera
 
-> **PictureStudio v2.5.1** — Bis zu 9 Kamerakanäle gleichzeitig überwachen
+> **PictureStudio v2.5.2** — Bis zu 9 Kamerakanäle gleichzeitig überwachen
 
 ---
 

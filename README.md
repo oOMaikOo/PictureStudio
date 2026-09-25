@@ -1,4 +1,4 @@
-# Picture Studio v2.5.1
+# Picture Studio v2.5.2
 
 [![CI](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml/badge.svg)](https://github.com/oOMaikOo/PictureStudio/actions/workflows/ci.yml)
 

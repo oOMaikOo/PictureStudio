@@ -4,7 +4,7 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
-## [Unreleased]
+## [2.5.2] – 2026-09-25
 
 ### Added
 

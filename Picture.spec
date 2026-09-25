@@ -96,8 +96,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": APP_NAME,
         "CFBundleDisplayName": APP_NAME,
-        "CFBundleShortVersionString": "2.5.1",
-        "CFBundleVersion": "2.5.1",
+        "CFBundleShortVersionString": "2.5.2",
+        "CFBundleVersion": "2.5.2",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0",
         # Required so macOS allows camera access instead of crashing:

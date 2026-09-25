@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="Picture Studio"
 APP_PATH="dist/${APP_NAME}.app"
-DMG_PATH="dist/Picture-Studio-2.5.1.dmg"
+DMG_PATH="dist/Picture-Studio-2.5.2.dmg"
 PY="${PYTHON:-.venv/bin/python}"
 
 echo "▶ 1/4  Clean previous build…"

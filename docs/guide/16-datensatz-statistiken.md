@@ -1,6 +1,6 @@
 # 📈 Datensatz-Statistiken
 
-> **PictureStudio v2.5.1** — Klassenverteilung, Duplikate und Label-Rate analysieren
+> **PictureStudio v2.5.2** — Klassenverteilung, Duplikate und Label-Rate analysieren
 
 ---
 

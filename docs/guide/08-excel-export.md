@@ -1,6 +1,6 @@
 # 📤 Excel-Export
 
-> **PictureStudio v2.5.1** — Klassifikationsergebnisse als formatierte Excel-Datei exportieren
+> **PictureStudio v2.5.2** — Klassifikationsergebnisse als formatierte Excel-Datei exportieren
 
 ---
 

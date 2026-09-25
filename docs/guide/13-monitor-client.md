@@ -1,6 +1,6 @@
 # 💻 Monitor-Client
 
-> **PictureStudio v2.5.1** — Eigenständiges CLI-Tool für den Produktionseinsatz
+> **PictureStudio v2.5.2** — Eigenständiges CLI-Tool für den Produktionseinsatz
 
 ---
 

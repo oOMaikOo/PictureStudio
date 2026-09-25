@@ -1,6 +1,6 @@
 # 🎬 Video-Annotation
 
-> **PictureStudio v2.5.1** — Frame-für-Frame Annotation direkt aus Videodateien
+> **PictureStudio v2.5.2** — Frame-für-Frame Annotation direkt aus Videodateien
 
 ---
 

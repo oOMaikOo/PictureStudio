@@ -1,6 +1,6 @@
 # 🏷 Labeling & ROIs
 
-> **PictureStudio v2.5.1** — Bilder annotieren, Labels zuweisen und Regionen einzeichnen
+> **PictureStudio v2.5.2** — Bilder annotieren, Labels zuweisen und Regionen einzeichnen
 
 ---
 
