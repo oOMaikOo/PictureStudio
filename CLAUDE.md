@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 source .venv/bin/activate
 python main.py
 
-# Run all tests (~942 pass; integration tests take ~30 s each)
+# Run all tests (1102 collected; integration tests take ~30 s each)
 .venv/bin/python -m pytest tests/ -v
 
 # Skip slow ML integration tests
@@ -35,29 +35,33 @@ Integration tests (`test_integration.py`) train a small model on 12 synthetic im
 
 ### Project types and sidebar pages
 
-The app has two project types — **Image** (classification) and **Video** (anomaly/stream). The sidebar (`gui/sidebar.py`) switches between `_IMAGE_PAGES` and `_VIDEO_PAGES` lists. `MainWindow` holds a single `QStackedWidget`; sidebar entries are `(label_key, icon, stack_index)` tuples.
+The app has two project types — **Image** (classification) and **Video** (anomaly/stream) — and two UI modes, **Beginner** and **Expert**. The sidebar (`gui/sidebar.py`) picks one of three lists: `_BEGINNER_PAGES` (beginner mode, any project type), else `_IMAGE_PAGES` or `_VIDEO_PAGES`. `MainWindow` holds a single `QStackedWidget`; sidebar entries are `(label_key, icon, stack_index)` tuples.
+
+**UI mode**: persisted via `AppSettings.get_ui_mode()` / `set_ui_mode()` ("beginner" | "expert"), switchable live from the View menu (`MainWindow._set_ui_mode()`, no restart). In beginner mode `MainWindow._switch_page()` ignores any index outside `_BEGINNER_ALLOWED = {0, 1, 2, 3, 5, 7}`, so shortcuts, the Help menu and the wizard cannot escape the label → train → classify workflow. When adding a page that beginners must reach, add its index to `_BEGINNER_ALLOWED` **and** to `_BEGINNER_PAGES`.
 
 **Section headers** use `stack_idx = None` as a sentinel — these render as a labeled divider and are never added to `self._buttons`, so `set_locked()` / `set_page()` / `_select_by_stack()` work without modification. When adding a new page, add a nav tuple to the correct list; when adding a new section, insert a `("sidebar.section.yourkey", "", None)` tuple and add the key to both locale files.
 
-Stack indices (add new pages here):
-| Index | Page class | Visible in |
+Stack indices (add new pages here). The index is the position in the `for page in [...]` list in `MainWindow._build_ui()` — reordering that list renumbers everything, so `main_window.py`, `gui/sidebar.py` and `gui/guide_tour.py` must be changed together:
+
+| Index | Page class | Reachable from |
 |-------|-----------|------------|
-| 0 | `DashboardPage` | both |
-| 1 | `DataPage` | both |
-| 2 | `LabelingPage` | image |
-| 3 | `TrainingPage` | image |
+| 0 | `DashboardPage` | both, beginner |
+| 1 | `DataPage` | both, beginner |
+| 2 | `LabelingPage` | image, beginner |
+| 3 | `TrainingPage` | image, beginner |
 | 4 | `ModelsPage` | image |
-| 5 | `InferencePage` | image |
+| 5 | `InferencePage` | image, beginner |
 | 6 | `ExportPage` | both |
-| 7 | `SettingsPage` | both |
+| 7 | `SettingsPage` | both, beginner |
 | 8 | `CameraPage` | video |
 | 9 | `BatchInferencePage` | image |
 | 10 | `MultiCameraPage` | video |
-| 11 | `DatasetStatsPage` | image |
+| 11 | `DatasetStatsPage` | **no nav entry** — instantiated and fed by `set_project()`, but no sidebar list or `_switch_page()` call reaches it |
 | 12 | `VideoAnnotationPage` | video |
 | 13 | `FleetPage` | video |
-| 14 | `DataDriftPage` | image |
+| 14 | `DataDriftPage` | **no nav entry** — same as 11 |
 | 15 | `AnomalyTrainingPage` | video |
+| 16 | `LiveClassificationPage` | image (`nav.liveclassify`) |
 
 ### Central data model: `core/project.py`
 
@@ -188,7 +192,22 @@ Edge export (`core/edge_export.py`): `EdgeExporter.export_quantized_onnx()` (ONN
 
 Docker deployment (`core/docker_generator.py`): generates `Dockerfile`, `docker-compose.yml`, `requirements_monitor.txt`, `run_monitor.sh`, `README_deploy.md`.
 
-### Standalone monitor daemon: `monitor.py`
+### Standalone monitor daemon: `monitor.py` → `monitor/` package
+
+`monitor.py` at the repo root is a 24-line entry point only — it puts the project root on `sys.path` and calls `monitor.cli.main()`. The implementation lives in the `monitor/` package (split from a single 2482-line module):
+
+| Module | Responsibility |
+|--------|----------------|
+| `monitor/cli.py` | `build_parser()`, `main()` — argument parsing and mode dispatch |
+| `monitor/runner.py` | `run_monitor()` / `run_monitor_multi()` — the single- and multi-channel loops |
+| `monitor/state.py` | `_MonitorState` + the JPEG frame ring buffer |
+| `monitor/camera.py` | `_discover_cameras()`, `_terminal_camera_select()`, `find_camera_index()`, `_CameraThread` |
+| `monitor/imaging.py` | `apply_roi()`, `composite_overlay()`, `draw_hud()`, `save_alarm()` |
+| `monitor/api_server.py` | `MonitorApiServer` — REST API on `core.http_router` |
+| `monitor/setup_server.py` | `SetupApiServer`, `run_setup()` — setup wizard on `core.http_router` |
+| `monitor/web.py` | `load_html(name)` — loads `monitor_web/<name>.html`, PyInstaller-aware via `sys._MEIPASS` |
+
+`monitor/__init__.py` re-exports the public names (and the old `_`-prefixed ones) so `from monitor import X` keeps working for existing tests and tooling.
 
 Runs without the GUI. Designed for headless Windows/Linux deployment. Key modes:
 
@@ -196,6 +215,8 @@ Runs without the GUI. Designed for headless Windows/Linux deployment. Key modes:
 - **Normal** (`--model path`): single-camera anomaly detection
 - **Multi-channel** (`--channels cfg.json`): `run_monitor_multi()` with N parallel channels
 - **Setup wizard** (`--setup`): web UI on `--setup-port` (default 8765) — camera preview (JPEG polling at `/setup/channels/{id}/frame.jpg`), ROI drawing, model deploy via multipart POST; no training on the daemon
+
+Both web frontends are plain files in `monitor_web/` (`dashboard.html`, `setup.html`), loaded through `monitor.web.load_html()` — not inline Python strings. Edit the HTML there; `load_html` is `lru_cache`d, so a running daemon must be restarted to pick up changes.
 
 The setup wizard web UI exposes `/setup/cameras` (GET) which returns the pre-scanned camera list for one-click channel creation buttons.
 
@@ -211,9 +232,13 @@ Embedded REST API (`--api-port`, default 8766): `GET /api/status` (includes `fra
 
 Minimal dependencies for monitor-only deployment: `requirements_monitor.txt` (no PySide6, no GUI).
 
+### HTTP layer: `core/http_router.py`
+
+All three HTTP servers (`api/rest_server.py`, `monitor/api_server.py`, `monitor/setup_server.py`) share one stdlib-only router — no web framework dependency. It provides `Request`, `Response`, `Router` (path patterns with `<param>` segments), `make_handler(router)` and `RouterServer` (a `ThreadingHTTPServer`, so parallel requests don't block each other). JSON encoding, CORS and the `X-Api-Key` check live in the router, not in the route functions. When adding an endpoint, register a route on the relevant server's `Router`; don't subclass `BaseHTTPRequestHandler`.
+
 ### REST API: `api/rest_server.py`
 
-`RestApiServer` runs in a background daemon thread (stdlib `http.server`, no extra deps). Call `set_project(project)` after load. Optional API key auth (`X-Api-Key` header); `/api/status` and `/dashboard` are always public.
+`RestApiServer` runs in a background daemon thread on `core.http_router`; this module only defines the routes and the shared state they read. Call `set_project(project)` after load. Optional API key auth (`X-Api-Key` header); `/api/status` and `/dashboard` are always public.
 
 ### Thumbnail list: `gui/widgets/thumbnail_list.py`
 

@@ -4,6 +4,21 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [Unreleased]
+
+### Removed
+
+- **Tote Module entfernt (808 Zeilen)** — vier Dateien, die kein Modul und kein Test importierte: `gui/training_panel.py` (416 Z.) und `gui/inference_panel.py` (291 Z.) waren die Vorgänger der heutigen `gui/pages/training_page.py` bzw. `gui/pages/inference_page.py`; `gui/image_viewer.py` (63 Z.) wurde laut Docstring vom ROI-Editor genutzt, der es nicht mehr importiert; `core/roi.py` (38 Z.) war ein Wrapper um ROI-Daten, die längst als dicts im `Project` liegen.
+- **Tote Abhängigkeiten entfernt** — `scikit-learn` (Rest des in 2.5.1 entfernten Anomalie-Clusterings) und `pandas` standen ungekommentiert in `requirements.txt`, hatten aber **0 Import-Stellen** im gesamten Projekt (~100 MB Pflichtinstall ohne Nutzen). `Picture.spec` sammelte `sklearn` zusätzlich per `collect_submodules()` + `collect_data_files()` ins macOS-Bundle — beides entfernt, `sklearn` und `pandas` stattdessen in `excludes` aufgenommen, damit sie nicht transitiv wieder hineinrutschen.
+- **Doppelter `onnxruntime`-Eintrag** in `requirements.txt` bereinigt (stand einmal aktiv und einmal auskommentiert); der verbleibende Kommentar nennt jetzt beide Verwendungen (Monitor-Inferenz + INT8-Quantisierung im Edge-Export).
+
+### Changed
+
+- **`CLAUDE.md` / `AGENTS.md` auf den Code-Stand nachgezogen** — Stack-Index 16 (`LiveClassificationPage`) in der Seitentabelle ergänzt und die Indizes 11/14 als derzeit nicht navigierbar markiert; Anfänger-/Experte-Modus (`_BEGINNER_PAGES`, `_BEGINNER_ALLOWED`, `AppSettings.get_ui_mode()`) dokumentiert; `monitor.py` als reiner Entry-Point mit Modul-Tabelle des `monitor/`-Packages beschrieben; neuer Abschnitt zum gemeinsamen `core/http_router.py`; Hinweis auf die HTML-Frontends in `monitor_web/`; Testanzahl auf 1102 aktualisiert.
+- **`BACKLOG.md` um die Sektion „Aufräumen / Technische Schulden"** (IDs O–T) aus dem Code-Audit vom 2026-09-25 erweitert; die Punkte F und I mit dem tatsächlich gemessenen Umfang präzisiert.
+
+---
+
 ## [2.5.1] – 2026-05-24
 
 ### Changed

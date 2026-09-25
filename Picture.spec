@@ -5,8 +5,6 @@ PyInstaller spec for Picture Studio — macOS .app bundle.
 Build with:  ./build_macos.sh
 or directly: pyinstaller --noconfirm Picture.spec
 """
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
-
 block_cipher = None
 
 # ── App metadata ─────────────────────────────────────────────────────────────
@@ -20,13 +18,9 @@ datas = [
     ("assets", "assets"),
     ("monitor_web", "monitor_web"),
 ]
-# sklearn / matplotlib ship runtime data that their hooks may miss.
-datas += collect_data_files("sklearn", includes=["**/*.csv", "**/*.npz"])
 
 # ── Hidden imports (modules pulled in dynamically by their libraries) ─────────
-hiddenimports = []
-hiddenimports += collect_submodules("sklearn")
-hiddenimports += [
+hiddenimports = [
     "matplotlib.backends.backend_qtagg",
     "matplotlib.backends.backend_agg",
     "scipy.special",
@@ -38,6 +32,8 @@ excludes = [
     "pytest", "pytest_qt", "_pytest",
     # Optional extras that are not installed / not needed at runtime:
     "optuna", "coremltools", "imagehash",
+    # Unused by the app — sklearn was only needed by the removed clustering feature:
+    "sklearn", "pandas",
 ]
 
 a = Analysis(
