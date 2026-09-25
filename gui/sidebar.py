@@ -10,6 +10,8 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFrame
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QFont
 
+from gui.page_index import Page
+
 
 def _ui_font(size: int = 11) -> QFont:
     """Return a QFont using the platform system UI font at *size* points."""
@@ -23,46 +25,46 @@ def _ui_font(size: int = 11) -> QFont:
 # (tr-key, icon, stack_idx) — labels are translation keys, resolved at button-build time.
 # stack_idx=None marks a section header (no button rendered, no entry in self._buttons).
 _IMAGE_PAGES: List[Tuple[str, str, Optional[int]]] = [
-    ("sidebar.section.workflow",    "",   None),
-    ("nav.dashboard",       "🏠", 0),
-    ("nav.data",            "📁", 1),
-    ("nav.labeling",        "🏷", 2),
-    ("nav.training",        "🧠", 3),
-    ("nav.models",          "📊", 4),
-    ("sidebar.section.anwenden",    "",   None),
-    ("nav.inference",       "🔍", 5),
-    ("nav.batch",           "📦", 9),
-    ("nav.liveclassify",    "🎥", 16),
-    ("sidebar.section.system",      "",   None),
-    ("nav.export",          "📤", 6),
-    ("nav.settings",        "⚙",  7),
+    ("sidebar.section.workflow", "",   None),
+    ("nav.dashboard",            "🏠", Page.DASHBOARD),
+    ("nav.data",                 "📁", Page.DATA),
+    ("nav.labeling",             "🏷", Page.LABELING),
+    ("nav.training",             "🧠", Page.TRAINING),
+    ("nav.models",               "📊", Page.MODELS),
+    ("sidebar.section.anwenden", "",   None),
+    ("nav.inference",            "🔍", Page.INFERENCE),
+    ("nav.batch",                "📦", Page.BATCH),
+    ("nav.liveclassify",         "🎥", Page.LIVE_CLASSIFY),
+    ("sidebar.section.system",   "",   None),
+    ("nav.export",               "📤", Page.EXPORT),
+    ("nav.settings",             "⚙",  Page.SETTINGS),
 ]
 
 _VIDEO_PAGES: List[Tuple[str, str, Optional[int]]] = [
-    ("sidebar.section.workflow",    "",   None),
-    ("nav.dashboard",      "🏠", 0),
-    ("nav.data",           "📁", 1),
-    ("nav.videoannotation",   "🎬", 12),
-    ("nav.anomalytraining",   "🧠", 15),
-    ("nav.camera",            "🎥", 8),
-    ("nav.multicamera",    "📹", 10),
-    ("sidebar.section.tools",       "",   None),
-    ("nav.fleet",          "🌐", 13),
-    ("sidebar.section.system",      "",   None),
-    ("nav.export",         "📤", 6),
-    ("nav.settings",       "⚙",  7),
+    ("sidebar.section.workflow", "",   None),
+    ("nav.dashboard",            "🏠", Page.DASHBOARD),
+    ("nav.data",                 "📁", Page.DATA),
+    ("nav.videoannotation",      "🎬", Page.VIDEO_ANNOTATION),
+    ("nav.anomalytraining",      "🧠", Page.ANOMALY_TRAINING),
+    ("nav.camera",               "🎥", Page.CAMERA),
+    ("nav.multicamera",          "📹", Page.MULTI_CAMERA),
+    ("sidebar.section.tools",    "",   None),
+    ("nav.fleet",                "🌐", Page.FLEET),
+    ("sidebar.section.system",   "",   None),
+    ("nav.export",               "📤", Page.EXPORT),
+    ("nav.settings",             "⚙",  Page.SETTINGS),
 ]
 
 # Beginner mode: the label → train → classify workflow (image classification).
 _BEGINNER_PAGES: List[Tuple[str, str, Optional[int]]] = [
-    ("sidebar.section.workflow",    "",   None),
-    ("nav.dashboard",       "🏠", 0),
-    ("nav.data",            "📁", 1),
-    ("nav.labeling",        "🏷", 2),
-    ("nav.training",        "🧠", 3),
-    ("nav.inference",       "🔍", 5),
-    ("sidebar.section.system",      "",   None),
-    ("nav.settings",        "⚙",  7),
+    ("sidebar.section.workflow", "",   None),
+    ("nav.dashboard",            "🏠", Page.DASHBOARD),
+    ("nav.data",                 "📁", Page.DATA),
+    ("nav.labeling",             "🏷", Page.LABELING),
+    ("nav.training",             "🧠", Page.TRAINING),
+    ("nav.inference",            "🔍", Page.INFERENCE),
+    ("sidebar.section.system",   "",   None),
+    ("nav.settings",             "⚙",  Page.SETTINGS),
 ]
 
 _BTN_STYLE = """

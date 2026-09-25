@@ -43,7 +43,11 @@ Not every page is in a sidebar list: 11 and 14 are reached from the View menu in
 
 **Section headers** use `stack_idx = None` as a sentinel — these render as a labeled divider and are never added to `self._buttons`, so `set_locked()` / `set_page()` / `_select_by_stack()` work without modification. When adding a new page, add a nav tuple to the correct list; when adding a new section, insert a `("sidebar.section.yourkey", "", None)` tuple and add the key to both locale files.
 
-Stack indices (add new pages here). The index is the position in the `for page in [...]` list in `MainWindow._build_ui()` — reordering that list renumbers everything, so `main_window.py`, `gui/sidebar.py` and `gui/guide_tour.py` must be changed together:
+Stack indices live in **`gui/page_index.py`** as an `IntEnum Page` — the single source of truth. `MainWindow._build_ui()` maps each member to its widget and adds them in `sorted(Page)` order, so the enum value *is* the index rather than a description of it; a member with no widget raises `KeyError` at startup. All consumers key off `Page`: the three nav lists in `gui/sidebar.py`, `TOUR_STEPS` in `gui/guide_tour.py`, `PAGE_TO_SECTION` in `gui/help_dialog.py`, the wizard's `stack_idx` values, and every `_switch_page()` call. `tests/test_page_index.py` fails if any of them drifts.
+
+To add a page: append a member to `Page`, map it to its widget in `MainWindow._build_ui()`, add a sidebar nav tuple, and give it a `TOUR_STEPS` entry plus a `PAGE_TO_SECTION` mapping (the last two are asserted by the tests). `Page` members are `IntEnum`, so they compare and hash like plain ints and can be passed straight to `setCurrentIndex()`.
+
+Current numbering:
 
 | Index | Page class | Reachable from |
 |-------|-----------|------------|

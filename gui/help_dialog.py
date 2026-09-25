@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
 
+from gui.page_index import Page
+
 # ---------------------------------------------------------------------------
 # Sections
 # ---------------------------------------------------------------------------
@@ -39,12 +41,26 @@ SECTIONS = [
     (24, "🧠", "Anomalie-Training"),
 ]
 
-# Map sidebar page index → section index
+# Map stack page index (gui.page_index.Page) → section id in SECTIONS above.
+# The section ids are a separate numbering and stay plain ints.
 PAGE_TO_SECTION = {
-    0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9,
-    8: 10, 9: 15, 10: 14, 11: 16,
-    12: 17, 13: 18, 14: 22,
-    15: 24, 16: 7,
+    Page.DASHBOARD:         2,
+    Page.DATA:              3,
+    Page.LABELING:          4,
+    Page.TRAINING:          5,
+    Page.MODELS:            6,
+    Page.INFERENCE:         7,
+    Page.EXPORT:            8,
+    Page.SETTINGS:          9,
+    Page.CAMERA:           10,
+    Page.BATCH:            15,
+    Page.MULTI_CAMERA:     14,
+    Page.DATASET_STATS:    16,
+    Page.VIDEO_ANNOTATION: 17,
+    Page.FLEET:            18,
+    Page.DATA_DRIFT:       22,
+    Page.ANOMALY_TRAINING: 24,
+    Page.LIVE_CLASSIFY:     7,   # shares the Klassifikation section
 }
 
 # ---------------------------------------------------------------------------

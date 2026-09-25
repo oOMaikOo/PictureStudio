@@ -8,6 +8,9 @@ All notable changes to PictureStudio are documented here.
 
 ### Added
 
+- **`gui/page_index.py` — `IntEnum Page` als einzige Quelle der Stack-Nummerierung.** Derselbe Index war bisher an vier Stellen von Hand gepflegt (Listenposition in `MainWindow._build_ui()`, Nav-Tupel in `gui/sidebar.py`, `TOUR_STEPS`-Keys in `gui/guide_tour.py`, `PAGE_TO_SECTION` in `gui/help_dialog.py`) — ein Renumbering musste alle vier im Gleichschritt treffen und brach Navigation stillschweigend, wenn eine vergessen wurde. `MainWindow` ordnet jetzt jedem Member sein Widget zu und fügt sie in `sorted(Page)`-Reihenfolge ein: der Enum-Wert *ist* der Index, und ein Member ohne Widget fliegt beim Start als `KeyError` auf. Ebenfalls umgestellt: die `stack_idx`-Werte des Quick-Start-Wizards, die Ctrl+1..9-Shortcuts, das Ansicht-Menü, `_BEGINNER_ALLOWED` und die Navigation aus `camera_page.py`.
+- **`tests/test_page_index.py`** — 6 Tests, die die Kopplung festnageln: lückenlose Enum-Werte, Stack-Reihenfolge gegen die erwarteten Seitenklassen, Sidebar-Listen und Wizard-Schritte nutzen `Page`-Member, jede Seite hat einen Tour- *und* einen Hilfe-Eintrag (dessen Sektion auch existiert und Inhalt hat), und `_BEGINNER_ALLOWED` deckt alles ab, was die Anfänger-Sidebar anbietet.
+
 - **Eigene Hilfesektion „Batch-Inferenz"** (`gui/help_dialog.py`, Sektion 15) — die Batch-Seite hatte bisher keine Hilfe. Beschreibt den Ablauf (Modell laden → Eingabe wählen → Batch starten), die Felder unter *Filter & Schwellwert* (Min. Confidence, Warnschwelle 0.70, Klassen-Filter), die Farbkodierung der Confidence-Spalte (≥ 90 % grün / ≥ Warnschwelle gelb / darunter rot) und beide CSV-Exporte inkl. der `p_<Klasse>`-Spalten. Enthält einen Warnhinweis, dass der Ordnerscan **nicht rekursiv** ist (`os.listdir`) — anders als der Datenimport auf der Daten-Seite. Erreichbar über *Hilfe → Batch-Inferenz – Hilfe* (neuer i18n-Key `menu.help.batch` in DE und EN).
 
 ### Fixed

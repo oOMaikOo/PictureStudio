@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSettings
 from PySide6.QtGui import QFont, QColor, QPalette
 
+from gui.page_index import Page
+
 
 # ── Step definitions ─────────────────────────────────────────────────────────
 
@@ -101,7 +103,7 @@ _IMAGE_STEPS = [
         ),
         "action_de":  "→ Zur Daten-Seite",
         "action_en":  "→ Go to Data Page",
-        "stack_idx":  1,
+        "stack_idx":  Page.DATA,
         "action_type": "navigate",
     },
     {
@@ -126,7 +128,7 @@ _IMAGE_STEPS = [
         ),
         "action_de":  "→ Zum Labeling",
         "action_en":  "→ Go to Labeling",
-        "stack_idx":  2,
+        "stack_idx":  Page.LABELING,
         "action_type": "navigate",
     },
     {
@@ -157,7 +159,7 @@ _IMAGE_STEPS = [
         ),
         "action_de":  "→ Zum Training",
         "action_en":  "→ Go to Training",
-        "stack_idx":  3,
+        "stack_idx":  Page.TRAINING,
         "action_type": "navigate",
     },
     {
@@ -180,7 +182,7 @@ _IMAGE_STEPS = [
         ),
         "action_de":  "→ Zur Klassifikation",
         "action_en":  "→ Go to Classification",
-        "stack_idx":  5,
+        "stack_idx":  Page.INFERENCE,
         "action_type": "navigate",
     },
     {
@@ -207,7 +209,7 @@ _IMAGE_STEPS = [
         ),
         "action_de":  "→ Zur Live-Klassifikation",
         "action_en":  "→ Go to Live Classification",
-        "stack_idx":  16,
+        "stack_idx":  Page.LIVE_CLASSIFY,
         "action_type": "navigate",
         "expert_only": True,   # hidden in beginner mode (live is an expert feature)
     },
@@ -285,7 +287,7 @@ _VIDEO_STEPS = [
         ),
         "action_de":  "→ Zur Training-Seite",
         "action_en":  "→ Go to Training Page",
-        "stack_idx":  15,
+        "stack_idx":  Page.ANOMALY_TRAINING,
         "action_type": "navigate",
     },
     {
@@ -308,7 +310,7 @@ _VIDEO_STEPS = [
         ),
         "action_de":  "→ Zur Training-Seite",
         "action_en":  "→ Go to Training Page",
-        "stack_idx":  15,
+        "stack_idx":  Page.ANOMALY_TRAINING,
         "action_type": "navigate",
     },
     {
@@ -335,7 +337,7 @@ _VIDEO_STEPS = [
         ),
         "action_de":  "→ Zum Live-Monitoring",
         "action_en":  "→ Go to Live Monitoring",
-        "stack_idx":  8,
+        "stack_idx":  Page.CAMERA,
         "action_type": "navigate",
     },
 ]

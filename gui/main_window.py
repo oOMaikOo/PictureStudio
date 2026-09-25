@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, Signal, Slot, QTimer
 from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
 
 from utils.config import APP_NAME, APP_VERSION
+from gui.page_index import Page
 from utils.logging_utils import get_logger
 from utils.settings import AppSettings
 from gui.sidebar import Sidebar
@@ -152,20 +153,29 @@ class MainWindow(QMainWindow):
         self.anomaly_training_page   = AnomalyTrainingPage()
         self.live_classify_page      = LiveClassificationPage()
 
-        for page in [
-            self.dashboard_page, self.data_page, self.labeling_page,
-            self.training_page, self.models_page, self.inference_page,
-            self.export_page, self.settings_page, self.camera_page,
-            self.batch_page,                # index 9
-            self.multi_camera_page,         # index 10
-            self.dataset_stats_page,        # index 11
-            self.video_annotation_page,     # index 12
-            self.fleet_page,                # index 13
-            self.data_drift_page,           # index 14
-            self.anomaly_training_page,     # index 15
-            self.live_classify_page,        # index 16
-        ]:
-            self.stack.addWidget(page)
+        # Page.<NAME> is the stack index; adding in sorted(Page) order makes that
+        # true by construction. A member without an entry here raises KeyError.
+        pages = {
+            Page.DASHBOARD:        self.dashboard_page,
+            Page.DATA:             self.data_page,
+            Page.LABELING:         self.labeling_page,
+            Page.TRAINING:         self.training_page,
+            Page.MODELS:           self.models_page,
+            Page.INFERENCE:        self.inference_page,
+            Page.EXPORT:           self.export_page,
+            Page.SETTINGS:         self.settings_page,
+            Page.CAMERA:           self.camera_page,
+            Page.BATCH:            self.batch_page,
+            Page.MULTI_CAMERA:     self.multi_camera_page,
+            Page.DATASET_STATS:    self.dataset_stats_page,
+            Page.VIDEO_ANNOTATION: self.video_annotation_page,
+            Page.FLEET:            self.fleet_page,
+            Page.DATA_DRIFT:       self.data_drift_page,
+            Page.ANOMALY_TRAINING: self.anomaly_training_page,
+            Page.LIVE_CLASSIFY:    self.live_classify_page,
+        }
+        for _page in sorted(Page):
+            self.stack.addWidget(pages[_page])
         self.live_classify_page.images_added.connect(self._on_images_loaded)
 
         # REST API server
@@ -220,7 +230,7 @@ class MainWindow(QMainWindow):
         self.training_page.al_queue_updated.connect(self._on_al_queue_updated)
         self.inference_page.labels_applied.connect(self._on_labels_applied)
         self.labeling_page.al_retrain_requested.connect(
-            lambda: self._switch_page(3)  # 3 = Training page
+            lambda: self._switch_page(Page.TRAINING)
         )
 
         # Global Drag & Drop fallback on the stacked-widget area
@@ -291,17 +301,17 @@ class MainWindow(QMainWindow):
         vm.addAction(self._expert_mode_action)
         vm.addSeparator()
         for label, idx in [
-            (tr("nav.dashboard"),       0),
-            (tr("nav.data"),            1),
-            (tr("nav.labeling"),        2),
-            (tr("nav.training"),        3),
-            (tr("nav.models"),          4),
-            (tr("nav.inference"),       5),
-            (tr("menu.view.batchinference"), 9),
-            (tr("nav.dataset"),         11),
-            (tr("nav.datadrift"),       14),
-            (tr("nav.export"),          6),
-            (tr("nav.settings"),        7),
+            (tr("nav.dashboard"),            Page.DASHBOARD),
+            (tr("nav.data"),                 Page.DATA),
+            (tr("nav.labeling"),             Page.LABELING),
+            (tr("nav.training"),             Page.TRAINING),
+            (tr("nav.models"),               Page.MODELS),
+            (tr("nav.inference"),            Page.INFERENCE),
+            (tr("menu.view.batchinference"), Page.BATCH),
+            (tr("nav.dataset"),              Page.DATASET_STATS),
+            (tr("nav.datadrift"),            Page.DATA_DRIFT),
+            (tr("nav.export"),               Page.EXPORT),
+            (tr("nav.settings"),             Page.SETTINGS),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=idx: self._switch_page(i))
@@ -363,10 +373,13 @@ class MainWindow(QMainWindow):
         f1.setContext(Qt.ApplicationShortcut)
         f1.activated.connect(lambda: self._show_help())
 
-        # Page navigation shortcuts Ctrl+1..9 → pages 0..8
-        for _i, _idx in enumerate([0, 1, 2, 3, 4, 5, 6, 7, 8]):
+        # Page navigation shortcuts Ctrl+1..9
+        for _i, _page in enumerate([
+            Page.DASHBOARD, Page.DATA, Page.LABELING, Page.TRAINING, Page.MODELS,
+            Page.INFERENCE, Page.EXPORT, Page.SETTINGS, Page.CAMERA,
+        ]):
             QShortcut(QKeySequence(f"Ctrl+{_i + 1}"), self,
-                      activated=lambda idx=_idx: self._switch_page(idx))
+                      activated=lambda idx=_page: self._switch_page(idx))
 
     def _build_statusbar(self) -> None:
         """Create the status bar with a project-stats label and an autosave indicator."""
@@ -383,7 +396,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ page switching
 
     # Beginner mode: only these stack pages may be reached (matches sidebar).
-    _BEGINNER_ALLOWED = {0, 1, 2, 3, 5, 7}
+    _BEGINNER_ALLOWED = frozenset({
+        Page.DASHBOARD, Page.DATA, Page.LABELING,
+        Page.TRAINING, Page.INFERENCE, Page.SETTINGS,
+    })
 
     @Slot(int)
     def _switch_page(self, idx: int) -> None:
@@ -413,7 +429,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_expert_mode_action"):
             self._expert_mode_action.setChecked(mode != "beginner")
         if mode == "beginner" and self.stack.currentIndex() not in self._BEGINNER_ALLOWED:
-            self._switch_page(0)
+            self._switch_page(Page.DASHBOARD)
 
     # ------------------------------------------------------------------ active learning
 
@@ -442,7 +458,7 @@ class MainWindow(QMainWindow):
 
     def _open_anomaly_capture_dialog(self) -> None:
         """Navigate to CameraPage and immediately open the capture/training dialog."""
-        self._switch_page(8)
+        self._switch_page(Page.CAMERA)
         self.camera_page._open_capture_dialog()
 
     def _on_al_queue_updated(self) -> None:
@@ -541,7 +557,7 @@ class MainWindow(QMainWindow):
         self.dashboard_page.set_recent_projects(self._settings.get_recent_projects())
         self.setWindowTitle(f"{APP_NAME} – {project.config.name or project.project_path}")
         self._update_status()
-        self._switch_page(0)  # Go to dashboard
+        self._switch_page(Page.DASHBOARD)
 
         # Fehlende Bilder in Statusbar anzeigen (nicht-blockierend)
         if project.images:
@@ -924,7 +940,7 @@ class MainWindow(QMainWindow):
 
     def _navigate_to_label(self, label_name: str) -> None:
         """Navigate to the labeling page filtered to the given label."""
-        self._switch_page(2)
+        self._switch_page(Page.LABELING)
         self.labeling_page.filter_by_label(label_name)
 
     # ------------------------------------------------------------------ status

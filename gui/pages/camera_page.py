@@ -35,6 +35,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer, Slot
 from PySide6.QtGui import QImage, QKeySequence, QPixmap, QShortcut
 
 from utils.i18n import tr
+from gui.page_index import Page
 
 log = logging.getLogger(__name__)
 
@@ -983,7 +984,7 @@ class CameraPage(QWidget):
         self._dismiss_retrain_banner()
         mw = self.window()
         if hasattr(mw, "_switch_page"):
-            mw._switch_page(3)
+            mw._switch_page(Page.TRAINING)
 
     def _dismiss_retrain_banner(self) -> None:
         """Hide the retrain banner and reset the session alarm counter."""

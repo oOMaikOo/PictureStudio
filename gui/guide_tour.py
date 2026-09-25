@@ -9,16 +9,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QPoint, QRect
 from PySide6.QtGui import QFont, QColor
 
+from gui.page_index import Page
+
 # ---------------------------------------------------------------------------
-# Tour steps per page index (0–9)
-# 0=Dashboard, 1=Daten, 2=Labeling, 3=Training, 4=Modelle,
-# 5=Klassifikation, 6=Export, 7=Einstellungen, 8=Kamera, 9=Batch,
-# 10=Multi-Kamera, 11=Datensatz, 12=VideoAnnotation,
-# 13=Fleet, 14=DataDrift, 15=AnomalieTraining, 16=Live-Klassifikation
+# Tour steps per page, keyed by the stack index from gui.page_index.Page.
 # Each step: (title, description, button_text_to_highlight | None)
 # ---------------------------------------------------------------------------
 TOUR_STEPS = {
-    0: [  # Dashboard
+    Page.DASHBOARD: [  # Dashboard
         ("Willkommen bei Picture Studio",
          "Das Dashboard zeigt den Projektstand auf einen Blick:\n"
          "Bilder, Labels, Klassen und letzte Trainingsmetriken.\n\n"
@@ -52,7 +50,7 @@ TOUR_STEPS = {
          "zu wenig Bildern pro Klasse.",
          None),
     ],
-    1: [  # Daten
+    Page.DATA: [  # Daten
         ("Daten-Seite",
          "Hier importierst du Bilder oder Videos,\n"
          "analysierst den Datensatz und exportierst\n"
@@ -93,7 +91,7 @@ TOUR_STEPS = {
          "• CSV → eigene Tools / Tabellenkalkulation",
          "COCO"),
     ],
-    2: [  # Labeling (nur Bildprojekte)
+    Page.LABELING: [  # Labeling (nur Bildprojekte)
         ("Labeling-Seite",
          "Weise Bildern Klassen zu und zeichne ROIs\n"
          "(Regions of Interest) für die Klassifikation.\n\n"
@@ -156,7 +154,7 @@ TOUR_STEPS = {
          "gelabelt — Undo jederzeit möglich.",
          "Vorschläge generieren"),
     ],
-    3: [  # Training (nur Bildprojekte)
+    Page.TRAINING: [  # Training (nur Bildprojekte)
         ("Training-Seite",
          "Trainiere ein CNN-Modell auf deinen\n"
          "annotierten Bildern.\n\n"
@@ -226,7 +224,7 @@ TOUR_STEPS = {
          "Queue-Einträge reviewen → neu trainieren.",
          "🔍 AL-Scan starten"),
     ],
-    4: [  # Modelle
+    Page.MODELS: [  # Modelle
         ("Modellbibliothek",
          "Alle trainierten Modelle des Projekts\n"
          "auf einen Blick.\n\n"
@@ -260,7 +258,7 @@ TOUR_STEPS = {
          "sortiert mit Gerät, Epochen, Train-Acc.",
          "Ausgewählte vergleichen"),
     ],
-    5: [  # Klassifikation (nur Bildprojekte)
+    Page.INFERENCE: [  # Klassifikation (nur Bildprojekte)
         ("Klassifikations-Seite",
          "Neue (unbekannte) Bilder mit einem\n"
          "trainierten Modell bewerten.\n\n"
@@ -306,7 +304,7 @@ TOUR_STEPS = {
          "Danach: Labeling-Seite zur Kontrolle öffnen.",
          "Auf Projekt anwenden"),
     ],
-    6: [  # Export
+    Page.EXPORT: [  # Export
         ("Excel-Export",
          "Klassifikationsergebnisse in eine\n"
          "formatierte Excel-Datei exportieren.\n"
@@ -332,7 +330,7 @@ TOUR_STEPS = {
          "→ 'Excel exportieren' klicken.",
          "Excel exportieren"),
     ],
-    7: [  # Einstellungen
+    Page.SETTINGS: [  # Einstellungen
         ("Einstellungen – Überblick",
          "Alle Einstellungen werden automatisch\n"
          "gespeichert (QSettings) und beim\n"
@@ -418,7 +416,7 @@ TOUR_STEPS = {
          "Kamera, ROI und Schwellwert werden automatisch aus den Modell-Metadaten geladen.",
          None),
     ],
-    8: [  # Kamera & Videoanalyse (Dialog, kein eigener Stack-Index)
+    Page.CAMERA: [  # Kamera & Videoanalyse (Dialog, kein eigener Stack-Index)
         ("Kamera & Videoanalyse – Überblick",
          "Datei → Kamera aufnehmen… (Strg+K)\n\n"
          "Drei Quelltypen stehen zur Wahl:\n"
@@ -643,7 +641,7 @@ TOUR_STEPS = {
          "in audit/model_audit.jsonl.",
          None),
     ],
-    10: [  # Multi-Kamera-Monitoring
+    Page.MULTI_CAMERA: [  # Multi-Kamera-Monitoring
         ("Multi-Kamera-Monitoring – Überblick",
          "Überwache 1–9 Kameras gleichzeitig,\n"
          "jede mit eigenem Modell und eigenem ROI.\n\n"
@@ -731,7 +729,7 @@ TOUR_STEPS = {
          "eine Multi-Kamera-Sektion.",
          None),
     ],
-    9: [  # Batch-Inferenz
+    Page.BATCH: [  # Batch-Inferenz
         ("Batch-Inferenz",
          "Klassifiziere einen ganzen Ordner\n"
          "mit einem trainierten Modell in einem Durchlauf.\n\n"
@@ -762,7 +760,7 @@ TOUR_STEPS = {
          "CSV-Datei speichern.",
          "Batch starten"),
     ],
-    11: [  # Datensatz-Statistiken
+    Page.DATASET_STATS: [  # Datensatz-Statistiken
         ("Datensatz-Statistiken – Überblick",
          "Die Datensatz-Statistiken-Seite analysiert\n"
          "den aktuellen Datensatz auf Qualität und\n"
@@ -791,7 +789,7 @@ TOUR_STEPS = {
          "Benötigt: pip install imagehash",
          "Analyse aktualisieren"),
     ],
-    12: [  # Video-Annotation
+    Page.VIDEO_ANNOTATION: [  # Video-Annotation
         ("Video-Annotation – Überblick",
          "Annotiere einzelne Frames direkt aus\n"
          "einer Videodatei ohne vorherigen Export.\n\n"
@@ -816,7 +814,7 @@ TOUR_STEPS = {
          "Danach auf der Labeling-Seite prüfen.",
          "Frame extrahieren"),
     ],
-    13: [  # Fleet-Management
+    Page.FLEET: [  # Fleet-Management
         ("Fleet-Management – Überblick",
          "Überwache mehrere remote monitor.py-\n"
          "Instanzen (Edge-Geräte, Server, VMs)\n"
@@ -856,7 +854,7 @@ TOUR_STEPS = {
          "Training"),
     ],
 
-    14: [  # Data Drift
+    Page.DATA_DRIFT: [  # Data Drift
         ("Data Drift – Überblick",
          "Erkennt automatisch, wenn sich\n"
          "Produktionsbilder statistisch von\n"
@@ -912,7 +910,7 @@ TOUR_STEPS = {
          None),
     ],
 
-    15: [  # Anomalie-Training (Video-Modus)
+    Page.ANOMALY_TRAINING: [  # Anomalie-Training (Video-Modus)
         ("🧠 Anomalie-Training – Überblick",
          "Diese Seite ist der Einstieg ins\n"
          "Anomalie-Tracking im Video-Modus.\n\n"
@@ -958,7 +956,7 @@ TOUR_STEPS = {
          "False-Positive-Rate akzeptabel.",
          None),
     ],
-    16: [  # Live-Klassifikation
+    Page.LIVE_CLASSIFY: [  # Live-Klassifikation
         ("Live-Klassifikation – Überblick",
          "Wende dein trainiertes Klassifikationsmodell\n"
          "in Echtzeit auf einen Kamera- oder Video-Stream an.\n\n"
