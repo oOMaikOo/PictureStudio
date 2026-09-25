@@ -42,6 +42,38 @@ class AnalysisThread(QThread):
             self.error.emit(str(exc))
 
 
+class ExportThread(QThread):
+    """Runs one ``core.dataset`` export function without blocking the UI.
+
+    The COCO and YOLO exports open every image with PIL to read its size, which
+    freezes the window on a large dataset when run inline.
+    """
+
+    done = Signal()
+    error = Signal(str)
+
+    def __init__(self, fn, project, target: str):
+        """
+        Parameters
+        ----------
+        fn      : Export function taking ``(project, target)``.
+        project : The ``Project`` to export.
+        target  : Output file path or directory, depending on *fn*.
+        """
+        super().__init__()
+        self._fn = fn
+        self._project = project
+        self._target = target
+
+    def run(self):
+        """Execute the export and emit ``done`` or ``error``."""
+        try:
+            self._fn(self._project, self._target)
+            self.done.emit()
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
 class DataPage(QWidget):
     """
     Dataset management page (stack index 1).
@@ -66,6 +98,7 @@ class DataPage(QWidget):
         self.project = None
         self._analysis: dict = {}
         self._thread: Optional[AnalysisThread] = None
+        self._export_thread: Optional[ExportThread] = None
         self._build_ui()
 
         from gui.widgets.drop_mixin import ImageDropFilter
@@ -431,12 +464,8 @@ class DataPage(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, tr("data.dlg.coco_title"), "annotations.json", "JSON (*.json)")
         if not path:
             return
-        try:
-            from core.dataset import export_coco
-            export_coco(self.project, path)
-            QMessageBox.information(self, tr("common.saved"), tr("data.msg.coco_saved", path=path))
-        except Exception as exc:
-            QMessageBox.critical(self, tr("common.error"), str(exc))
+        from core.dataset import export_coco
+        self._start_export(export_coco, path, "data.msg.coco_saved", path=path)
 
     def _export_yolo(self) -> None:
         from utils.i18n import tr
@@ -445,12 +474,8 @@ class DataPage(QWidget):
         folder = QFileDialog.getExistingDirectory(self, tr("data.dlg.yolo_title"))
         if not folder:
             return
-        try:
-            from core.dataset import export_yolo
-            export_yolo(self.project, folder)
-            QMessageBox.information(self, tr("common.saved"), tr("data.msg.yolo_saved", folder=folder))
-        except Exception as exc:
-            QMessageBox.critical(self, tr("common.error"), str(exc))
+        from core.dataset import export_yolo
+        self._start_export(export_yolo, folder, "data.msg.yolo_saved", folder=folder)
 
     def _export_csv(self) -> None:
         from utils.i18n import tr
@@ -459,12 +484,38 @@ class DataPage(QWidget):
         path, _ = QFileDialog.getSaveFileName(self, tr("data.dlg.csv_title"), "dataset.csv", "CSV (*.csv)")
         if not path:
             return
-        try:
-            from core.dataset import export_csv
-            export_csv(self.project, path)
-            QMessageBox.information(self, tr("common.saved"), tr("data.msg.csv_saved", path=path))
-        except Exception as exc:
-            QMessageBox.critical(self, tr("common.error"), str(exc))
+        from core.dataset import export_csv
+        self._start_export(export_csv, path, "data.msg.csv_saved", path=path)
+
+    def _start_export(self, fn, target: str, msg_key: str, **msg_kw) -> None:
+        """Run *fn* in an ``ExportThread``, locking the export buttons meanwhile."""
+        self.progress.setVisible(True)
+        self._set_exports_enabled(False)
+        thread = ExportThread(fn, self.project, target)
+        self._export_thread = thread          # keep a reference; Qt won't
+        thread.done.connect(lambda: self._on_export_done(msg_key, msg_kw))
+        thread.error.connect(self._on_export_error)
+        thread.start()
+
+    def _set_exports_enabled(self, enabled: bool) -> None:
+        for btn in self._export_btns:
+            btn.setEnabled(enabled)
+
+    def _finish_export(self) -> None:
+        self._export_thread = None
+        self.progress.setVisible(False)
+        self._set_exports_enabled(True)
+
+    def _on_export_done(self, msg_key: str, msg_kw: dict) -> None:
+        from utils.i18n import tr
+        self._finish_export()
+        QMessageBox.information(self, tr("common.saved"), tr(msg_key, **msg_kw))
+
+    @Slot(str)
+    def _on_export_error(self, message: str) -> None:
+        from utils.i18n import tr
+        self._finish_export()
+        QMessageBox.critical(self, tr("common.error"), message)
 
     def _check_files(self) -> None:
         """Validate all image file paths and display a summary message box."""
