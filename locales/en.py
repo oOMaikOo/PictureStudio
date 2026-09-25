@@ -86,6 +86,7 @@ STRINGS: dict = {
     "menu.help.models":         "Models – Help",
     "menu.help.inference":      "Classification – Help",
     "menu.help.batch":          "Batch Inference – Help",
+    "menu.help.liveclassify":   "Live Classification – Help",
     "menu.help.export":         "Export – Help",
     "menu.help.settings":       "Settings – Help",
     "menu.help.camera":         "Camera – Help",

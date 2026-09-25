@@ -21,13 +21,11 @@ A–E sind Teilmengen eines größeren Befunds: beim Audit am 2026-09-25 standen
 ## Aufräumen / Technische Schulden
 
 Ergebnisse des Code-Audits vom 2026-09-25 (Stand v2.5.1). Innerhalb der Sektion nach Aufwand sortiert.
-IDs M (tote Module), N (tote Abhängigkeiten), P (Stack-Index als `IntEnum`), Q (`CameraSettingsGroup`), R (i18n Kamera-Dialog + unübersetzte Dialoge) S (stille Exception-Handler, inkl. **F**) und T (Exporte auf QThread) sind erledigt — siehe CHANGELOG 2.5.2.
+IDs M (tote Module), N (tote Abhängigkeiten), P (Stack-Index als `IntEnum`), Q (`CameraSettingsGroup`), R (i18n Kamera-Dialog + unübersetzte Dialoge), S (stille Exception-Handler, inkl. **F**), T (Exporte auf QThread) und U (Hilfesektion Live-Klassifikation) sind erledigt — siehe CHANGELOG 2.5.2.
 Zu S: die ursprünglich genannten 173 Handler waren eine Überzählung — der Detektor wertete nur `log.`/`raise`/`QMessageBox`/`print` als Fehlerbehandlung und übersah `Response.error(...)`, `self._notify(...)`, `sys.exit(...)` und Rückgaben vom Typ `(False, msg)`. Tatsächlich waren es 80, davon 34 behoben; die verbleibenden 46 sind bewusst still (Eingabevalidierung mit dokumentiertem Default, Teardown, `KeyboardInterrupt`, optionale Abhängigkeiten, Fehler die bereits zurückgegeben werden).
 ID O (angeblich unerreichbare Seiten 11/14) war ein Fehlbefund und wurde zurückgezogen: beide Seiten sind über **Ansicht → Datensatz-Stats / Data Drift** erreichbar (`main_window.py:301-302`); sie stehen seit `30099de` bewusst nur im Menü statt in der Sidebar.
 
-| ID | Beschreibung | Datei(en) |
-|----|-------------|-----------|
-| U | **Eigene Hilfesektion für Live-Klassifikation** — `PAGE_TO_SECTION[Page.LIVE_CLASSIFY]` zeigt behelfsweise auf Sektion 7 („Klassifikation"). Die Seite hat eigene Bedienelemente (Kamera/Video-Quelle, Top-k-Overlay, Mindest-Konfidenz, „Frame ins Projekt übernehmen") und eine eigene Tour, aber keine eigene Hilfe. Analog zur Batch-Sektion anlegen; die freie Sektions-ID 21 bietet sich an | `gui/help_dialog.py`, `gui/main_window.py`, locales |
+**Alle Punkte dieser Sektion sind abgearbeitet.**
 
 Beim Audit **nicht** beanstandet: Locale-Dateien exakt synchron (891/891 Keys, keine Lücke in beide Richtungen); 0 TODO/FIXME/HACK-Marker; keine Laufzeitartefakte im Git getrackt; für die neuen Features existieren dedizierte Tests (`test_live_classification.py`, `test_http_router.py`, `test_ui_mode.py`); COCO/YOLO-Reste sind bewusst behalten (Export), Clustering ist rückstandsfrei entfernt.
 

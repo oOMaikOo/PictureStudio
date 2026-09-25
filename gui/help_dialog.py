@@ -24,6 +24,7 @@ SECTIONS = [
     (6, "📊", "Modellbibliothek"),
     (7, "🔍", "Klassifikation"),
     (15, "📦", "Batch-Inferenz"),
+    (21, "🎥", "Live-Klassifikation"),
     (8, "📤", "Excel-Export"),
     (9, "⚙", "Einstellungen"),
     (10, "📷", "Kamera & Videoanalyse"),
@@ -60,7 +61,7 @@ PAGE_TO_SECTION = {
     Page.FLEET:            18,
     Page.DATA_DRIFT:       22,
     Page.ANOMALY_TRAINING: 24,
-    Page.LIVE_CLASSIFY:     7,   # shares the Klassifikation section
+    Page.LIVE_CLASSIFY:    21,
 }
 
 # ---------------------------------------------------------------------------
@@ -541,6 +542,70 @@ Nur die Ergebnisse unterhalb der Warnschwelle, Spalten <code>filename</code>,
 ist. Diese gezielt ins Projekt aufnehmen, auf der <i>Labeling</i>-Seite korrekt
 labeln und neu trainieren — derselbe Gedanke wie beim Active Learning, nur für
 Bildbestände außerhalb des Projekts.</div>
+"""),
+
+# ── 21  Live-Klassifikation ───────────────────────────────────────────────────
+21: page("""
+<h1>🎥 Live-Klassifikation</h1>
+<p>Wendet das trainierte Klassifikationsmodell in Echtzeit auf einen Kamera- oder
+Video-Stream an und zeigt die erkannte Klasse direkt im Bild. Interessante Frames
+lassen sich per Knopfdruck ins Projekt übernehmen — damit schließt sich der Kreis
+<i>Aufnahme → Klassifikation → Labeling → Training</i>.</p>
+
+<div class="warn"><b>Voraussetzung</b><br>
+Ein trainiertes Modell (<code>.pth</code>) von der <i>Training</i>-Seite. Ohne Modell
+läuft das Videobild zwar, es wird aber nichts klassifiziert.</div>
+
+<h2>Schritt-für-Schritt</h2>
+<div class="step"><b>1 – Modell</b><br>
+Ist im Projekt bereits ein Modell hinterlegt, wird es beim Öffnen der Seite
+automatisch geladen. Sonst <i>Modell laden…</i> → <code>.pth</code> wählen.<br>
+Bei Erfolg steht der Dateiname mit der Klassenliste grün im Panel, bei einem
+Fehler die Meldung in Rot.</div>
+
+<div class="step"><b>2 – Quelle wählen</b><br>
+<i>🔄 Kameras suchen</i> füllt die Liste der angeschlossenen Kameras.<br>
+Alternativ das Eingabefeld darunter nutzen: RTSP-URL, Pfad zu einer Videodatei
+oder einfach eine Kameranummer.<br>
+<b>Das Eingabefeld hat Vorrang</b> — steht dort etwas, wird die Auswahl im
+Dropdown ignoriert.</div>
+
+<div class="step"><b>3 – Starten</b><br>
+<i>▶ Start</i> öffnet den Stream (15 fps), <i>⏹ Stopp</i> beendet ihn.
+Beim Verlassen der Seite und beim Beenden der App wird die Kamera automatisch
+freigegeben.</div>
+
+<h2>Einstellungen</h2>
+<table>
+<tr><th>Feld</th><th>Wirkung</th></tr>
+<tr><td><b>Klassifizieren alle N Frames</b></td><td>1–30, Standard <code>5</code>. Nicht jedes Bild wird ausgewertet — das spart CPU. <code>1</code> = jedes Bild, höhere Werte entlasten schwache Rechner. Das Videobild läuft unabhängig davon flüssig weiter.</td></tr>
+<tr><td><b>Mindest-Konfidenz</b></td><td>0–100 %, Standard <code>50 %</code>. Liegt die Konfidenz darunter, erscheint statt des Klassennamens <i>unsicher</i> in Orange. Die Vorhersage wird dadurch nicht unterdrückt, nur als unsicher gekennzeichnet.</td></tr>
+<tr><td><b>Bildausschnitt (ROI)</b></td><td>Beschneidet den Frame <b>vor</b> der Klassifikation auf x1/y1/x2/y2 in Prozent der Bildgröße. Der Ausschnitt wird orange im Vorschaubild eingezeichnet. Nützlich, wenn nur ein Teil des Bildes das Prüfobjekt zeigt. Zu kleine Bereiche (unter 4 Pixel Kantenlänge) werden ignoriert.</td></tr>
+</table>
+
+<h2>Ergebnis lesen</h2>
+<p>Oben im Videobild liegt ein Balken mit Klasse und Konfidenz —
+<span style="color:#27AE60"><b>grün</b></span> wenn die Mindest-Konfidenz erreicht ist,
+<span style="color:#E67E22"><b>orange</b></span> wenn nicht. Unter dem Bild stehen
+dieselbe Angabe groß und darunter die <b>Top-3</b> mit ihren Einzelwahrscheinlichkeiten.</p>
+
+<h2>Frame ins Projekt übernehmen</h2>
+<div class="step"><b>📸 Frame ins Projekt übernehmen</b><br>
+Speichert das aktuelle Bild als JPEG unter
+<code>&lt;Projektordner&gt;/live_captures/live_&lt;Zeitstempel&gt;.jpg</code> und nimmt es in
+das Projekt auf. Der Zähler auf dem Dashboard aktualisiert sich sofort.</div>
+
+<div class="warn"><b>Zwei Dinge dazu</b><br>
+Gespeichert wird immer das <b>vollständige Bild</b>, nicht der ROI-Ausschnitt — der
+ROI wirkt nur auf die Klassifikation.<br>
+Das Bild wird <b>nicht automatisch gelabelt</b>. Die erkannte Klasse ist eine
+Vorhersage, kein Label; die Zuordnung erfolgt bewusst von Hand.</div>
+
+<div class="tip"><b>Arbeitsablauf-Tipp</b><br>
+Gerade die <i>falsch</i> erkannten und die als <i>unsicher</i> markierten Frames sind
+wertvoll. Diese übernehmen, auf der <i>Labeling</i>-Seite korrekt labeln und neu
+trainieren — das ist derselbe Gedanke wie beim Active Learning, nur mit Material
+direkt aus dem laufenden Betrieb.</div>
 """),
 
 # ── 8  Export ─────────────────────────────────────────────────────────────────
