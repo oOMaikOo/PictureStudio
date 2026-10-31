@@ -111,9 +111,10 @@ class InferencePage(QWidget):
             meta = self.inferencer.load_model(path)
             self.model_path_label.setText(os.path.basename(path))
             self.model_info_label.setText(
-                f"Klassen: {', '.join(meta.get('class_names', []))}\n"
-                f"Architektur: {meta.get('model_type', '?')}\n"
-                f"Bildgröße: {meta.get('image_size', '?')}px"
+                tr("inference.model_info",
+                   classes=", ".join(meta.get("class_names", [])),
+                   arch=meta.get("model_type", "?"),
+                   size=meta.get("image_size", "?"))
             )
         except Exception as exc:
             QMessageBox.critical(self, tr("common.error"), str(exc))
@@ -137,7 +138,7 @@ class InferencePage(QWidget):
         splitter.setSizes([320, 680])
 
     def _build_control_panel(self) -> QGroupBox:
-        box = QGroupBox("Inferenz-Steuerung")
+        box = QGroupBox(tr("inference.control_group"))
         v = QVBoxLayout(box)
 
         # Model
@@ -154,11 +155,11 @@ class InferencePage(QWidget):
         self.model_info_label.setStyleSheet("color:#27AE60;font-size:10px;")
         mv.addWidget(self.model_info_label)
 
-        ens_info = QLabel("Ensemble: weitere Modelle hinzufügen (average softmax):")
+        ens_info = QLabel(tr("inference.ensemble_info"))
         ens_info.setStyleSheet("color:#aaa;font-size:10px;")
         ens_info.setWordWrap(True)
         mv.addWidget(ens_info)
-        self._ens_list = QLabel("(kein Ensemble)")
+        self._ens_list = QLabel(tr("inference.ensemble_empty"))
         self._ens_list.setStyleSheet("color:#888;font-size:10px;")
         self._ens_list.setWordWrap(True)
         mv.addWidget(self._ens_list)
@@ -190,10 +191,7 @@ class InferencePage(QWidget):
         folder_row.addWidget(fb)
         iv.addLayout(folder_row)
         self._recursive_cb = QCheckBox(tr("inference.recursive_cb"))
-        self._recursive_cb.setToolTip(
-            "Scannt den gewählten Ordner und alle Unterordner rekursiv.\n"
-            "Der Dateiname in der Tabelle zeigt 'Unterordner/Dateiname'."
-        )
+        self._recursive_cb.setToolTip(tr("inference.recursive_tip"))
         iv.addWidget(self._recursive_cb)
         self.classify_btn = QPushButton(tr("inference.classify_folder_btn"))
         self.classify_btn.setStyleSheet("background:#3498DB;color:white;font-weight:bold;padding:6px;")
@@ -219,11 +217,7 @@ class InferencePage(QWidget):
         self.tta_spin = QSpinBox()
         self.tta_spin.setRange(1, 20)
         self.tta_spin.setValue(1)
-        self.tta_spin.setToolTip(
-            "Test-Time Augmentation: 1 = deaktiviert.\n"
-            "Höher = robustere Vorhersagen, aber langsamer.\n"
-            "Empfehlung: 5–10 für unsichere Bilder."
-        )
+        self.tta_spin.setToolTip(tr("inference.tta_tip"))
         tta_row.addWidget(self.tta_spin)
         ov.addLayout(tta_row)
         self.use_roi_template_cb = QCheckBox(tr("inference.use_roi_cb"))
@@ -244,7 +238,7 @@ class InferencePage(QWidget):
         label_row = QHBoxLayout()
         label_row.addWidget(QLabel(tr("inference.label_filter_label")))
         self.label_filter_combo = QComboBox()
-        self.label_filter_combo.addItem("Alle")
+        self.label_filter_combo.addItem(tr("inference.filter_all"))
         label_row.addWidget(self.label_filter_combo)
         fv.addLayout(label_row)
         self.low_conf_only_cb = QCheckBox(tr("inference.low_conf_only_cb"))
@@ -257,10 +251,7 @@ class InferencePage(QWidget):
         # Active Learning
         al_box = QGroupBox(tr("inference.al_group"))
         av = QVBoxLayout(al_box)
-        al_info = QLabel(
-            "Unsichere Vorhersagen (Confidence < 70 %) zur\n"
-            "Labeling-Queue hinzufügen und dann neu trainieren."
-        )
+        al_info = QLabel(tr("inference.al_info"))
         al_info.setWordWrap(True)
         al_info.setStyleSheet("color:#aaa;font-size:10px;")
         av.addWidget(al_info)
@@ -268,9 +259,7 @@ class InferencePage(QWidget):
         self._al_btn.setStyleSheet(
             "background:#E67E22;color:white;font-weight:bold;padding:5px;"
         )
-        self._al_btn.setToolTip(
-            "Fügt alle Bilder mit Confidence < 70 % der AL-Queue im Labeling-Reiter hinzu."
-        )
+        self._al_btn.setToolTip(tr("inference.al_btn_tip"))
         self._al_btn.clicked.connect(self._add_to_al_queue)
         av.addWidget(self._al_btn)
         self._al_status = QLabel("")
@@ -282,10 +271,7 @@ class InferencePage(QWidget):
         # Semi-automatic labeling
         sl_box = QGroupBox(tr("inference.semi_auto_group"))
         sv = QVBoxLayout(sl_box)
-        sl_info = QLabel(
-            "Überträgt Vorhersagen mit hoher Konfidenz als Labels\n"
-            "direkt ins Projekt (nur noch nicht gelabelte Bilder)."
-        )
+        sl_info = QLabel(tr("inference.semi_auto_info"))
         sl_info.setWordWrap(True)
         sl_info.setStyleSheet("color:#aaa;font-size:10px;")
         sv.addWidget(sl_info)
@@ -319,10 +305,7 @@ class InferencePage(QWidget):
         exp_btn.clicked.connect(self._export_excel)
         ev.addWidget(exp_btn)
         rename_btn = QPushButton(tr("inference.rename_btn"))
-        rename_btn.setToolTip(
-            "Hängt das vorhergesagte Label an den Dateinamen:\n"
-            "foto.jpg  →  foto_gut.jpg"
-        )
+        rename_btn.setToolTip(tr("inference.rename_tip"))
         rename_btn.clicked.connect(self._rename_images)
         ev.addWidget(rename_btn)
         v.addWidget(eg)
@@ -341,7 +324,12 @@ class InferencePage(QWidget):
         # Main results table
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels([
-            "Dateiname", "Vorhergesagtes Label", "Confidence", "Top-2", "Top-3", "⚠"
+            tr("inference.col_filename"),
+            tr("inference.col_pred_label"),
+            tr("inference.col_confidence"),
+            tr("inference.col_top2"),
+            tr("inference.col_top3"),
+            tr("inference.col_warn"),
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -363,10 +351,7 @@ class InferencePage(QWidget):
         preview_row.addWidget(QLabel(tr("inference.preview_label")))
         self._gradcam_btn = QPushButton(tr("inference.gradcam_btn"))
         self._gradcam_btn.setEnabled(False)
-        self._gradcam_btn.setToolTip(
-            "Zeigt eine Aktivierungskarte (Grad-CAM), die erklärt,\n"
-            "welche Bildregionen die Vorhersage beeinflusst haben."
-        )
+        self._gradcam_btn.setToolTip(tr("inference.gradcam_tip"))
         self._gradcam_btn.setStyleSheet(
             "background:#8E44AD;color:white;font-weight:bold;padding:4px 10px;"
         )
@@ -402,14 +387,17 @@ class InferencePage(QWidget):
             inf.load_model(path)
             self._ensemble_inferencers.append(inf)
             names = [os.path.basename(i.model_path) for i in self._ensemble_inferencers]
-            self._ens_list.setText("Ensemble:\n" + "\n".join(f"  • {n}" for n in names))
+            self._ens_list.setText(
+                tr("inference.ensemble_list",
+                   names="\n".join(f"  • {n}" for n in names))
+            )
         except Exception as exc:
             QMessageBox.critical(self, tr("common.error"), str(exc))
 
     def _clear_ensemble(self) -> None:
         """Remove all ensemble models, reverting to single-model inference."""
         self._ensemble_inferencers.clear()
-        self._ens_list.setText("(kein Ensemble)")
+        self._ens_list.setText(tr("inference.ensemble_empty"))
 
     def _ensemble_predict(self, img_path: str, top_k: int, tta_passes: int) -> Dict:
         """Average softmax over primary + ensemble models."""
@@ -442,12 +430,13 @@ class InferencePage(QWidget):
     def _classify_single(self) -> None:
         """Open a file chooser, classify the selected image, and display the result."""
         if not self.inferencer.is_ready():
-            QMessageBox.warning(self, tr("common.no_model"), "Bitte erst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("common.no_model_msg"))
             return
         from utils.config import IMAGE_FORMATS
         path, _ = QFileDialog.getOpenFileName(
-            self, "Bild wählen", "",
-            f"Bilder ({' '.join('*' + e for e in IMAGE_FORMATS)});;Alle (*)"
+            self, tr("inference.pick_image"), "",
+            tr("inference.pick_image_filter",
+               patterns=" ".join("*" + e for e in IMAGE_FORMATS)),
         )
         if not path:
             return
@@ -482,14 +471,14 @@ class InferencePage(QWidget):
 
     def _select_folder(self) -> None:
         """Open a folder chooser and update the folder label."""
-        folder = QFileDialog.getExistingDirectory(self, "Bildordner wählen")
+        folder = QFileDialog.getExistingDirectory(self, tr("inference.pick_folder"))
         if folder:
             self.folder_label.setText(folder)
 
     def _classify_folder(self) -> None:
         """Start ``InferenceThread`` to classify all images in the selected folder."""
         if not self.inferencer.is_ready():
-            QMessageBox.warning(self, tr("common.no_model"), "Bitte erst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("common.no_model_msg"))
             return
         folder = self.folder_label.text()
         if not os.path.isdir(folder):
@@ -517,13 +506,8 @@ class InferencePage(QWidget):
                 x = int(fallback_roi.get("x", 0))
                 y = int(fallback_roi.get("y", 0))
                 QMessageBox.information(
-                    self, "ROI-Fallback aktiv",
-                    f"Das Projekt enthält ROIs. Das Training wurde wahrscheinlich auf "
-                    f"ROI-Ausschnitten durchgeführt.\n\n"
-                    f"Der erste Projekt-ROI wird automatisch auf alle Bilder angewendet:\n"
-                    f"  Position: x={x}, y={y}  |  Größe: {w} × {h} px\n\n"
-                    f"Um einen anderen ROI zu verwenden, aktiviere 'ROI-Vorlagen anwenden'\n"
-                    f"und konfiguriere ein Template in den Projekteinstellungen."
+                    self, tr("inference.roi_fallback_title"),
+                    tr("inference.roi_fallback_msg", x=x, y=y, w=w, h=h),
                 )
 
         self.classify_btn.setEnabled(False)
@@ -571,7 +555,7 @@ class InferencePage(QWidget):
         labels = set(r.get("predicted_label", "") for r in results if not r.get("error"))
         self.label_filter_combo.blockSignals(True)
         self.label_filter_combo.clear()
-        self.label_filter_combo.addItem("Alle")
+        self.label_filter_combo.addItem(tr("inference.filter_all"))
         self.label_filter_combo.addItems(sorted(labels))
         self.label_filter_combo.blockSignals(False)
         self._apply_filter()
@@ -585,8 +569,8 @@ class InferencePage(QWidget):
 
     def _apply_filter(self) -> None:
         """Filter ``_all_results`` with the current UI filter settings and refresh the table."""
-        lbl = self.label_filter_combo.currentText()
-        lbl = "" if lbl == "Alle" else lbl
+        # Index 0 is always the translated "All" sentinel — don't compare text.
+        lbl = "" if self.label_filter_combo.currentIndex() == 0 else self.label_filter_combo.currentText()
         self._filtered = self.inferencer.filter_results(
             self._all_results,
             min_confidence=self.min_conf_spin.value(),
@@ -639,8 +623,10 @@ class InferencePage(QWidget):
         self.table.setSortingEnabled(True)
         n_low = sum(1 for r in results if r.get("low_confidence"))
         self.result_count_label.setText(
-            f"{len(results)} Bilder  |  {n_low} unsichere Vorhersagen  |  "
-            f"Modell: {os.path.basename(self.inferencer.model_path)}"
+            tr("inference.result_count",
+               n=len(results),
+               n_low=n_low,
+               model=os.path.basename(self.inferencer.model_path or ""))
         )
         self.low_conf_text.setPlainText(
             "\n".join(low_conf_lines) if low_conf_lines else tr("inference.no_uncertain_text")
@@ -684,9 +670,9 @@ class InferencePage(QWidget):
                 added += 1
             else:
                 skipped += 1
-        parts = [f"{added} Bilder hinzugefügt"]
+        parts = [tr("inference.al_added", n=added)]
         if skipped:
-            parts.append(f"{skipped} bereits in Queue")
+            parts.append(tr("inference.al_skipped", n=skipped))
         self._al_status.setText("  ".join(parts))
         if added > 0:
             self.al_queue_updated.emit()
@@ -697,7 +683,7 @@ class InferencePage(QWidget):
             QMessageBox.warning(self, tr("common.no_project"), tr("inference.no_project_msg"))
             return
         if not self._all_results:
-            self._sl_status.setText("Bitte zuerst Bilder klassifizieren.")
+            self._sl_status.setText(tr("inference.semi_need_results"))
             return
 
         min_conf = self._sl_conf_spin.value()
@@ -729,13 +715,13 @@ class InferencePage(QWidget):
         if applied > 0:
             self.project.save()
 
-        parts = [f"{applied} Labels übernommen"]
+        parts = [tr("inference.semi_applied", n=applied)]
         if skipped_conf:
-            parts.append(f"{skipped_conf} unter Schwelle")
+            parts.append(tr("inference.semi_below", n=skipped_conf))
         if skipped_exists:
-            parts.append(f"{skipped_exists} bereits gelabelt")
+            parts.append(tr("inference.semi_exists", n=skipped_exists))
         if skipped_label:
-            parts.append(f"{skipped_label} unbekannte Labels")
+            parts.append(tr("inference.semi_unknown", n=skipped_label))
         self._sl_status.setText("  |  ".join(parts))
         if applied > 0:
             self.labels_applied.emit(applied)
@@ -748,7 +734,10 @@ class InferencePage(QWidget):
         r = self._filtered[row]
         path = r.get("path", "")
         if not os.path.isfile(path):
-            QMessageBox.warning(self, "Datei nicht gefunden", f"Bilddatei nicht gefunden:\n{path}")
+            QMessageBox.warning(
+                self, tr("inference.file_missing_title"),
+                tr("inference.file_missing_msg", path=path),
+            )
             return
 
         model = getattr(self.inferencer, "model", None)
@@ -757,7 +746,7 @@ class InferencePage(QWidget):
         image_size  = getattr(self.inferencer, "image_size", 224)
 
         if model is None:
-            QMessageBox.warning(self, tr("common.no_model"), "Bitte erst ein Modell laden.")
+            QMessageBox.warning(self, tr("common.no_model"), tr("common.no_model_msg"))
             return
 
         # Map predicted label to class index
@@ -797,10 +786,12 @@ class InferencePage(QWidget):
     def _export_excel(self) -> None:
         """Save all inference results to an Excel workbook."""
         if not self._all_results:
-            QMessageBox.information(self, "Keine Daten", "Erst Bilder klassifizieren.")
+            QMessageBox.information(
+                self, tr("inference.no_data_title"), tr("inference.no_data_msg"),
+            )
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Excel speichern", "ergebnisse.xlsx", "Excel (*.xlsx)"
+            self, tr("inference.save_excel_title"), "ergebnisse.xlsx", "Excel (*.xlsx)"
         )
         if not path:
             return
@@ -810,7 +801,9 @@ class InferencePage(QWidget):
                 self._all_results, path,
                 model_name=os.path.basename(self.inferencer.model_path)
             )
-            QMessageBox.information(self, tr("common.done"), f"Gespeichert:\n{path}")
+            QMessageBox.information(
+                self, tr("common.done"), tr("inference.saved_path", path=path),
+            )
         except Exception as exc:
             QMessageBox.critical(self, tr("common.error"), str(exc))
 
@@ -819,8 +812,9 @@ class InferencePage(QWidget):
         results = self._all_results
         renameable = [r for r in results if not r.get("error") and os.path.isfile(r.get("path", ""))]
         if not renameable:
-            QMessageBox.information(self, tr("inference.rename_btn"),
-                                    "Keine gültigen Bilddateien zum Umbenennen gefunden.")
+            QMessageBox.information(
+                self, tr("inference.rename_btn"), tr("inference.rename_none"),
+            )
             return
 
         # Show preview of first 5 renames
@@ -831,13 +825,15 @@ class InferencePage(QWidget):
             new = f"{stem}_{r['predicted_label']}{ext}"
             preview_lines.append(f"  {old}  →  {new}")
         if len(renameable) > 5:
-            preview_lines.append(f"  … und {len(renameable) - 5} weitere")
+            preview_lines.append(
+                tr("inference.rename_preview_more", n=len(renameable) - 5)
+            )
 
         reply = QMessageBox.question(
             self, tr("inference.rename_btn"),
-            f"{len(renameable)} Dateien werden umbenannt:\n\n"
-            + "\n".join(preview_lines)
-            + "\n\nFortfahren?",
+            tr("inference.rename_confirm",
+               n=len(renameable),
+               preview="\n".join(preview_lines)),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -882,9 +878,10 @@ class InferencePage(QWidget):
         # Refresh table with updated filenames
         self._populate_table(self._filtered if self._filtered else self._all_results)
 
-        msg = f"{renamed} Dateien umbenannt."
+        msg = tr("inference.rename_done", n=renamed)
         if skipped:
-            msg += f"\n{skipped} übersprungen (Zieldatei existiert bereits)."
+            msg += tr("inference.rename_skipped", n=skipped)
         if errors:
-            msg += f"\n{len(errors)} Fehler:\n" + "\n".join(errors[:5])
-        QMessageBox.information(self, "Umbenennen abgeschlossen", msg)
+            msg += tr("inference.rename_errors",
+                      n=len(errors), details="\n".join(errors[:5]))
+        QMessageBox.information(self, tr("inference.rename_done_title"), msg)

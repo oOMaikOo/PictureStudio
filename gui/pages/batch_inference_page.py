@@ -16,9 +16,101 @@ from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QSplitter, QScrollArea, QFrame,
 )
 from PySide6.QtCore import Qt, QThread, Signal, Slot
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 
 from utils.i18n import tr
+
+
+# ── confidence histogram helpers ───────────────────────────────────────────────
+
+_N_CONF_BINS = 10
+
+
+def confidence_histogram_bins(confidences, n_bins: int = _N_CONF_BINS) -> List[int]:
+    """Bucket confidence values into *n_bins* equal-width bins over [0, 1]."""
+    bins = [0] * n_bins
+    if n_bins <= 0:
+        return bins
+    for c in confidences:
+        try:
+            v = float(c)
+        except (TypeError, ValueError):
+            continue
+        idx = min(n_bins - 1, max(0, int(v * n_bins)))
+        bins[idx] += 1
+    return bins
+
+
+class _ConfidenceHistogram(QWidget):
+    """QPainter bar chart: share of images per 10%-confidence bucket."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._bins: List[int] = [0] * _N_CONF_BINS
+        self.setMinimumHeight(140)
+        self.setMaximumHeight(180)
+
+    def set_bins(self, bins: List[int]) -> None:
+        """Update bucket counts and repaint."""
+        self._bins = list(bins) if bins else [0] * _N_CONF_BINS
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        painter.fillRect(0, 0, w, h, QColor("#0D1117"))
+
+        total = sum(self._bins)
+        pad_l, pad_r, pad_t, pad_b = 40, 12, 18, 28
+        chart_w = max(1, w - pad_l - pad_r)
+        chart_h = max(1, h - pad_t - pad_b)
+
+        painter.setPen(QPen(QColor("#30363D")))
+        painter.drawLine(pad_l, pad_t, pad_l, pad_t + chart_h)
+        painter.drawLine(pad_l, pad_t + chart_h, pad_l + chart_w, pad_t + chart_h)
+
+        if total == 0:
+            painter.setPen(QColor("#8B949E"))
+            painter.drawText(0, 0, w, h, Qt.AlignCenter, tr("batch.hist_empty"))
+            return
+
+        n = len(self._bins)
+        bar_w = max(6, (chart_w - 4) // n - 4)
+        spacing = max(2, (chart_w - n * bar_w) // (n + 1))
+        max_count = max(self._bins) or 1
+
+        painter.setPen(QColor("#8B949E"))
+        font = painter.font()
+        font.setPointSize(8)
+        painter.setFont(font)
+
+        for i, count in enumerate(self._bins):
+            x = pad_l + spacing + i * (bar_w + spacing)
+            bar_h = int((count / max_count) * chart_h) if count else 0
+            # Colour: low conf red → mid amber → high green
+            t = i / max(1, n - 1)
+            if t < 0.5:
+                color = QColor("#F85149")
+            elif t < 0.8:
+                color = QColor("#D29922")
+            else:
+                color = QColor("#3FB950")
+            painter.fillRect(x, pad_t + chart_h - bar_h, bar_w, bar_h, color)
+
+            painter.setPen(QColor("#ADBAC7"))
+            if bar_h > 14:
+                pct = count / total * 100
+                painter.drawText(
+                    x, pad_t + chart_h - bar_h - 2, bar_w, 14,
+                    Qt.AlignHCenter | Qt.AlignBottom, f"{pct:.0f}%",
+                )
+            lo = i * 10
+            painter.setPen(QColor("#8B949E"))
+            painter.drawText(
+                x - 2, pad_t + chart_h + 2, bar_w + 4, 22,
+                Qt.AlignHCenter | Qt.AlignTop, f"{lo}",
+            )
 
 
 # ── background thread ──────────────────────────────────────────────────────────
@@ -71,6 +163,8 @@ class BatchInferencePage(QWidget):
     - Export all results or only low-confidence results as CSV.
     - Cancel support: forwards cancellation to the worker's cancel flag.
     """
+
+    low_confidence_ready = Signal(list)  # [{path, confidence, predicted}, ...]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -242,6 +336,13 @@ class BatchInferencePage(QWidget):
         self._summary_lbl.setStyleSheet("font-size:12px;color:#ADBAC7;padding:4px;")
         v.addWidget(self._summary_lbl)
 
+        # Confidence distribution (10%-buckets)
+        hist_lbl = QLabel(tr("batch.hist_title"))
+        hist_lbl.setStyleSheet("font-size:11px;color:#8B949E;padding:2px 4px;")
+        v.addWidget(hist_lbl)
+        self._conf_hist = _ConfidenceHistogram()
+        v.addWidget(self._conf_hist)
+
         # Results table
         self._table = QTableWidget(0, 4)
         self._table.setHorizontalHeaderLabels([
@@ -379,6 +480,7 @@ class BatchInferencePage(QWidget):
         self._status_lbl.setText(f"Verarbeite 0 / {total} Bilder …")
         self._results = []
         self._table.setRowCount(0)
+        self._conf_hist.set_bins([])
         self._thread.start()
 
     @Slot(int, int)
@@ -474,6 +576,20 @@ class BatchInferencePage(QWidget):
                         item.setBackground(warn_bg)
 
         self._table.setSortingEnabled(True)
+
+        confs = [r["confidence"] for r in filtered if not r.get("error")]
+        self._conf_hist.set_bins(confidence_histogram_bins(confs))
+
+        low_items = [
+            {
+                "path": r.get("path", ""),
+                "confidence": r.get("confidence", 0.0),
+                "predicted": r.get("predicted", ""),
+            }
+            for r in results
+            if not r.get("error") and r.get("confidence", 1.0) < warn_thresh
+        ]
+        self.low_confidence_ready.emit(low_items)
 
         summary_parts = [f"{len(filtered)} Bilder"]
         for cls, n in sorted(counts.items()):

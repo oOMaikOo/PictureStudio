@@ -23,8 +23,8 @@ def test_beginner_mode_shows_only_label_train(qtbot):
     qtbot.addWidget(sb)
     sb.set_ui_mode("beginner")
     stacks = sorted(i for _, i in sb._buttons)
-    # dashboard, data, labeling, training, classification, settings
-    assert stacks == [0, 1, 2, 3, 5, 7]
+    # dashboard, data, labeling, training, classification, settings, review
+    assert stacks == [0, 1, 2, 3, 5, 7, 17]
 
 
 def test_expert_mode_shows_full_image_set(qtbot):
@@ -44,7 +44,7 @@ def test_beginner_persists_across_project_type(qtbot):
     qtbot.addWidget(sb)
     sb.set_ui_mode("beginner")
     sb.set_project_type("video")   # must not re-expand the sidebar
-    assert sorted(i for _, i in sb._buttons) == [0, 1, 2, 3, 5, 7]
+    assert sorted(i for _, i in sb._buttons) == [0, 1, 2, 3, 5, 7, 17]
 
 
 def test_mode_dialog_default_and_choice(qtbot):
@@ -57,7 +57,7 @@ def test_mode_dialog_default_and_choice(qtbot):
 
 
 # Stacks reachable in beginner mode — must stay in sync with sidebar/main_window.
-_BEGINNER_STACKS = {0, 1, 2, 3, 5, 7}
+_BEGINNER_STACKS = {0, 1, 2, 3, 5, 7, 17}
 
 
 def test_beginner_tour_filters_expert_steps():

@@ -41,6 +41,48 @@ class AppSettings:
     def set_ui_mode(self, mode: str) -> None:
         self._s.setValue("appearance/ui_mode", "beginner" if mode == "beginner" else "expert")
 
+    def get_product_line(self) -> str:
+        """Product line: ``studio`` (image) or ``monitor`` (video/fleet)."""
+        val = self._s.value("appearance/product_line", "studio")
+        return "monitor" if val == "monitor" else "studio"
+
+    def set_product_line(self, line: str) -> None:
+        self._s.setValue(
+            "appearance/product_line",
+            "monitor" if line == "monitor" else "studio",
+        )
+
+    def is_product_line_chosen(self) -> bool:
+        return bool(self._s.value("appearance/product_line_chosen", False, type=bool))
+
+    def mark_product_line_chosen(self) -> None:
+        self._s.setValue("appearance/product_line_chosen", True)
+
+    def get_show_advanced(self) -> bool:
+        """When False, niche pages/controls stay under Advanced only."""
+        return self._s.value("appearance/show_advanced", False, type=bool)
+
+    def set_show_advanced(self, val: bool) -> None:
+        self._s.setValue("appearance/show_advanced", bool(val))
+
+    def get_last_seen_version(self) -> str:
+        return self._s.value("update/last_seen_version", "") or ""
+
+    def set_last_seen_version(self, version: str) -> None:
+        self._s.setValue("update/last_seen_version", version)
+
+    def get_skip_update_tag(self) -> str:
+        return self._s.value("update/skip_tag", "") or ""
+
+    def set_skip_update_tag(self, tag: str) -> None:
+        self._s.setValue("update/skip_tag", tag)
+
+    def get_update_check_enabled(self) -> bool:
+        return self._s.value("update/check_enabled", True, type=bool)
+
+    def set_update_check_enabled(self, val: bool) -> None:
+        self._s.setValue("update/check_enabled", bool(val))
+
     # ---- project ----
     def get_autosave_enabled(self) -> bool:
         return self._s.value("project/autosave_enabled", True, type=bool)

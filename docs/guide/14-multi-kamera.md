@@ -37,7 +37,7 @@ Bei >4 Kanälen erscheinen ◀ Vorherige** und **Nächste ▶** Buttons.
 | GET | /api/mc/scores?channel=N | Score-Puffer für Kanal N |
 | GET | /api/mc/latest_alarm?channel=N | Letztes Alarm-Event für Kanal N |
 
-> 💡 Alarm-JPEG-Pfad:**
- `monitor_logs/multi_cam/mc_chN_YYYYMMDDTHHMMSSZ.jpg`
+> 💡 Alarm-JPEG: `monitor_logs/multi_cam/mc_chN_YYYYMMDDTHHMMSSZ.jpg`  
+> CSV-Protokoll: `monitor_logs/multi_cam/multi_cam_events.csv` — Export über *Protokoll exportieren…*
 
 > ⚠️ Kanalzahl ändern stoppt alle Kanäle — konfigurierte Einstellungen bleiben erhalten.

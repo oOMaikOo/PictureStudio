@@ -88,7 +88,9 @@ TOUR_STEPS = {
          "Exportiere Annotationen (ROIs + Labels) als:\n"
          "• COCO JSON → Object-Detection-Frameworks\n"
          "• YOLO TXT → Ultralytics / Darknet\n"
-         "• CSV → eigene Tools / Tabellenkalkulation",
+         "• CSV → eigene Tools / Tabellenkalkulation\n"
+         "• Ground-Truth CSV → image_path, label,\n"
+         "  uncertain (Wahrheits-Labels für Auswertung)",
          "COCO"),
     ],
     Page.LABELING: [  # Labeling (nur Bildprojekte)
@@ -96,7 +98,9 @@ TOUR_STEPS = {
          "Weise Bildern Klassen zu und zeichne ROIs\n"
          "(Regions of Interest) für die Klassifikation.\n\n"
          "Links: Thumbnail-Liste  |  Mitte: Editor\n"
-         "Rechts: ROI-Details und Label-Zuweisung",
+         "Rechts: ROI-Details und Label-Zuweisung\n\n"
+         "Rückgängig: Bearbeiten → Rückgängig (Strg+Z)\n"
+         "Wiederherstellen: Strg+Y / Strg+Umschalt+Z",
          None),
         ("Bilder laden & Label definieren",
          "Bilder zuerst auf der Daten-Seite laden\n"
@@ -112,8 +116,20 @@ TOUR_STEPS = {
          "(Reihenfolge entspricht der Label-Liste)\n\n"
          "Alternativ: Label-Dropdown oben rechts\n\n"
          "Navigation:\n"
-         "N = nächstes Bild  |  P = vorheriges Bild",
+         "N = nächstes Bild  |  P = vorheriges Bild\n\n"
+         "Falsches Label? Bearbeiten → Rückgängig\n"
+         "(Strg+Z) — gilt für Labels und ROIs.",
          None),
+        ("Nach Dateiname labeln",
+         "Wenn Dateinamen schon die Klasse enthalten\n"
+         "(z. B. defect_001.jpg):\n\n"
+         "Panel 'Nach Dateiname labeln' (links):\n"
+         "1. Muster eingeben (fnmatch), z. B. *defect*\n"
+         "2. Label im Dropdown wählen\n"
+         "3. 'Anwenden' → passende Bilder erhalten\n"
+         "   das Label in einem Schritt\n\n"
+         "Undo über Bearbeiten → Rückgängig.",
+         "Anwenden"),
         ("ROI zeichnen",
          "Werkzeug in der Toolbar wählen:\n"
          "• R = Rechteck (häufigste Wahl)\n"
@@ -151,7 +167,8 @@ TOUR_STEPS = {
          "3. '▶ Vorschläge generieren'\n"
          "4. '✅ Vorschläge übernehmen'\n\n"
          "Nur Bilder über dem Schwellwert werden\n"
-         "gelabelt — Undo jederzeit möglich.",
+         "gelabelt — Rückgängig über Bearbeiten\n"
+         "→ Rückgängig (Strg+Z).",
          "Vorschläge generieren"),
     ],
     Page.TRAINING: [  # Training (nur Bildprojekte)
@@ -706,14 +723,17 @@ TOUR_STEPS = {
          "• Uhrzeit und Kanal-Nummer\n"
          "• Score und Schwellwert\n"
          "• Dateiname des gespeicherten Frames\n\n"
+         "CSV-Protokoll (automatisch):\n"
+         "monitor_logs/multi_cam/\n"
+         "multi_cam_events.csv\n\n"
+         "'Protokoll exportieren…' → speichert\n"
+         "die CSV per Dateidialog (QFileDialog).\n\n"
          "Alarm-JPEG:\n"
-         "Bei jedem Alarm wird automatisch\n"
-         "ein Schnappschuss gespeichert unter:\n"
          "monitor_logs/multi_cam/\n"
          "mc_chN_YYYYMMDDTHHMMSSZ.jpg\n\n"
          "E-Mail/Webhook aus den Einstellungen\n"
          "gelten für alle Kanäle.",
-         None),
+         "Protokoll exportieren"),
         ("REST-API – Per-Kanal-Endpunkte",
          "Wenn der REST-Server läuft\n"
          "(Einstellungen → REST-API → Starten),\n"
@@ -733,8 +753,8 @@ TOUR_STEPS = {
         ("Batch-Inferenz",
          "Klassifiziere einen ganzen Ordner\n"
          "mit einem trainierten Modell in einem Durchlauf.\n\n"
-         "Ergebnis: sortierbare Tabelle mit\n"
-         "Dateiname, Klasse, Konfidenz, Fehler\n"
+         "Ergebnis: sortierbare Tabelle,\n"
+         "Confidence-Histogramm (10 %-Buckets)\n"
          "und CSV-Export.",
          None),
         ("Modell laden",
@@ -753,11 +773,14 @@ TOUR_STEPS = {
         ("Batch starten & exportieren",
          "'Batch starten' → alle Bilder werden\n"
          "nacheinander klassifiziert.\n\n"
+         "Über der Tabelle: Confidence-Verteilung\n"
+         "in 10 %-Buckets (Anteil der Bilder).\n"
+         "Rot = unsicher, Grün = sicher.\n\n"
          "Ergebnisse in der Tabelle:\n"
          "• Klick auf Spaltenköpfe → sortieren\n"
          "• Rot = unter Min. Confidence\n\n"
-         "'Als CSV exportieren' → Tabelle als\n"
-         "CSV-Datei speichern.",
+         "'CSV exportieren…' → volle Tabelle\n"
+         "'Unsichere exportieren…' → nur Warnfälle.",
          "Batch starten"),
     ],
     Page.DATASET_STATS: [  # Datensatz-Statistiken
@@ -985,6 +1008,26 @@ TOUR_STEPS = {
          "schließt sich.",
          "📸 Frame ins Projekt übernehmen"),
     ],
+    Page.REVIEW: [
+        ("Review-Queue – Überblick",
+         "Ein Ort für alles, was manuell geprüft\n"
+         "werden sollte:\n\n"
+         "• Unsichere QA-Flags (Labeling)\n"
+         "• Active-Learning-Kandidaten\n"
+         "• Batch-Ergebnisse mit niedriger\n"
+         "  Konfidenz\n\n"
+         "Doppelklick oder 'In Labeling öffnen'\n"
+         "springt direkt zum Bild.",
+         None),
+        ("Tabs nutzen",
+         "Drei Tabs oben:\n"
+         "1. Unsichere Flags\n"
+         "2. Active Learning\n"
+         "3. Batch niedrig\n\n"
+         "'Aktualisieren' lädt den aktuellen Stand\n"
+         "aus dem Projekt neu.",
+         "Aktualisieren"),
+    ],
 }
 
 
@@ -995,6 +1038,7 @@ _EXPERT_ONLY_TITLES = {
     "Video importieren",
     "Datensatz analysieren",
     "Annotationen exportieren",
+    "Nach Dateiname labeln",
     "ROI zeichnen",
     "ROI-Label zuweisen",
     "Segmentierungsmaske malen",

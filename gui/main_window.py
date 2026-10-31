@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
       after load via ``_load_project()``.
     - Autosave: configurable interval via ``AppSettings``; triggered by a
       ``QTimer``.
-    - Menu bar with Datei / Projekt / Ansicht / Audit / Hilfe menus.
+    - Menu bar with Datei / Bearbeiten / Projekt / Ansicht / Audit / Hilfe menus.
     - REST API server lifecycle (start/stop, project injection).
     - Global drag-and-drop fallback for images dropped anywhere in the window.
     - Active-Learning integration: relays ``al_queue_updated`` and
@@ -82,8 +82,10 @@ class MainWindow(QMainWindow):
         self._autosave_timer.timeout.connect(self._autosave)
         self._reset_autosave_timer()
 
-        # Show first-launch wizard after the window is fully rendered
+        # Product line + update check + first-launch wizard
+        QTimer.singleShot(200, self._maybe_choose_product_line)
         QTimer.singleShot(400, self._maybe_show_wizard)
+        QTimer.singleShot(1200, self._run_update_check)
 
         # Periodic status update
         self._status_timer = QTimer(self)
@@ -101,16 +103,32 @@ class MainWindow(QMainWindow):
         root.setSpacing(0)
 
         self._ui_mode = self._settings.get_ui_mode()
+        self._product_line = self._settings.get_product_line()
+        self._show_advanced = self._settings.get_show_advanced()
         self.sidebar = Sidebar()
         self.sidebar.set_ui_mode(self._ui_mode)
+        self.sidebar.set_product_line(self._product_line)
         self.sidebar.set_locked(True)   # locked until a project is loaded
         self.sidebar.page_requested.connect(self._switch_page)
         self.sidebar.help_requested.connect(lambda: self._show_help())
         self.sidebar.tour_requested.connect(self._start_tour)
         root.addWidget(self.sidebar)
 
+        from PySide6.QtWidgets import QVBoxLayout
+        from gui.widgets.update_banner import UpdateBanner
+        content = QWidget()
+        content_l = QVBoxLayout(content)
+        content_l.setContentsMargins(0, 0, 0, 0)
+        content_l.setSpacing(0)
+        self._update_banner = UpdateBanner()
+        self._update_banner.dismissed.connect(self._on_update_banner_dismissed)
+        self._update_banner.open_whats_new.connect(self._show_whats_new)
+        self._update_banner.open_release.connect(self._open_release_page)
+        content_l.addWidget(self._update_banner)
+
         self.stack = QStackedWidget()
-        root.addWidget(self.stack)
+        content_l.addWidget(self.stack, stretch=1)
+        root.addWidget(content)
 
         # Guided tour (created after stack so it floats above everything)
         from gui.guide_tour import GuideTour
@@ -134,6 +152,7 @@ class MainWindow(QMainWindow):
         from gui.pages.data_drift_page         import DataDriftPage
         from gui.pages.anomaly_training_page   import AnomalyTrainingPage
         from gui.pages.live_classification_page import LiveClassificationPage
+        from gui.pages.review_queue_page       import ReviewQueuePage
 
         self.dashboard_page          = DashboardPage()
         self.data_page               = DataPage()
@@ -152,6 +171,7 @@ class MainWindow(QMainWindow):
         self.data_drift_page         = DataDriftPage()
         self.anomaly_training_page   = AnomalyTrainingPage()
         self.live_classify_page      = LiveClassificationPage()
+        self.review_page             = ReviewQueuePage()
 
         # Page.<NAME> is the stack index; adding in sorted(Page) order makes that
         # true by construction. A member without an entry here raises KeyError.
@@ -173,10 +193,16 @@ class MainWindow(QMainWindow):
             Page.DATA_DRIFT:       self.data_drift_page,
             Page.ANOMALY_TRAINING: self.anomaly_training_page,
             Page.LIVE_CLASSIFY:    self.live_classify_page,
+            Page.REVIEW:           self.review_page,
         }
         for _page in sorted(Page):
             self.stack.addWidget(pages[_page])
         self.live_classify_page.images_added.connect(self._on_images_loaded)
+        self.review_page.open_in_labeling.connect(self._open_review_in_labeling)
+        self.batch_page.low_confidence_ready.connect(
+            self.review_page.set_batch_low_confidence
+        )
+        self._apply_advanced_visibility()
 
         # REST API server
         from api.rest_server import RestApiServer
@@ -271,6 +297,26 @@ class MainWindow(QMainWindow):
         quit_a.triggered.connect(self.close)
         fm.addAction(quit_a)
 
+        # Edit — Undo/Redo bound to LabelingPage's QUndoStack (global menu
+        # shortcuts; page-level Ctrl+Z/Y shortcuts were removed to avoid
+        # double-firing when the labeling page has focus).
+        em = mb.addMenu(tr("menu.edit"))
+        self._undo_action = self.labeling_page._undo_stack.createUndoAction(
+            self, tr("menu.edit.undo"))
+        self._undo_action.setShortcuts([
+            QKeySequence.StandardKey.Undo,
+            QKeySequence("Ctrl+Z"),
+        ])
+        em.addAction(self._undo_action)
+        self._redo_action = self.labeling_page._undo_stack.createRedoAction(
+            self, tr("menu.edit.redo"))
+        self._redo_action.setShortcuts([
+            QKeySequence.StandardKey.Redo,
+            QKeySequence("Ctrl+Y"),
+            QKeySequence("Ctrl+Shift+Z"),
+        ])
+        em.addAction(self._redo_action)
+
         # Project
         pm = mb.addMenu(tr("menu.project"))
         labels_a = QAction(tr("menu.project.labels"), self)
@@ -299,23 +345,45 @@ class MainWindow(QMainWindow):
         self._expert_mode_action.toggled.connect(
             lambda on: self._set_ui_mode("expert" if on else "beginner"))
         vm.addAction(self._expert_mode_action)
+
+        self._studio_action = QAction(tr("menu.view.studio"), self, checkable=True)
+        self._studio_action.setChecked(self._product_line == "studio")
+        self._studio_action.triggered.connect(lambda: self._set_product_line("studio"))
+        vm.addAction(self._studio_action)
+        self._monitor_action = QAction(tr("menu.view.monitor"), self, checkable=True)
+        self._monitor_action.setChecked(self._product_line == "monitor")
+        self._monitor_action.triggered.connect(lambda: self._set_product_line("monitor"))
+        vm.addAction(self._monitor_action)
+
+        self._advanced_action = QAction(tr("menu.view.advanced"), self, checkable=True)
+        self._advanced_action.setChecked(self._show_advanced)
+        self._advanced_action.toggled.connect(self._set_show_advanced)
+        vm.addAction(self._advanced_action)
         vm.addSeparator()
         for label, idx in [
             (tr("nav.dashboard"),            Page.DASHBOARD),
             (tr("nav.data"),                 Page.DATA),
             (tr("nav.labeling"),             Page.LABELING),
+            (tr("nav.review"),               Page.REVIEW),
             (tr("nav.training"),             Page.TRAINING),
             (tr("nav.models"),               Page.MODELS),
             (tr("nav.inference"),            Page.INFERENCE),
             (tr("menu.view.batchinference"), Page.BATCH),
-            (tr("nav.dataset"),              Page.DATASET_STATS),
-            (tr("nav.datadrift"),            Page.DATA_DRIFT),
             (tr("nav.export"),               Page.EXPORT),
             (tr("nav.settings"),             Page.SETTINGS),
         ]:
             a = QAction(label, self)
             a.triggered.connect(lambda _, i=idx: self._switch_page(i))
             vm.addAction(a)
+        self._advanced_menu = vm.addMenu(tr("menu.view.advanced_pages"))
+        for label, idx in [
+            (tr("nav.dataset"),   Page.DATASET_STATS),
+            (tr("nav.datadrift"), Page.DATA_DRIFT),
+        ]:
+            a = QAction(label, self)
+            a.triggered.connect(lambda _, i=idx: self._switch_page(i))
+            self._advanced_menu.addAction(a)
+        self._advanced_menu.menuAction().setVisible(self._show_advanced)
 
         # Audit
         audit_m = mb.addMenu(tr("menu.audit"))
@@ -398,9 +466,12 @@ class MainWindow(QMainWindow):
 
     # Beginner mode: only these stack pages may be reached (matches sidebar).
     _BEGINNER_ALLOWED = frozenset({
-        Page.DASHBOARD, Page.DATA, Page.LABELING,
+        Page.DASHBOARD, Page.DATA, Page.LABELING, Page.REVIEW,
         Page.TRAINING, Page.INFERENCE, Page.SETTINGS,
     })
+
+    # Niche pages reachable only when Advanced is enabled (unless already open).
+    _ADVANCED_ONLY = frozenset({Page.DATASET_STATS, Page.DATA_DRIFT})
 
     @Slot(int)
     def _switch_page(self, idx: int) -> None:
@@ -411,6 +482,12 @@ class MainWindow(QMainWindow):
         only ever reach the pages the sidebar shows.
         """
         if self._ui_mode == "beginner" and idx not in self._BEGINNER_ALLOWED:
+            return
+        if (
+            not self._show_advanced
+            and idx in self._ADVANCED_ONLY
+            and self._ui_mode != "beginner"
+        ):
             return
         self.stack.setCurrentIndex(idx)
         self.sidebar.set_page(idx)
@@ -431,6 +508,54 @@ class MainWindow(QMainWindow):
             self._expert_mode_action.setChecked(mode != "beginner")
         if mode == "beginner" and self.stack.currentIndex() not in self._BEGINNER_ALLOWED:
             self._switch_page(Page.DASHBOARD)
+
+    def _set_product_line(self, line: str) -> None:
+        """Studio (image) vs Monitor (video/fleet) shell — hides the other stack."""
+        line = "monitor" if line == "monitor" else "studio"
+        if line == self._product_line:
+            if hasattr(self, "_studio_action"):
+                self._studio_action.setChecked(line == "studio")
+                self._monitor_action.setChecked(line == "monitor")
+            return
+        self._product_line = line
+        self._settings.set_product_line(line)
+        self._settings.mark_product_line_chosen()
+        self.sidebar.set_product_line(line)
+        if hasattr(self, "_studio_action"):
+            self._studio_action.setChecked(line == "studio")
+            self._monitor_action.setChecked(line == "monitor")
+        # Leave pages that aren't in the new shell.
+        if line == "studio" and self.stack.currentIndex() in {
+            Page.CAMERA, Page.MULTI_CAMERA, Page.FLEET,
+            Page.VIDEO_ANNOTATION, Page.ANOMALY_TRAINING,
+        }:
+            self._switch_page(Page.DASHBOARD)
+        if line == "monitor" and self.stack.currentIndex() in {
+            Page.LABELING, Page.TRAINING, Page.MODELS, Page.INFERENCE,
+            Page.BATCH, Page.LIVE_CLASSIFY, Page.REVIEW,
+        }:
+            self._switch_page(Page.DASHBOARD)
+
+    def _set_show_advanced(self, on: bool) -> None:
+        self._show_advanced = bool(on)
+        self._settings.set_show_advanced(self._show_advanced)
+        self._apply_advanced_visibility()
+        if (
+            not self._show_advanced
+            and self.stack.currentIndex() in self._ADVANCED_ONLY
+        ):
+            self._switch_page(Page.DASHBOARD)
+
+    def _apply_advanced_visibility(self) -> None:
+        vis = bool(self._show_advanced)
+        if hasattr(self, "models_page"):
+            self.models_page.set_advanced_visible(vis)
+        if hasattr(self, "training_page"):
+            self.training_page.set_advanced_visible(vis)
+        if hasattr(self, "_advanced_menu"):
+            self._advanced_menu.menuAction().setVisible(vis)
+        if hasattr(self, "_advanced_action"):
+            self._advanced_action.setChecked(vis)
 
     # ------------------------------------------------------------------ active learning
 
@@ -463,12 +588,12 @@ class MainWindow(QMainWindow):
         self.camera_page._open_capture_dialog()
 
     def _on_al_queue_updated(self) -> None:
-        """Refresh labeling page queue panel and notify user."""
+        """Refresh labeling + review hub and notify user."""
         self.labeling_page.refresh_al_queue_panel()
+        self.review_page.refresh()
         n = len(self.project.get_al_queue()) if self.project else 0
         self._status_label.setText(
-            f"AL-Queue aktualisiert — {n} Bilder warten auf Labeling. "
-            "Wechsle zum Labeling-Reiter."
+            f"AL-Queue aktualisiert — {n} Bilder. Review-Queue oder Labeling öffnen."
         )
 
     def _on_model_loaded_api(self, model_path: str) -> None:
@@ -531,8 +656,11 @@ class MainWindow(QMainWindow):
         # so existing code that accesses self.audit continues to work.
         self.audit = self._project_ctrl.audit
 
-        # Unlock sidebar and configure for project type
-        self.sidebar.set_project_type(getattr(project.config, "project_type", "image"))
+        # Align product line with project type, then unlock sidebar
+        ptype = getattr(project.config, "project_type", "image")
+        line = "monitor" if ptype == "video" else "studio"
+        self._set_product_line(line)
+        self.sidebar.set_project_type(ptype)
         self.sidebar.set_locked(False)
 
         # Propagate to all pages
@@ -551,6 +679,8 @@ class MainWindow(QMainWindow):
         self.data_drift_page.set_project(project)
         self.live_classify_page.set_project(project)
         self.anomaly_training_page.set_project(project)
+        self.review_page.set_project(project)
+        self._apply_advanced_visibility()
 
         self._rest_server.set_project(project)
         self._settings.add_recent_project(project.project_path)
@@ -814,12 +944,69 @@ class MainWindow(QMainWindow):
             )
         QMessageBox.information(self, "Projektinfo", info)
 
+    def _maybe_choose_product_line(self) -> None:
+        """First launch: Studio vs Monitor product shell."""
+        if self._settings.is_product_line_chosen():
+            return
+        from gui.product_select_dialog import ProductSelectDialog
+        line = ProductSelectDialog.choose(
+            self._settings.get_product_line(), parent=self
+        )
+        self._settings.mark_product_line_chosen()
+        self._set_product_line(line)
+
+    def _open_review_in_labeling(self, path: str) -> None:
+        """Jump to Labeling and focus *path* from the review hub."""
+        self._switch_page(Page.LABELING)
+        if hasattr(self.labeling_page, "focus_image"):
+            self.labeling_page.focus_image(path)
+
+    def _run_update_check(self) -> None:
+        """Background-friendly update + What's-new banner (non-blocking)."""
+        if not self._settings.get_update_check_enabled():
+            return
+        from utils.updater import (
+            fetch_latest_release_tag, is_newer, changelog_whats_new, load_changelog,
+        )
+        last_seen = self._settings.get_last_seen_version() or APP_VERSION
+        whats = changelog_whats_new(load_changelog(), last_seen)
+        skip = self._settings.get_skip_update_tag()
+        remote = fetch_latest_release_tag()
+        if remote and is_newer(remote, APP_VERSION) and remote != skip:
+            self._update_banner.show_update(APP_VERSION, remote, whats)
+            return
+        if whats and last_seen != APP_VERSION:
+            self._update_banner.show_whats_new_only(whats)
+
+    def _on_update_banner_dismissed(self) -> None:
+        self._settings.set_last_seen_version(APP_VERSION)
+        tag = getattr(self._update_banner, "_release_tag", "") or ""
+        if tag:
+            self._settings.set_skip_update_tag(tag)
+
+    def _show_whats_new(self) -> None:
+        from utils.i18n import tr
+        text = self._update_banner.whats_new_text
+        if not text:
+            from utils.updater import changelog_whats_new, load_changelog
+            text = changelog_whats_new(load_changelog(), "0") or tr("update.no_notes")
+        QMessageBox.information(self, tr("update.whats_new_title"), text)
+        self._settings.set_last_seen_version(APP_VERSION)
+
+    def _open_release_page(self, tag: str) -> None:
+        import webbrowser
+        url = f"https://github.com/oOMaikOo/Picture/releases/tag/{tag}" if tag else (
+            "https://github.com/oOMaikOo/Picture/releases/latest"
+        )
+        webbrowser.open(url)
+
     def _maybe_show_wizard(self) -> None:
         """Show the quick-start wizard on first launch (once per installation)."""
         from gui.quick_start_wizard import QuickStartWizard
         if QuickStartWizard.should_show_on_startup():
             QuickStartWizard.mark_shown()
-            self._open_wizard("image")
+            workflow = "video" if self._product_line == "monitor" else "image"
+            self._open_wizard(workflow)
 
     def _open_wizard(self, workflow: str = "image") -> None:
         """Open the quick-start wizard for the given workflow."""

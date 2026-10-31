@@ -131,6 +131,8 @@ All label/ROI changes go through `QUndoStack` via command objects in `gui/labeli
 
 Commands: `SetImageLabelCommand`, `BulkSetImageLabelCommand`, `SetMultiLabelsCommand`, `SetLabelFlagCommand`, `AddROICommand`, `DeleteROICommand`, `AssignROILabelCommand`, `MoveROICommand`.
 
+The main-window **Edit** menu (`Bearbeiten`) exposes Undo/Redo via `QUndoStack.createUndoAction` / `createRedoAction` bound to `labeling_page._undo_stack` (shortcuts Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z). Do not re-add page-level `QShortcut`s for the same keys — they would double-fire.
+
 ### Data loading: `gui/pages/data_page.py`
 
 `_load_images()` uses `os.walk()` to scan the selected folder **and all subfolders** recursively. Drag & drop also handles dropped folders recursively — no need to flatten image directories before import. Train/test split is applied automatically at training time; users do not pre-separate images.

@@ -4,8 +4,10 @@ Jeder Kanal hat eine eigene Kamera-Quelle und ein eigenes Anomalie-Modell.
 """
 from __future__ import annotations
 
+import csv
 import logging
 import os
+import shutil
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -19,6 +21,7 @@ from core.anomaly_detector import AnomalyDetector
 from core.camera import list_usb_cameras, CameraFrameThread
 from core.alarm_notifier import AlarmNotifier
 from core.industrial_notifier import IndustrialNotifier
+from utils.i18n import tr
 
 try:
     from core.onnx_anomaly_scorer import OnnxAnomalyScorer, HAS_ORT
@@ -31,7 +34,7 @@ except Exception:
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QPushButton, QGroupBox, QProgressBar,
-    QDialog, QComboBox, QLineEdit, QFileDialog,
+    QDialog, QComboBox, QLineEdit, QFileDialog, QMessageBox,
     QDialogButtonBox, QPlainTextEdit, QSizePolicy, QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal, QMetaObject, Q_ARG, Slot
@@ -384,6 +387,10 @@ class MultiCameraPage(QWidget):
         self._alarm_output_dir: str = "monitor_logs/multi_cam"
 
         self._scoring_paused: bool = False
+        self._alarm_log_path: str = os.path.join(
+            self._alarm_output_dir, "multi_cam_events.csv"
+        )
+        self._alarm_events: list[dict] = []
         self._frame_signal.connect(self._on_frame_ui)
         self._build_ui()
         self._apply_channel_count(2)
@@ -626,6 +633,20 @@ class MultiCameraPage(QWidget):
             "}"
         )
         alarm_layout.addWidget(self._alarm_log)
+
+        export_row = QHBoxLayout()
+        export_row.addStretch(1)
+        self._export_log_btn = QPushButton(tr("multicam.export_log_btn"))
+        self._export_log_btn.setEnabled(False)
+        self._export_log_btn.setStyleSheet(
+            "QPushButton { background: #2C3E50; color: #BDC3C7; border-radius: 4px;"
+            "  padding: 4px 12px; }"
+            "QPushButton:hover:enabled { background: #34495E; }"
+            "QPushButton:disabled { background: #1A252F; color: #4A5568; }"
+        )
+        self._export_log_btn.clicked.connect(self._export_alarm_log)
+        export_row.addWidget(self._export_log_btn)
+        alarm_layout.addLayout(export_row)
         root.addWidget(alarm_grp)
 
     # ── Channel configuration ─────────────────────────────────────────────────
@@ -802,8 +823,9 @@ class MultiCameraPage(QWidget):
                 ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
                 thr = state.threshold
 
-                # Save alarm JPEG
+                # Save alarm JPEG + append to CSV protocol
                 fname = self._save_alarm_frame(frame, channel_idx)
+                self._write_alarm_event(channel_idx, score, thr, fname)
 
                 log_msg = (
                     f"[{ts}] Kanal {channel_idx + 1}:"
@@ -850,6 +872,12 @@ class MultiCameraPage(QWidget):
                     Qt.QueuedConnection,
                     Q_ARG(str, log_msg),
                 )
+                QMetaObject.invokeMethod(
+                    self._export_log_btn,
+                    "setEnabled",
+                    Qt.QueuedConnection,
+                    Q_ARG(bool, True),
+                )
                 return
 
         # Normal frame update (no alarm)
@@ -891,6 +919,77 @@ class MultiCameraPage(QWidget):
         except Exception:
             log.warning("Failed to save alarm frame for channel %d", channel_idx)
             return ""
+
+    def _write_alarm_event(
+        self, channel_idx: int, score: float, threshold: float, frame_file: str
+    ) -> None:
+        """Append one alarm row to the CSV protocol and in-memory event list."""
+        ts = datetime.now(timezone.utc)
+        score_pct = int(score / threshold * 100) if threshold > 0 else 0
+        row = {
+            "timestamp_utc": ts.isoformat(),
+            "channel": channel_idx + 1,
+            "score": f"{score:.6f}",
+            "threshold": f"{threshold:.6f}",
+            "score_pct": str(score_pct),
+            "frame_file": frame_file or "",
+        }
+        self._alarm_events.append(row)
+        try:
+            os.makedirs(self._alarm_output_dir, exist_ok=True)
+            write_header = not os.path.exists(self._alarm_log_path)
+            with open(self._alarm_log_path, "a", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                if write_header:
+                    w.writerow([
+                        "timestamp_utc", "channel", "score",
+                        "threshold", "score_pct", "frame_file",
+                    ])
+                w.writerow([
+                    row["timestamp_utc"], row["channel"], row["score"],
+                    row["threshold"], row["score_pct"], row["frame_file"],
+                ])
+        except Exception:
+            log.warning("Failed to write multi-cam alarm CSV %s", self._alarm_log_path)
+
+    def _export_alarm_log(self) -> None:
+        """Save the alarm protocol CSV via a file dialog."""
+        if not self._alarm_events and not (
+            self._alarm_log_path and os.path.exists(self._alarm_log_path)
+        ):
+            QMessageBox.information(
+                self, tr("common.ok"), tr("multicam.export_log_empty")
+            )
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            tr("multicam.export_log_dlg"),
+            "multi_cam_alarms.csv",
+            "CSV (*.csv)",
+        )
+        if not path:
+            return
+        try:
+            if self._alarm_log_path and os.path.exists(self._alarm_log_path):
+                shutil.copyfile(self._alarm_log_path, path)
+            else:
+                with open(path, "w", newline="", encoding="utf-8") as f:
+                    w = csv.writer(f)
+                    w.writerow([
+                        "timestamp_utc", "channel", "score",
+                        "threshold", "score_pct", "frame_file",
+                    ])
+                    for row in self._alarm_events:
+                        w.writerow([
+                            row["timestamp_utc"], row["channel"], row["score"],
+                            row["threshold"], row["score_pct"], row["frame_file"],
+                        ])
+            QMessageBox.information(
+                self, tr("common.exported"),
+                tr("multicam.export_log_saved", path=path),
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, tr("common.error"), str(exc))
 
     @staticmethod
     def _apply_roi_crop(frame: np.ndarray, roi: Optional[list]) -> np.ndarray:

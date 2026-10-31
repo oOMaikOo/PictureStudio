@@ -163,6 +163,15 @@ class CameraPage(QWidget):
         )
         open_dlg_btn.clicked.connect(self._open_capture_dialog)
         title_row.addWidget(open_dlg_btn)
+        train_nav_btn = QPushButton(tr("camera.goto_train_btn"))
+        train_nav_btn.setToolTip(tr("camera.tip.goto_train"))
+        train_nav_btn.setStyleSheet(
+            "QPushButton{background:#6C3483;color:white;border-radius:6px;"
+            "padding:5px 14px;font-weight:bold;}"
+            "QPushButton:hover{background:#5B2C6F;}"
+        )
+        train_nav_btn.clicked.connect(self._goto_anomaly_training)
+        title_row.addWidget(train_nav_btn)
         root.addLayout(title_row)
 
         # ── Model row ─────────────────────────────────────────────────────────
@@ -928,12 +937,16 @@ class CameraPage(QWidget):
 
     # ── USP 2: Auto-retrain suggestion ───────────────────────────────────────
 
-    def _on_retrain_suggested(self) -> None:
-        """Navigate to the Training page and dismiss the retrain banner."""
-        self._dismiss_retrain_banner()
+    def _goto_anomaly_training(self) -> None:
+        """Canonical train entry: Anomaly-Training page (not capture-dialog HPT)."""
         mw = self.window()
         if hasattr(mw, "_switch_page"):
-            mw._switch_page(Page.TRAINING)
+            mw._switch_page(Page.ANOMALY_TRAINING)
+
+    def _on_retrain_suggested(self) -> None:
+        """Navigate to Anomaly-Training and dismiss the retrain banner."""
+        self._dismiss_retrain_banner()
+        self._goto_anomaly_training()
 
     def _dismiss_retrain_banner(self) -> None:
         """Hide the retrain banner and reset the session alarm counter."""

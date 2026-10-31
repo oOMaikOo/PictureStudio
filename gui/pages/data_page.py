@@ -126,41 +126,25 @@ class DataPage(QWidget):
 
         load_btn = QPushButton(tr("data.load_images_btn"))
         load_btn.setStyleSheet("background:#2ECC71;color:white;padding:8px;font-weight:bold;")
-        load_btn.setToolTip(
-            "Ordner mit Bildern auswählen.\n"
-            "Unterstützte Formate: JPG, PNG, BMP, TIFF, WebP.\n"
-            "Alle Bilder im Ordner UND in Unterordnern werden geladen.\n"
-            "Tipp: Bilder oder Ordner per Drag & Drop ins Fenster ziehen geht auch."
-        )
+        load_btn.setToolTip(tr("data.load_tip"))
         load_btn.clicked.connect(self._load_images)
         cv.addWidget(load_btn)
 
         cam_btn = QPushButton(tr("data.camera_btn"))
         cam_btn.setStyleSheet("background:#9B59B6;color:white;padding:8px;font-weight:bold;")
-        cam_btn.setToolTip(
-            "Live-Kamera öffnen und Bilder direkt ins Projekt aufnehmen.\n"
-            "Unterstützt USB-Kameras (Index 0, 1, …) und IP-Kameras (RTSP/HTTP).\n"
-            "Einzelbild, Burst-Modus und automatische Anomalieerkennung verfügbar."
-        )
+        cam_btn.setToolTip(tr("data.camera_tip"))
         cam_btn.clicked.connect(self._open_camera_dialog)
         cv.addWidget(cam_btn)
 
         video_btn = QPushButton(tr("data.video_import_btn"))
         video_btn.setStyleSheet("background:#D35400;color:white;padding:8px;font-weight:bold;")
-        video_btn.setToolTip("Frames aus MP4/AVI/MOV extrahieren und zum Projekt hinzufügen")
+        video_btn.setToolTip(tr("data.video_tip"))
         video_btn.clicked.connect(self._import_video)
         cv.addWidget(video_btn)
 
         self._analyze_btn = QPushButton(tr("data.analyze_btn"))
         self._analyze_btn.setStyleSheet("background:#3498DB;color:white;padding:8px;font-weight:bold;")
-        self._analyze_btn.setToolTip(
-            "Analysiert den Datensatz und zeigt:\n"
-            "• Klassenverteilung und Ungleichgewicht\n"
-            "• Fehlende oder unlesbare Dateien\n"
-            "• MD5-Duplikate (identische Bilder)\n"
-            "• Bildgrößen und Formatstatistiken\n"
-            "Empfehlung: vor dem Training ausführen."
-        )
+        self._analyze_btn.setToolTip(tr("data.analyze_tip"))
         self._analyze_btn.clicked.connect(self._run_analysis)
         self._analyze_btn.setEnabled(False)
         cv.addWidget(self._analyze_btn)
@@ -173,25 +157,17 @@ class DataPage(QWidget):
         export_group = QGroupBox(tr("data.export_group"))
         eg = QVBoxLayout(export_group)
         _export_tips = {
-            tr("data.export_coco_btn"): (
-                "Exportiert Annotationen im COCO-Format (JSON).\n"
-                "Kompatibel mit: Detectron2, MMDetection, Ultralytics YOLO v8+,\n"
-                "CVAT, LabelStudio und vielen anderen Frameworks."
-            ),
-            tr("data.export_yolo_btn"): (
-                "Exportiert Annotationen im YOLO-Format (eine .txt-Datei pro Bild).\n"
-                "Kompatibel mit: Ultralytics YOLOv5/v8, Darknet."
-            ),
-            tr("data.export_csv_btn"): (
-                "Exportiert Labels und ROIs als CSV-Tabelle.\n"
-                "Gut für eigene Tools, Excel oder pandas-Analysen."
-            ),
+            tr("data.export_coco_btn"): tr("data.export_coco_tip"),
+            tr("data.export_yolo_btn"): tr("data.export_yolo_tip"),
+            tr("data.export_csv_btn"): tr("data.export_csv_tip"),
+            tr("data.export_gt_btn"): tr("data.export_gt_tip"),
         }
         self._export_btns = []
         for label, slot in [
             (tr("data.export_coco_btn"), self._export_coco),
             (tr("data.export_yolo_btn"), self._export_yolo),
             (tr("data.export_csv_btn"),  self._export_csv),
+            (tr("data.export_gt_btn"),   self._export_ground_truth),
         ]:
             btn = QPushButton(label)
             btn.clicked.connect(slot)
@@ -205,17 +181,11 @@ class DataPage(QWidget):
         valid_group = QGroupBox(tr("data.validation_group"))
         vg = QVBoxLayout(valid_group)
         check_btn = QPushButton(tr("data.check_files_btn"))
-        check_btn.setToolTip(
-            "Prüft ob alle Bilddateien noch an ihrem gespeicherten Pfad vorhanden sind.\n"
-            "Fehlende Dateien werden rot markiert."
-        )
+        check_btn.setToolTip(tr("data.check_files_tip"))
         check_btn.clicked.connect(self._check_files)
         vg.addWidget(check_btn)
         fix_btn = QPushButton(tr("data.fix_paths_btn"))
-        fix_btn.setToolTip(
-            "Bilder die verschoben oder umbenannt wurden neu verknüpfen.\n"
-            "Nützlich wenn das Projekt auf einen anderen Rechner kopiert wurde."
-        )
+        fix_btn.setToolTip(tr("data.fix_paths_tip"))
         fix_btn.clicked.connect(self._fix_paths)
         vg.addWidget(fix_btn)
 
@@ -381,7 +351,7 @@ class DataPage(QWidget):
             QMessageBox.warning(self, tr("common.no_project"), tr("common.no_project_msg"))
             return
         self.progress.setVisible(True)
-        self._summary_text.setPlainText("Analysiere Datensatz …")
+        self._summary_text.setPlainText(tr("data.analyzing"))
         self._thread = AnalysisThread(self.project)
         self._thread.finished.connect(self._on_analysis_done)
         self._thread.error.connect(self._on_error)
@@ -416,9 +386,11 @@ class DataPage(QWidget):
             lines += [
                 "",
                 tr("data.stats.sizes"),
-                f"  Breite:  {size_stats['min_w']} – {size_stats['max_w']} px",
-                f"  Höhe:    {size_stats['min_h']} – {size_stats['max_h']} px",
-                f"  Versch. Größen: {size_stats['unique_sizes']}",
+                tr("data.stats.width",
+                   min_w=size_stats["min_w"], max_w=size_stats["max_w"]),
+                tr("data.stats.height",
+                   min_h=size_stats["min_h"], max_h=size_stats["max_h"]),
+                tr("data.stats.unique_sizes", n=size_stats["unique_sizes"]),
             ]
         lines += ["", tr("data.stats.per_class")]
         for lbl, cnt in result.get("label_counts", {}).items():
@@ -439,7 +411,9 @@ class DataPage(QWidget):
 
         # Warnings
         warns = result.get("warnings", [])
-        self._warn_text.setPlainText("\n".join(warns) if warns else "✓ Keine Warnungen.")
+        self._warn_text.setPlainText(
+            "\n".join(warns) if warns else tr("data.no_warnings")
+        )
         if warns:
             self._warn_text.setStyleSheet("color: #F39C12;")
         else:
@@ -487,6 +461,19 @@ class DataPage(QWidget):
         from core.dataset import export_csv
         self._start_export(export_csv, path, "data.msg.csv_saved", path=path)
 
+    def _export_ground_truth(self) -> None:
+        """Export image_path / label / uncertain as a flat ground-truth CSV."""
+        from utils.i18n import tr
+        if not self._check_project():
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, tr("data.dlg.gt_title"), "ground_truth.csv", "CSV (*.csv)",
+        )
+        if not path:
+            return
+        from core.export import export_ground_truth_csv
+        self._start_export(export_ground_truth_csv, path, "data.msg.gt_saved", path=path)
+
     def _start_export(self, fn, target: str, msg_key: str, **msg_kw) -> None:
         """Run *fn* in an ``ExportThread``, locking the export buttons meanwhile."""
         self.progress.setVisible(True)
@@ -521,18 +508,23 @@ class DataPage(QWidget):
         """Validate all image file paths and display a summary message box."""
         if not self._check_project():
             return
+        from utils.i18n import tr
         result = self.project.validate_image_files()
         missing = result.get("missing", [])
-        msg = (
-            f"OK: {len(result['ok'])} Dateien\n"
-            f"Fehlend: {len(missing)}\n"
-            f"Unlesbar: {len(result.get('unreadable', []))}"
+        msg = tr(
+            "data.check_summary",
+            ok=len(result["ok"]),
+            missing=len(missing),
+            unreadable=len(result.get("unreadable", [])),
         )
         if missing:
-            msg += "\n\nFehlende Dateien:\n" + "\n".join(os.path.basename(p) for p in missing[:10])
+            msg += tr(
+                "data.check_missing_list",
+                list="\n".join(os.path.basename(p) for p in missing[:10]),
+            )
             if len(missing) > 10:
-                msg += f"\n... und {len(missing)-10} weitere"
-        QMessageBox.information(self, "Datei-Prüfung", msg)
+                msg += tr("data.check_more", n=len(missing) - 10)
+        QMessageBox.information(self, tr("data.check_title"), msg)
 
     def _remove_missing_files(self) -> None:
         """Remove all image paths that no longer exist on disk after user confirmation."""
@@ -541,7 +533,7 @@ class DataPage(QWidget):
             return
         missing = [p for p in self.project.images if not os.path.isfile(p)]
         if not missing:
-            QMessageBox.information(self, tr("common.info"), "Keine fehlenden Dateien.")
+            QMessageBox.information(self, tr("common.info"), tr("data.no_missing"))
             return
         reply = QMessageBox.question(
             self, tr("data.confirm_remove_title"),
@@ -556,7 +548,7 @@ class DataPage(QWidget):
         self.project.save()
         QMessageBox.information(
             self, tr("data.confirm_remove_title"),
-            f"{len(missing)} Einträge entfernt.",
+            tr("data.removed_entries", n=len(missing)),
         )
 
     def _fix_paths(self) -> None:

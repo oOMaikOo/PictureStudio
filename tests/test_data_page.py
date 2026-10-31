@@ -15,7 +15,7 @@ def test_export_btns_disabled_without_project(qtbot):
     """All export buttons must be disabled when no project is loaded."""
     page = DataPage()
     qtbot.addWidget(page)
-    assert len(page._export_btns) == 3
+    assert len(page._export_btns) == 4  # COCO, YOLO, CSV, Ground-Truth
     for btn in page._export_btns:
         assert not btn.isEnabled()
 

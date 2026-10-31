@@ -35,6 +35,7 @@ def test_stack_order_matches_page_enum(qtbot):
         Page.DATA_DRIFT:       "DataDriftPage",
         Page.ANOMALY_TRAINING: "AnomalyTrainingPage",
         Page.LIVE_CLASSIFY:    "LiveClassificationPage",
+        Page.REVIEW:           "ReviewQueuePage",
     }
     assert set(expected) == set(Page), "expected-map and Page have drifted apart"
 

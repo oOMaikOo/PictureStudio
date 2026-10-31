@@ -46,4 +46,5 @@ Nach dem Verschieben von Bildern aktualisiert diese Funktion alle Pfade automati
 |---|---|---|
 | COCO JSON | annotations.json | Object-Detection-Frameworks (YOLO v5+, Detectron2) |
 | YOLO TXT | bild.txt + classes.txt | Ultralytics / Darknet |
-| CSV | annotations.csv | Tabellenkalkulation / eigene Tools |
+| CSV | annotations.csv | Tabellenkalkulation / eigene Tools (ROIs + Labels) |
+| Ground-Truth CSV | ground_truth.csv | Wahrheits-Labels: `image_path`, `label`, `uncertain` |

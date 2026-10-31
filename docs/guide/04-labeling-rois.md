@@ -28,6 +28,16 @@ Schnelles Labeln****
 
 Label-Filter: Nur Bilder einer bestimmten Klasse anzeigen.
 
+## Rückgängig / Wiederherstellen
+
+*Bearbeiten → Rückgängig* (`Strg+Z`) · *Wiederherstellen* (`Strg+Y` / `Strg+Umschalt+Z`)
+
+Gilt für Labels, Bulk-/Muster-Zuweisung, ROIs, QA-Flags und Pre-Labeling.
+
+## Nach Dateiname labeln
+
+Panel **Nach Dateiname labeln** (linke Spalte): fnmatch-Muster (z. B. `*defect*`) + Label → *Anwenden*.
+
 ## ROIs zeichnen
 
 Rechteck** `R` – Im Bild ziehen

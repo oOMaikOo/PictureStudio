@@ -40,6 +40,7 @@ SECTIONS = [
     (22, "📉", "Data Drift"),
     (23, "🔄", "Active Learning"),
     (24, "🧠", "Anomalie-Training"),
+    (25, "📋", "Review-Queue"),
 ]
 
 # Map stack page index (gui.page_index.Page) → section id in SECTIONS above.
@@ -62,6 +63,7 @@ PAGE_TO_SECTION = {
     Page.DATA_DRIFT:       22,
     Page.ANOMALY_TRAINING: 24,
     Page.LIVE_CLASSIFY:    21,
+    Page.REVIEW:           25,
 }
 
 # ---------------------------------------------------------------------------
@@ -201,17 +203,17 @@ Gehe zur <b>Export-Seite</b>:<br>
   <tr><th>Bereich</th><th>Features</th></tr>
   <tr><td><b>Projektverwaltung</b></td><td>Versionierte JSON-Projekte, atomares Speichern, automatische Backups, Projekttypen (Klassifikation / Videoanalyse)</td></tr>
   <tr><td><b>ROI-Editor</b></td><td>Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; Label-Schnellzuweisung 1–9; Segmentierungsmaske</td></tr>
-  <tr><td><b>Labeling</b></td><td>Label-Hierarchien, Statistiken, Label-Filter, Review-Modus, Multi-Label, Audit-Trail</td></tr>
-  <tr><td><b>Datensatz-Analyse</b></td><td>MD5-Duplikaterkennung, Klassenungleichgewicht, COCO/YOLO/CSV-Export, Video-Frame-Import</td></tr>
+  <tr><td><b>Labeling</b></td><td>Label-Hierarchien, Statistiken, Label-Filter, Review-Modus, Multi-Label, Bulk-Label nach Dateiname (fnmatch), Undo/Redo (Bearbeiten-Menü), Audit-Trail</td></tr>
+  <tr><td><b>Datensatz-Analyse</b></td><td>MD5-Duplikaterkennung, Klassenungleichgewicht, COCO/YOLO/CSV-Export, Ground-Truth-CSV, Video-Frame-Import</td></tr>
   <tr><td><b>Training</b></td><td>ResNet18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping; Mixed Precision; GPU/CPU/MPS; Klassenausgleich</td></tr>
   <tr><td><b>SSH-Ferntraining</b></td><td>Verbindungsprofile, Live-Log-Streaming, conda/venv-Unterstützung, automatischer Download</td></tr>
   <tr><td><b>Modellbibliothek</b></td><td>Versioniertes Registry, ONNX/TorchScript-Export, Accuracy/F1-Vergleich, Run-History</td></tr>
-  <tr><td><b>Inferenz</b></td><td>Batch-Inferenz, Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling</td></tr>
+  <tr><td><b>Inferenz</b></td><td>Batch-Inferenz mit Confidence-Histogramm (10 %-Buckets), Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling</td></tr>
   <tr><td><b>Excel-Export</b></td><td>Konfigurierbare Spalten, Anhängen/Überschreiben, rote Markierung unter Schwellwert</td></tr>
   <tr><td><b>REST-API</b></td><td>HTTP-Server (Port konfigurierbar), optionaler API-Key-Schutz, Label zuweisen per POST, Live-Dashboard im Browser, Per-Kanal-Endpunkte für Multi-Kamera</td></tr>
   <tr><td><b>MQTT-Alarm</b></td><td>JSON-Events bei Anomalie-Alarm an beliebigen Broker (paho-mqtt), auth-fähig</td></tr>
   <tr><td><b>Kamera / Video</b></td><td>USB-Kamera, IP-Kamera (RTSP/HTTP), Video-Datei direkt im Live-Monitor, Auto-Reconnect, Live-Aufzeichnung (MP4), Burst-Modus</td></tr>
-  <tr><td><b>Multi-Kamera</b></td><td>1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG-Saving pro Kanal, per-Kanal REST-API</td></tr>
+  <tr><td><b>Multi-Kamera</b></td><td>1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG + CSV-Protokoll mit Export-Button, per-Kanal REST-API</td></tr>
   <tr><td><b>Anomalie-Erkennung</b></td><td>Conv-Autoencoder, ROI-Bereich, Bewegungsfilter, Schwellwert-Kalibrierung, Heatmap, Bounding-Box, Alarm-Pause, Audit-Log, False-Positive-Markierung</td></tr>
   <tr><td><b>Batch-Analyse</b></td><td>Ordner oder Dateien auf Anomalien prüfen, CSV-Export der Ergebnisse</td></tr>
   <tr><td><b>Datensatz-Statistiken</b></td><td>Klassenverteilung, Format-/Größenstatistiken, Label-Rate, perceptual-hash Duplikaterkennung</td></tr>
@@ -305,8 +307,10 @@ Nach dem Verschieben von Bildern aktualisiert diese Funktion alle Pfade automati
   <tr><th>Format</th><th>Datei</th><th>Verwendung</th></tr>
   <tr><td>COCO JSON</td><td><code>annotations.json</code></td><td>Object-Detection-Frameworks (YOLO v5+, Detectron2)</td></tr>
   <tr><td>YOLO TXT</td><td><code>bild.txt</code> + <code>classes.txt</code></td><td>Ultralytics / Darknet</td></tr>
-  <tr><td>CSV</td><td><code>annotations.csv</code></td><td>Tabellenkalkulation / eigene Tools</td></tr>
+  <tr><td>CSV</td><td><code>annotations.csv</code></td><td>Tabellenkalkulation / eigene Tools (ROIs + Labels)</td></tr>
+  <tr><td>Ground-Truth CSV</td><td><code>ground_truth.csv</code></td><td>Wahrheits-Labels: Spalten <code>image_path</code>, <code>label</code>, <code>uncertain</code></td></tr>
 </table>
+<div class="tip"><b>Ground-Truth CSV</b> eignet sich für Auswertungen und externe Tools, die nur Bild→Label brauchen — ohne ROI-Geometrie.</div>
 """),
 
 # ── 4  Labeling ───────────────────────────────────────────────────────────────
@@ -326,6 +330,21 @@ Mindestens 2 Labels für das Training erforderlich.</div>
 2. <kbd>1</kbd>–<kbd>9</kbd> drücken = Label 1–9 zuweisen<br>
 3. <kbd>N</kbd> = nächstes Bild, <kbd>P</kbd> = vorheriges Bild<br>
 Label-Filter: Nur Bilder einer bestimmten Klasse anzeigen.</div>
+
+<h2>Rückgängig / Wiederherstellen</h2>
+<div class="step"><b>Bearbeiten-Menü</b><br>
+Alle Label- und ROI-Änderungen laufen über den Undo-Stack:<br>
+• <i>Bearbeiten → Rückgängig</i> (<kbd>Strg+Z</kbd>)<br>
+• <i>Bearbeiten → Wiederherstellen</i> (<kbd>Strg+Y</kbd> / <kbd>Strg+Umschalt+Z</kbd>)<br>
+Gilt für Einzel-Labels, Mehrfachauswahl, Muster-Labeling, ROIs, QA-Flags und Pre-Labeling.</div>
+
+<h2>Nach Dateiname labeln</h2>
+<div class="step"><b>Panel „Nach Dateiname labeln“ (linke Spalte)</b><br>
+Wenn Dateinamen bereits die Klasse enthalten (z.&nbsp;B. <code>defect_001.jpg</code>):<br>
+1. fnmatch-Muster eingeben — Beispiele: <code>*defect*</code>, <code>img_0??.jpg</code>, <code>fehler*</code><br>
+2. Label im Dropdown wählen<br>
+3. <i>Anwenden</i> — alle treffenden Dateinamen erhalten das Label in einem Schritt<br>
+Bestätigung vor dem Schreiben; Rückgängig über das Bearbeiten-Menü.</div>
 
 <h2>ROIs zeichnen</h2>
 <div class="step"><b>Rechteck</b> <kbd>R</kbd> – Im Bild ziehen</div>
@@ -360,7 +379,8 @@ Klasse und Pinselgröße über die Toolbar wählen.<br>
 <code>.pth</code>-Modell wählen.<br>
 <b>Schritt 2:</b> Konfidenz-Schwellwert einstellen (Standard: 75 %).<br>
 <b>Schritt 3:</b> <i>▶ Vorschläge generieren</i> — analysiert alle ungelabelten Bilder.<br>
-<b>Schritt 4:</b> <i>✅ Vorschläge übernehmen</i> — weist Labels zu (vollständiger Undo-Support).<br>
+<b>Schritt 4:</b> <i>✅ Vorschläge übernehmen</i> — weist Labels zu.
+Rückgängig über <i>Bearbeiten → Rückgängig</i> (<kbd>Strg+Z</kbd>).<br>
 Vorschläge unter dem Schwellwert oder mit unbekannten Labels werden übersprungen.
 </div>
 <div class="tip">
@@ -485,9 +505,10 @@ Höherer Wert = strengere Qualitätskontrolle, mehr im Niedrig-Konfidenz-Tab.</d
 15: page("""
 <h1>📦 Batch-Inferenz</h1>
 <p>Einen ganzen Ordner in einem Durchlauf klassifizieren — Ergebnisse als sortierbare
-Tabelle, exportierbar als CSV. Im Gegensatz zur <i>Klassifikation</i>-Seite ist die
-Batch-Seite auf Durchsatz und Auswertung ausgelegt: kein Bildvorschau-Panel, dafür
-Filter, Warnschwelle und Wahrscheinlichkeiten je Klasse im Export.</p>
+Tabelle plus <b>Confidence-Histogramm</b> (10 %-Buckets), exportierbar als CSV.
+Im Gegensatz zur <i>Klassifikation</i>-Seite ist die Batch-Seite auf Durchsatz und
+Auswertung ausgelegt: kein Bildvorschau-Panel, dafür Filter, Warnschwelle,
+Verteilungsdiagramm und Wahrscheinlichkeiten je Klasse im Export.</p>
 
 <h2>Schritt-für-Schritt</h2>
 <div class="step"><b>1 – Modell laden</b><br>
@@ -516,7 +537,14 @@ außen vor. Das unterscheidet die Batch-Seite vom Datenimport auf der
 <tr><td><b>Klassen-Filter</b></td><td>Zeigt nur eine vorhergesagte Klasse. <i>Alle</i> hebt den Filter auf.</td></tr>
 </table>
 <p>Änderungen greifen erst nach <i>Filter anwenden</i> — der Batch muss dafür nicht
-erneut laufen, gefiltert wird auf dem vorhandenen Ergebnis.</p>
+erneut laufen, gefiltert wird auf dem vorhandenen Ergebnis. Das Histogramm folgt
+derselben Filterung.</p>
+
+<h2>Confidence-Histogramm</h2>
+<div class="step"><b>Verteilung über der Tabelle</b><br>
+Zehn Buckets von 0–10&nbsp;% bis 90–100&nbsp;%. Die Balkenhöhe zeigt den Anteil der
+(gefilterten) Ergebnisse ohne Fehler. Farbe: rot (niedrig) → gelb → grün (hoch).<br>
+Schneller Blick auf Modellqualität: viele Balken links = unsichere Vorhersagen.</div>
 
 <h2>Farbkodierung der Confidence-Spalte</h2>
 <table>
@@ -1097,6 +1125,8 @@ gesammelte Frames bleiben erhalten.</p>
   <tr><td><kbd>Strg+S</kbd></td><td>Projekt speichern</td></tr>
   <tr><td><kbd>Strg+Umschalt+S</kbd></td><td>Speichern unter…</td></tr>
   <tr><td><kbd>Strg+L</kbd></td><td>Labels verwalten</td></tr>
+  <tr><td><kbd>Strg+Z</kbd></td><td>Rückgängig (Labeling: Labels &amp; ROIs)</td></tr>
+  <tr><td><kbd>Strg+Y</kbd> / <kbd>Strg+Umschalt+Z</kbd></td><td>Wiederherstellen</td></tr>
   <tr><td><kbd>Strg+K</kbd></td><td>Kamera aufnehmen</td></tr>
   <tr><td><kbd>Strg+Q</kbd></td><td>Beenden</td></tr>
   <tr><td><kbd>F1</kbd></td><td>Hilfe für aktuelle Seite</td></tr>
@@ -1288,9 +1318,17 @@ Die Score-Leiste und der Status (<span style="color:#2ECC71">Normal</span> / <sp
 
 <hr>
 <h2>Alarm-Ereignisse und JPEG-Speicherung</h2>
-<div class="step"><b>Alarm-Protokoll</b><br>
+<div class="step"><b>Alarm-Protokoll (UI)</b><br>
 Jede erkannte Anomalie erscheint im Protokoll unten mit Zeitstempel, Kanal-Nummer und Score.<br>
 E-Mail/Webhook-Benachrichtigungen aus den Einstellungen gelten automatisch für alle Kanäle.</div>
+
+<div class="step"><b>CSV-Protokoll &amp; Export</b><br>
+Alarme werden zusätzlich nach
+<code>monitor_logs/multi_cam/multi_cam_events.csv</code> geschrieben
+(Spalten: <code>timestamp_utc</code>, <code>channel</code>, <code>score</code>,
+<code>threshold</code>, <code>score_pct</code>, <code>frame_file</code>).<br>
+Mit <i>Protokoll exportieren…</i> speicherst du die CSV per Dateidialog an einen
+beliebigen Ort — z.&nbsp;B. für Schichtberichte oder externe Auswertung.</div>
 
 <div class="step"><b>Alarm-JPEG-Speicherung</b><br>
 Bei jedem Alarm wird der aktuelle Frame automatisch als JPEG gespeichert:<br>
@@ -1678,6 +1716,30 @@ Architektur (<code>base_ch</code>), Lernrate und Batch-Größe. Erfordert <code>
 Auf der Kamera-Seite kannst du ein zweites <i>Shadow-Modell</i> laden, das parallel läuft.
 Wenn beide Modelle sich nicht einig sind (Divergenz), wird das als <code>⚡ Divergenz</code> angezeigt
 und in eine CSV-Datei geloggt — ideal für A/B-Vergleiche nach einem Re-Training.</div>
+
+<div class="tip"><b>Train vs Live</b><br>
+<b>Anomalie-Training</b> = Modell trainieren / laden.<br>
+<b>Live-Scoring</b> = laufende Kamera mit Score &amp; Alarm.<br>
+Der Button <i>→ Anomalie-Training</i> auf der Live-Seite führt zum kanonischen Trainings-Einstieg.</div>
+"""),
+
+# ── 25  Review-Queue ─────────────────────────────────────────────────────────
+25: page("""
+<h1>📋 Review-Queue</h1>
+<p>Zentraler Prüfplatz für unsichere Labels, Active-Learning-Kandidaten und
+Batch-Ergebnisse mit niedriger Konfidenz.</p>
+
+<div class="step"><b>Unsichere Flags</b><br>
+Bilder, die im Labeling als <i>unsicher</i> markiert wurden (QA-Flag + optionaler Kommentar).</div>
+
+<div class="step"><b>Active Learning</b><br>
+Einträge aus der AL-Queue nach dem Training — Modell unsicher, Mensch entscheidet.</div>
+
+<div class="step"><b>Batch niedrig</b><br>
+Nach einem Batch-Lauf landen Vorhersagen unter der Warnschwelle hier, ohne die Batch-Seite erneut zu öffnen.</div>
+
+<div class="tip"><b>In Labeling öffnen</b><br>
+Doppelklick oder Button — wechselt zur Labeling-Seite und wählt das Bild in der Thumbnail-Liste.</div>
 """),
 
 }

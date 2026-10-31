@@ -113,6 +113,14 @@ class TrainingPage(QWidget):
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self._start)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self._stop_training)
 
+    def set_advanced_visible(self, visible: bool) -> None:
+        """Show/hide SSH remote training and HPT (Advanced fold)."""
+        vis = bool(visible)
+        if hasattr(self, "ssh_box"):
+            self.ssh_box.setVisible(vis)
+        if hasattr(self, "hpt_btn"):
+            self.hpt_btn.setVisible(vis)
+
     def set_project(self, project, audit=None) -> None:
         """Accept a new project, update the model save directory, and reload saved config."""
         self.project = project
@@ -328,8 +336,9 @@ class TrainingPage(QWidget):
         self.resume_path_label.setWordWrap(True)
         form.addRow(self.resume_path_label)
 
-        # SSH remote training
-        ssh_box = QGroupBox(tr("training.ssh_group"))
+        # SSH remote training (Advanced)
+        self.ssh_box = QGroupBox(tr("training.ssh_group"))
+        ssh_box = self.ssh_box
         ssh_f = QFormLayout(ssh_box)
 
         self.ssh_enabled_cb = QCheckBox(tr("training.ssh_enabled_cb"))
@@ -360,6 +369,7 @@ class TrainingPage(QWidget):
         ssh_f.addRow(self.ssh_status_lbl)
 
         form.addRow(ssh_box)
+        ssh_box.setVisible(False)
 
         # Buttons — Reihenfolge: HPT → Start → Stop
         self.hpt_btn = QPushButton(tr("training.hpt_btn"))
@@ -369,6 +379,7 @@ class TrainingPage(QWidget):
         self.hpt_btn.setToolTip(tr("training.tip_hpt_btn"))
         self.hpt_btn.clicked.connect(self._start_hpt)
         form.addRow(self.hpt_btn)
+        self.hpt_btn.setVisible(False)
 
         self.start_btn = QPushButton(tr("training.start_btn"))
         self.start_btn.setStyleSheet("background:#2ECC71;color:white;font-weight:bold;padding:8px;")

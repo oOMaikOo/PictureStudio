@@ -29,6 +29,7 @@ _IMAGE_PAGES: List[Tuple[str, str, Optional[int]]] = [
     ("nav.dashboard",            "🏠", Page.DASHBOARD),
     ("nav.data",                 "📁", Page.DATA),
     ("nav.labeling",             "🏷", Page.LABELING),
+    ("nav.review",               "📋", Page.REVIEW),
     ("nav.training",             "🧠", Page.TRAINING),
     ("nav.models",               "📊", Page.MODELS),
     ("sidebar.section.anwenden", "",   None),
@@ -45,9 +46,9 @@ _VIDEO_PAGES: List[Tuple[str, str, Optional[int]]] = [
     ("nav.dashboard",            "🏠", Page.DASHBOARD),
     ("nav.data",                 "📁", Page.DATA),
     ("nav.videoannotation",      "🎬", Page.VIDEO_ANNOTATION),
-    ("nav.anomalytraining",      "🧠", Page.ANOMALY_TRAINING),
-    ("nav.camera",               "🎥", Page.CAMERA),
-    ("nav.multicamera",          "📹", Page.MULTI_CAMERA),
+    ("nav.anomalytraining",      "🧠", Page.ANOMALY_TRAINING),  # train
+    ("nav.camera",               "📡", Page.CAMERA),            # live score
+    ("nav.multicamera",          "📹", Page.MULTI_CAMERA),      # live multi
     ("sidebar.section.tools",    "",   None),
     ("nav.fleet",                "🌐", Page.FLEET),
     ("sidebar.section.system",   "",   None),
@@ -61,6 +62,7 @@ _BEGINNER_PAGES: List[Tuple[str, str, Optional[int]]] = [
     ("nav.dashboard",            "🏠", Page.DASHBOARD),
     ("nav.data",                 "📁", Page.DATA),
     ("nav.labeling",             "🏷", Page.LABELING),
+    ("nav.review",               "📋", Page.REVIEW),
     ("nav.training",             "🧠", Page.TRAINING),
     ("nav.inference",            "🔍", Page.INFERENCE),
     ("sidebar.section.system",   "",   None),
@@ -115,6 +117,7 @@ class Sidebar(QWidget):
         self._locked = True
         self._ui_mode = "expert"          # "expert" | "beginner"
         self._project_type = "image"      # "image" | "video"
+        self._product_line = "studio"     # "studio" | "monitor"
         self._page_config = _IMAGE_PAGES
         # List of (QPushButton, stack_idx)
         self._buttons: List[Tuple[QPushButton, int]] = []
@@ -263,20 +266,35 @@ class Sidebar(QWidget):
         self._project_type = type_str
         self._apply_config()
 
+    def set_product_line(self, line: str) -> None:
+        """Studio (image) vs Monitor (video) product shell."""
+        self._product_line = "monitor" if line == "monitor" else "studio"
+        self._apply_config()
+
     def set_ui_mode(self, mode: str) -> None:
         """Switch between 'beginner' (label+train only) and 'expert' (all)."""
         self._ui_mode = "beginner" if mode == "beginner" else "expert"
         self._apply_config()
 
     def _apply_config(self) -> None:
-        """Pick the effective page list from ui_mode + project_type and rebuild."""
+        """Pick page list from ui_mode + product_line (+ project_type fallback)."""
         from utils.i18n import tr
         if self._ui_mode == "beginner":
+            # Beginner is Studio-only (label → train → classify).
             new_config = _BEGINNER_PAGES
+        elif self._product_line == "monitor":
+            new_config = _VIDEO_PAGES
+        elif self._product_line == "studio":
+            new_config = _IMAGE_PAGES
         else:
             new_config = _VIDEO_PAGES if self._project_type == "video" else _IMAGE_PAGES
-        badge_text = (tr("sidebar.badge.image") if self._project_type == "image"
-                      else tr("sidebar.badge.video"))
+        if self._product_line == "monitor":
+            badge_text = tr("sidebar.badge.monitor")
+        elif self._product_line == "studio":
+            badge_text = tr("sidebar.badge.studio")
+        else:
+            badge_text = (tr("sidebar.badge.image") if self._project_type == "image"
+                          else tr("sidebar.badge.video"))
         self._type_badge.setText(badge_text)
         self._type_badge.setVisible(True)
         if new_config is self._page_config:

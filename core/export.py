@@ -216,6 +216,24 @@ def export_training_report(run_data: Dict, output_path: str) -> str:
     return output_path
 
 
+def export_ground_truth_csv(project, output_path: str) -> str:
+    """Export project ground-truth labels as CSV (image_path, label, uncertain).
+
+    One row per project image. ``uncertain`` is ``1``/``0`` from QA flags.
+    Returns the output path.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)) or ".", exist_ok=True)
+    with open(output_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["image_path", "label", "uncertain"])
+        for img_path in project.images:
+            label = project.get_image_label(img_path) or ""
+            uncertain = 1 if project.is_label_uncertain(img_path) else 0
+            writer.writerow([img_path, label, uncertain])
+    log.info("Ground-truth CSV exportiert: %s (%d Zeilen)", output_path, len(project.images))
+    return output_path
+
+
 def export_results_to_csv(
     results: List[Dict],
     output_path: str,

@@ -38,3 +38,4 @@ class Page(IntEnum):
     DATA_DRIFT       = 14
     ANOMALY_TRAINING = 15
     LIVE_CLASSIFY    = 16
+    REVIEW           = 17

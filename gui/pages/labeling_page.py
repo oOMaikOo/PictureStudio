@@ -179,20 +179,17 @@ class _ROIMixin:
         """Copy the current image's ROIs to every image in the project."""
         from utils.i18n import tr
         if not self.project or not self._current_image:
-            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("labeling.select_image_first"))
             return
         self._save_current_rois()
         src_rois = self.project.get_rois(self._current_image)
         if not src_rois:
-            QMessageBox.warning(self, tr("common.warning"),
-                                "Das aktuelle Bild hat keine ROIs zum Kopieren.")
+            QMessageBox.warning(self, tr("common.warning"), tr("labeling.no_rois_copy"))
             return
         n = len(self.project.images)
         reply = QMessageBox.question(
-            self, "ROIs übertragen",
-            f"Die {len(src_rois)} ROI(s) dieses Bildes werden auf alle "
-            f"{n} Bilder kopiert.\nVorhandene ROIs werden überschrieben.\n\n"
-            "⚠ Diese Aktion kann nicht rückgängig gemacht werden.\n\nFortfahren?",
+            self, tr("labeling.roi_apply_title"),
+            tr("labeling.roi_apply_confirm", n_rois=len(src_rois), n_images=n),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -208,21 +205,20 @@ class _ROIMixin:
                 new_rois.append(r)
             self.project.rois[img_path] = new_rois
         QMessageBox.information(
-            self, "Fertig",
-            f"ROIs auf {n - 1} weitere Bilder übertragen."
+            self, tr("labeling.done_title"),
+            tr("labeling.roi_apply_done", n=n - 1),
         )
 
     def _apply_roi_size_to_all(self) -> None:
         """Copy only w+h of the selected ROI to every image; per-image x/y is kept."""
         from utils.i18n import tr
         if not self.project or not self._current_image:
-            QMessageBox.warning(self, tr("common.warning"), "Bitte zuerst ein Bild auswählen.")
+            QMessageBox.warning(self, tr("common.warning"), tr("labeling.select_image_first"))
             return
         self._save_current_rois()
         src_rois = self.project.get_rois(self._current_image)
         if not src_rois:
-            QMessageBox.warning(self, tr("common.warning"),
-                                "Das aktuelle Bild hat keine ROIs.")
+            QMessageBox.warning(self, tr("common.warning"), tr("labeling.no_rois"))
             return
 
         # Use the selected ROI if available, otherwise the first one
@@ -236,10 +232,8 @@ class _ROIMixin:
 
         n = len(self.project.images)
         reply = QMessageBox.question(
-            self, "ROI-Größe übertragen",
-            f"Breite ({src_w:.0f} px) und Höhe ({src_h:.0f} px) des ROI werden auf alle "
-            f"{n} Bilder übertragen.\nBilder mit einem bestehenden ROI behalten ihre Position.\n"
-            "Bilder ohne ROI erhalten einen neuen ROI an der aktuellen Position.\n\nFortfahren?",
+            self, tr("labeling.roi_size_title"),
+            tr("labeling.roi_size_confirm", w=src_w, h=src_h, n=n),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
@@ -276,8 +270,8 @@ class _ROIMixin:
         self._refresh_roi_list()
         self._update_stats()
         QMessageBox.information(
-            self, "Fertig",
-            f"Größe übertragen: {updated} ROIs aktualisiert, {created} neue ROIs erstellt."
+            self, tr("labeling.done_title"),
+            tr("labeling.roi_size_done", updated=updated, created=created),
         )
 
 
@@ -288,8 +282,9 @@ class _PrelabelMixin:
     @Slot()
     def _pre_load_model(self):
         from PySide6.QtWidgets import QFileDialog
+        from utils.i18n import tr
         path, _ = QFileDialog.getOpenFileName(
-            self, "Modell laden", "", "PyTorch Checkpoint (*.pth)"
+            self, tr("labeling.pre_load_title"), "", tr("labeling.pre_model_filter")
         )
         if not path:
             return
@@ -302,16 +297,19 @@ class _PrelabelMixin:
             if len(pl.class_names) > 5:
                 classes += "…"
             self._pre_model_lbl.setText(
-                f"✅ {os.path.basename(path)}\n({len(pl.class_names)} Klassen: {classes})"
+                tr("labeling.pre_model_loaded",
+                   name=os.path.basename(path),
+                   n=len(pl.class_names),
+                   classes=classes)
             )
             self._pre_run_btn.setEnabled(bool(self.project and self.project.images))
         except Exception as exc:
             from PySide6.QtWidgets import QMessageBox as _QMB
-            from utils.i18n import tr
             _QMB.critical(self, tr("common.error"), str(exc))
 
     @Slot()
     def _pre_run(self):
+        from utils.i18n import tr
         if not self.project or not self._pre_labeler:
             return
         only_unlabeled = self._pre_only_unlabeled_cb.isChecked()
@@ -320,7 +318,6 @@ class _PrelabelMixin:
         else:
             candidates = list(self.project.images)
         if not candidates:
-            from utils.i18n import tr
             self._pre_status.setText(tr("labeling.pre_no_images"))
             return
 
@@ -330,7 +327,7 @@ class _PrelabelMixin:
         self._pre_progress.setVisible(True)
         self._pre_run_btn.setEnabled(False)
         self._pre_apply_btn.setEnabled(False)
-        self._pre_status.setText(f"Analysiere {len(candidates)} Bilder…")
+        self._pre_status.setText(tr("labeling.pre_analyzing", n=len(candidates)))
 
         from core.pre_labeling import PreLabelingThread
         roi = None
@@ -357,6 +354,7 @@ class _PrelabelMixin:
 
     @Slot(list)
     def _pre_on_done(self, results: list):
+        from utils.i18n import tr
         self._pre_label_thread = None
         self._pre_progress.setVisible(False)
         self._pre_run_btn.setEnabled(True)
@@ -366,21 +364,23 @@ class _PrelabelMixin:
         errors   = [r for r in results if r["error"]]
         thr      = self._pre_thr_spin.value()
         self._pre_status.setText(
-            f"{len(accepted)} Vorschläge ≥ {thr:.0%}  •  "
-            f"{len(skipped)} unter Schwellwert  •  "
-            f"{len(errors)} Fehler"
+            tr("labeling.pre_result_status",
+               accepted=len(accepted), thr=thr,
+               skipped=len(skipped), errors=len(errors))
         )
         self._pre_apply_btn.setEnabled(bool(accepted))
 
     @Slot(str)
     def _pre_on_error(self, msg: str):
+        from utils.i18n import tr
         self._pre_label_thread = None
         self._pre_progress.setVisible(False)
         self._pre_run_btn.setEnabled(True)
-        self._pre_status.setText(f"Fehler: {msg}")
+        self._pre_status.setText(tr("labeling.pre_error", msg=msg))
 
     @Slot()
     def _pre_apply(self):
+        from utils.i18n import tr
         if not self.project or not hasattr(self, "_pre_suggestions"):
             return
         accepted = [r for r in self._pre_suggestions if not r["skip"] and not r["error"]]
@@ -395,7 +395,7 @@ class _PrelabelMixin:
             )
         )
         self._pre_apply_btn.setEnabled(False)
-        self._pre_status.setText(f"✅ {len(accepted)} Labels übernommen (Undo mit Strg+Z).")
+        self._pre_status.setText(tr("labeling.pre_applied", n=len(accepted)))
 
 
 class _ALMixin:
@@ -404,6 +404,7 @@ class _ALMixin:
 
     def refresh_al_queue_panel(self) -> None:
         """Refresh the AL queue panel after queue changes or project load."""
+        from utils.i18n import tr
         if not self.project:
             self._al_panel.hide()
             return
@@ -414,19 +415,19 @@ class _ALMixin:
             return
         self._al_panel.show()
         self._al_count_label.setText(
-            f"🔄 AL-Queue: {len(unlabeled)} offen / {len(queue)} gesamt"
+            tr("labeling.al_count", open=len(unlabeled), total=len(queue))
         )
         # Show suggestion for current image if it's in queue
         entry = next((e for e in queue if e["path"] == self._current_image), None)
         if entry:
             self._al_suggestion_label.setText(
-                f"Vorschlag: {entry['predicted_label']} "
-                f"({entry['confidence']*100:.0f}% Conf.)"
+                tr("labeling.al_suggestion",
+                   label=entry["predicted_label"],
+                   conf=entry["confidence"] * 100)
             )
         else:
             self._al_suggestion_label.setText(
-                "Klicke '→ Nächstes', um das nächste ungelabelte Queue-Bild zu öffnen."
-                if unlabeled else "Alle Queue-Bilder wurden gelabelt."
+                tr("labeling.al_hint_next") if unlabeled else tr("labeling.al_all_labeled")
             )
         self._al_next_btn.setEnabled(bool(unlabeled))
         in_queue = bool(
@@ -441,6 +442,7 @@ class _ALMixin:
 
     def _al_next_image(self) -> None:
         """Jump to the next unlabeled image in the AL queue."""
+        from utils.i18n import tr
         if not self.project:
             return
         unlabeled = self.project.get_unlabeled_al_queue()
@@ -457,13 +459,15 @@ class _ALMixin:
         # Show prediction suggestion after loading
         entry = unlabeled[0]
         self._al_suggestion_label.setText(
-            f"Vorschlag: {entry['predicted_label']} "
-            f"({entry['confidence']*100:.0f}% Conf.)"
+            tr("labeling.al_suggestion",
+               label=entry["predicted_label"],
+               conf=entry["confidence"] * 100)
         )
         self._al_done_btn.setEnabled(True)
 
     def _al_mark_done(self) -> None:
         """Manually mark the current image as done and remove from queue."""
+        from utils.i18n import tr
         if not self.project or not self._current_image:
             return
         self.project.remove_from_al_queue(self._current_image)
@@ -478,9 +482,8 @@ class _ALMixin:
                 self._al_panel.hide()
                 reply = QMessageBox.question(
                     self,
-                    "AL-Queue fertig",
-                    "Alle Queue-Bilder wurden gelabelt!\n\n"
-                    "Jetzt neu trainieren, um das Modell zu verbessern?",
+                    tr("labeling.al_done_title"),
+                    tr("labeling.al_done_retrain"),
                     QMessageBox.Yes | QMessageBox.No,
                 )
                 if reply == QMessageBox.Yes:
@@ -488,14 +491,15 @@ class _ALMixin:
 
     def _al_clear_queue(self) -> None:
         """Remove all entries from the AL queue after user confirmation and hide the panel."""
+        from utils.i18n import tr
         if not self.project:
             return
         n = len(self.project.get_al_queue())
         if n == 0:
             return
         reply = QMessageBox.question(
-            self, "Queue leeren",
-            f"Alle {n} Einträge aus der AL-Queue entfernen?",
+            self, tr("labeling.al_clear_title"),
+            tr("labeling.al_clear_confirm", n=n),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
@@ -517,6 +521,7 @@ class _ALMixin:
 
     def _al_bulk_accept(self) -> None:
         """Auto-label all AL queue images with confidence ≥ 80%."""
+        from utils.i18n import tr
         if not self.project:
             return
         queue = self.project.get_al_queue()
@@ -528,20 +533,20 @@ class _ALMixin:
         ]
         if not eligible:
             QMessageBox.information(
-                self, "Keine Kandidaten",
-                "Keine Queue-Einträge mit Confidence ≥ 80% und bekanntem Label gefunden."
+                self, tr("labeling.al_no_candidates_title"),
+                tr("labeling.al_no_candidates"),
             )
             return
         reply = QMessageBox.question(
-            self, "Bulk-Accept",
-            f"{len(eligible)} Bilder werden automatisch gelabelt.\nFortfahren?",
+            self, tr("labeling.al_bulk_title"),
+            tr("labeling.al_bulk_confirm", n=len(eligible)),
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
         from gui.labeling_commands import SetImageLabelCommand
         assignments = {e["path"]: e["predicted_label"] for e in eligible}
-        self._undo_stack.beginMacro(f"Bulk-Accept ({len(eligible)} Bilder)")
+        self._undo_stack.beginMacro(tr("labeling.al_bulk_macro", n=len(eligible)))
         for path, label in assignments.items():
             old = self.project.get_image_label(path)
             self._undo_stack.push(SetImageLabelCommand(self, path, label, old))
@@ -551,9 +556,8 @@ class _ALMixin:
         self.refresh_al_queue_panel()
         self._do_update_stats()   # thumbnails already updated via update_label(); just refresh stats once
         QMessageBox.information(
-            self, "Fertig",
-            f"{len(eligible)} Labels übernommen.\n"
-            "Im Labeling-Reiter zur Kontrolle prüfen."
+            self, tr("labeling.done_title"),
+            tr("labeling.al_bulk_done", n=len(eligible)),
         )
 
 
@@ -633,11 +637,11 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
 
         self.sort_combo = QComboBox()
         self.sort_combo.addItems([
-            "Dateiname A→Z",
-            "Dateiname Z→A",
-            "Label A→Z",
-            "Erst ungelabelt",
-            "Erst gelabelt",
+            tr("labeling.sort_name_asc"),
+            tr("labeling.sort_name_desc"),
+            tr("labeling.sort_label_asc"),
+            tr("labeling.sort_unlabeled_first"),
+            tr("labeling.sort_labeled_first"),
         ])
         self.sort_combo.currentIndexChanged.connect(self._filter_list)
         v.addWidget(self.sort_combo)
@@ -669,7 +673,7 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
 
         reset_filter_btn = QPushButton("✕")
         reset_filter_btn.setFixedSize(20, 20)
-        reset_filter_btn.setToolTip("Filter zurücksetzen")
+        reset_filter_btn.setToolTip(tr("labeling.reset_filter_tip"))
         reset_filter_btn.clicked.connect(self._reset_filters)
         filter_cb_row.addWidget(reset_filter_btn)
         v.addLayout(filter_cb_row)
@@ -741,6 +745,27 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         self.img_count_label.setStyleSheet("color:#aaa; font-size:10px;")
         v.addWidget(self.img_count_label)
 
+        # ── Bulk-label by filename pattern (BACKLOG J) ───────────────────────
+        pattern_box = QGroupBox(tr("labeling.pattern_group"))
+        pattern_box.setStyleSheet("QGroupBox { font-size: 10px; color: #888; }")
+        pv = QVBoxLayout(pattern_box)
+        pv.setContentsMargins(4, 8, 4, 4)
+        pv.setSpacing(3)
+        self._pattern_edit = QLineEdit()
+        self._pattern_edit.setPlaceholderText(tr("labeling.pattern_placeholder"))
+        self._pattern_edit.setToolTip(tr("labeling.pattern_tip"))
+        pv.addWidget(self._pattern_edit)
+        pattern_row = QHBoxLayout()
+        self._pattern_label_combo = QComboBox()
+        self._pattern_label_combo.addItem(tr("labeling.none_label"))
+        pattern_row.addWidget(self._pattern_label_combo)
+        pattern_btn = QPushButton(tr("labeling.pattern_apply_btn"))
+        pattern_btn.setToolTip(tr("labeling.pattern_apply_tip"))
+        pattern_btn.clicked.connect(self._apply_label_by_pattern)
+        pattern_row.addWidget(pattern_btn)
+        pv.addLayout(pattern_row)
+        v.addWidget(pattern_box)
+
         # ── Massen-Labeling Panel (hidden until 2+ images selected) ──────────
         self._bulk_panel = QFrame()
         self._bulk_panel.setFrameShape(QFrame.StyledPanel)
@@ -783,7 +808,7 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         alp.setSpacing(4)
 
         al_header = QHBoxLayout()
-        self._al_count_label = QLabel("🔄 AL-Queue: 0")
+        self._al_count_label = QLabel(tr("labeling.al_count_zero"))
         self._al_count_label.setStyleSheet(
             "color:#E67E22; font-weight:bold; font-size:11px;"
         )
@@ -791,7 +816,7 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         al_header.addStretch()
         al_clear_btn = QPushButton("✕")
         al_clear_btn.setFixedSize(20, 20)
-        al_clear_btn.setToolTip("Queue leeren")
+        al_clear_btn.setToolTip(tr("labeling.al_clear_btn"))
         al_clear_btn.setStyleSheet("color:#E67E22; font-weight:bold;")
         al_clear_btn.clicked.connect(self._al_clear_queue)
         al_header.addWidget(al_clear_btn)
@@ -803,7 +828,7 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         alp.addWidget(self._al_suggestion_label)
 
         al_nav_row = QHBoxLayout()
-        self._al_next_btn = QPushButton("→ Nächstes")
+        self._al_next_btn = QPushButton(tr("labeling.al_next_btn"))
         self._al_next_btn.setStyleSheet(
             "background:#E67E22; color:white; font-weight:bold;"
             "border-radius:4px; padding:3px 8px;"
@@ -811,35 +836,31 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         self._al_next_btn.clicked.connect(self._al_next_image)
         al_nav_row.addWidget(self._al_next_btn)
 
-        self._al_done_btn = QPushButton("✓ Gelabelt")
+        self._al_done_btn = QPushButton(tr("labeling.al_done_btn"))
         self._al_done_btn.setStyleSheet(
             "background:#27AE60; color:white; border-radius:4px; padding:3px 8px;"
         )
-        self._al_done_btn.setToolTip("Bild als gelabelt markieren und aus Queue entfernen")
+        self._al_done_btn.setToolTip(tr("labeling.al_done_tip"))
         self._al_done_btn.clicked.connect(self._al_mark_done)
         al_nav_row.addWidget(self._al_done_btn)
 
-        self._al_accept_btn = QPushButton("⚡ Übernehmen")
+        self._al_accept_btn = QPushButton(tr("labeling.al_accept_btn"))
         self._al_accept_btn.setStyleSheet(
             "background:#1F6FEB; color:white; border-radius:4px; padding:3px 8px;"
         )
-        self._al_accept_btn.setToolTip(
-            "Vorgeschlagenes Label für dieses Bild übernehmen und zum nächsten springen"
-        )
+        self._al_accept_btn.setToolTip(tr("labeling.al_accept_tip"))
         self._al_accept_btn.clicked.connect(self._al_accept_suggestion)
         al_nav_row.addWidget(self._al_accept_btn)
         alp.addLayout(al_nav_row)
 
         # Bulk accept row
         al_bulk_row = QHBoxLayout()
-        self._al_bulk_btn = QPushButton("⚡ Alle ≥80% übernehmen")
+        self._al_bulk_btn = QPushButton(tr("labeling.al_bulk_btn"))
         self._al_bulk_btn.setStyleSheet(
             "background:#BC8CFF; color:white; border-radius:4px;"
             "padding:3px 8px; font-size:10px;"
         )
-        self._al_bulk_btn.setToolTip(
-            "Alle Queue-Bilder mit Confidence ≥ 80% automatisch labeln"
-        )
+        self._al_bulk_btn.setToolTip(tr("labeling.al_bulk_tip"))
         self._al_bulk_btn.clicked.connect(self._al_bulk_accept)
         al_bulk_row.addWidget(self._al_bulk_btn)
         alp.addLayout(al_bulk_row)
@@ -1301,16 +1322,16 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         return scroll
 
     def _setup_shortcuts(self) -> None:
-        """Register all page-level keyboard shortcuts (navigation, undo/redo, flag)."""
+        """Register page-level keyboard shortcuts (navigation, clear, flag).
+
+        Undo/Redo live on the main-window Edit menu (bound to ``_undo_stack``)
+        so Ctrl+Z/Y work from any page without double-firing here.
+        """
         # Navigation
         QShortcut(QKeySequence("N"),          self, self._next_image)
         QShortcut(QKeySequence("P"),          self, self._prev_image)
         QShortcut(QKeySequence(Qt.Key_Right), self, self._next_image)
         QShortcut(QKeySequence(Qt.Key_Left),  self, self._prev_image)
-        # Undo / Redo
-        QShortcut(QKeySequence("Ctrl+Z"),       self, self._undo_stack.undo)
-        QShortcut(QKeySequence("Ctrl+Y"),       self, self._undo_stack.redo)
-        QShortcut(QKeySequence("Ctrl+Shift+Z"), self, self._undo_stack.redo)
         # Label clear (Delete key)
         QShortcut(QKeySequence(Qt.Key_Delete), self, self._clear_current_label)
         # Toggle uncertain flag
@@ -1375,6 +1396,13 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         has_images = bool(project and project.images)
         self._pre_run_btn.setEnabled(has_images and self._pre_labeler is not None)
 
+    def focus_image(self, path: str) -> None:
+        """Select *path* in the thumbnail list (used by the Review hub)."""
+        if not path or not self.project:
+            return
+        if path in self.project.images:
+            self.thumb_list.select_path(path)
+
     def _refresh_label_combos(self) -> None:
         """Repopulate the label combo, ROI combo, bulk combo, chips and multi-label checkboxes."""
         labels = list(self.project.labels.keys()) if self.project else []
@@ -1388,8 +1416,8 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
             self.img_label_combo.addItem(hint, lbl)   # display text with hint, user data = real label
         self.img_label_combo.blockSignals(False)
 
-        # roi and bulk combos: plain labels
-        for combo in [self.roi_label_combo, self._bulk_label_combo]:
+        # roi, bulk and pattern combos: plain labels
+        for combo in [self.roi_label_combo, self._bulk_label_combo, self._pattern_label_combo]:
             combo.blockSignals(True)
             combo.clear()
             combo.addItem("(kein)")
@@ -2049,6 +2077,56 @@ class LabelingPage(QWidget, _ROIMixin, _PrelabelMixin, _ALMixin):
         old_labels = {p: self.project.get_image_label(p) for p in paths}
         from gui.labeling_commands import BulkSetImageLabelCommand
         self._undo_stack.push(BulkSetImageLabelCommand(self, paths, label, old_labels))
+
+    def _apply_label_by_pattern(self) -> None:
+        """Bulk-label images whose filename matches a fnmatch pattern (BACKLOG J)."""
+        from utils.i18n import tr
+        import fnmatch
+        if not self.project:
+            return
+        pattern = (self._pattern_edit.text() or "").strip()
+        if not pattern:
+            QMessageBox.warning(
+                self, tr("common.warning"), tr("labeling.pattern_empty"),
+            )
+            return
+        label = self._pattern_label_combo.currentText()
+        from utils.i18n import tr as _tr
+        if label in ("(kein)", _tr("labeling.none_label")):
+            label = ""
+        if not label:
+            QMessageBox.warning(
+                self, tr("common.warning"), tr("labeling.pattern_no_label"),
+            )
+            return
+
+        matches = [
+            p for p in self.project.images
+            if fnmatch.fnmatch(os.path.basename(p), pattern)
+        ]
+        if not matches:
+            QMessageBox.information(
+                self, tr("common.info"),
+                tr("labeling.pattern_no_match", pattern=pattern),
+            )
+            return
+
+        reply = QMessageBox.question(
+            self, tr("labeling.pattern_confirm_title"),
+            tr("labeling.pattern_confirm", n=len(matches), pattern=pattern, label=label),
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        old_labels = {p: self.project.get_image_label(p) for p in matches}
+        from gui.labeling_commands import BulkSetImageLabelCommand
+        self._undo_stack.push(BulkSetImageLabelCommand(self, matches, label, old_labels))
+        self._do_update_stats()
+        QMessageBox.information(
+            self, tr("labeling.done_title"),
+            tr("labeling.pattern_done", n=len(matches), label=label),
+        )
 
     # ------------------------------------------------------------------ remove images
 

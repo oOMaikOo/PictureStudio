@@ -57,7 +57,7 @@ class _AddDeviceDialog(QDialog):
         layout = QFormLayout(self)
 
         self._name = QLineEdit()
-        self._name.setPlaceholderText("z.B. Kamera Nord")
+        self._name.setPlaceholderText(tr("fleet.name_placeholder"))
         layout.addRow(tr("fleet.device_name_label"), self._name)
 
         self._url = QLineEdit()
@@ -127,18 +127,21 @@ class _FrameDownloadThread(QThread):
             with urllib.request.urlopen(req, timeout=60) as resp:
                 raw = resp.read()
         except Exception as exc:
-            self.error.emit(f"Download fehlgeschlagen: {exc}")
+            from utils.i18n import tr
+            self.error.emit(tr("fleet.download_failed", exc=exc))
             return
 
         try:
             zf = zipfile.ZipFile(io.BytesIO(raw))
         except Exception as exc:
-            self.error.emit(f"ZIP ungültig: {exc}")
+            from utils.i18n import tr
+            self.error.emit(tr("fleet.zip_invalid", exc=exc))
             return
 
         names = zf.namelist()
         if not names:
-            self.error.emit("ZIP enthält keine Frames.")
+            from utils.i18n import tr
+            self.error.emit(tr("fleet.zip_empty"))
             return
 
         loaded = 0
@@ -233,16 +236,16 @@ class _RemoteTrainDialog(QDialog):
         tab = QWidget()
         lay = QVBoxLayout(tab)
 
-        self._status_label = QLabel("Verbinde mit Gerät…")
+        self._status_label = QLabel(tr("fleet.connecting"))
         self._status_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         self._status_label.setWordWrap(True)
         lay.addWidget(self._status_label)
 
-        dl_grp = QGroupBox("Frames herunterladen")
+        dl_grp = QGroupBox(tr("fleet.dl_group"))
         dl_lay = QVBoxLayout(dl_grp)
 
         cnt_row = QHBoxLayout()
-        cnt_row.addWidget(QLabel("Anzahl:"))
+        cnt_row.addWidget(QLabel(tr("fleet.count_label")))
         self._frame_count_spin = QSpinBox()
         self._frame_count_spin.setRange(30, 500)
         self._frame_count_spin.setValue(150)
@@ -255,7 +258,7 @@ class _RemoteTrainDialog(QDialog):
         self._dl_progress.setValue(0)
         dl_lay.addWidget(self._dl_progress)
 
-        self._dl_label = QLabel("Bereit")
+        self._dl_label = QLabel(tr("fleet.ready"))
         self._dl_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         dl_lay.addWidget(self._dl_label)
 
@@ -265,11 +268,11 @@ class _RemoteTrainDialog(QDialog):
         dl_lay.addWidget(self._dl_btn)
         lay.addWidget(dl_grp)
 
-        train_grp = QGroupBox("Modell trainieren")
+        train_grp = QGroupBox(tr("fleet.train_group"))
         train_lay = QVBoxLayout(train_grp)
 
         ep_row = QHBoxLayout()
-        ep_row.addWidget(QLabel("Epochen:"))
+        ep_row.addWidget(QLabel(tr("fleet.epochs_label")))
         self._epoch_spin = QSpinBox()
         self._epoch_spin.setRange(10, 100)
         self._epoch_spin.setValue(40)
@@ -282,7 +285,7 @@ class _RemoteTrainDialog(QDialog):
         self._train_progress.setValue(0)
         train_lay.addWidget(self._train_progress)
 
-        self._train_status_label = QLabel("Bereit")
+        self._train_status_label = QLabel(tr("fleet.ready"))
         self._train_status_label.setStyleSheet("color: #8B949E; font-size: 11px;")
         train_lay.addWidget(self._train_status_label)
 
@@ -300,13 +303,13 @@ class _RemoteTrainDialog(QDialog):
         tab = QWidget()
         lay = QVBoxLayout(tab)
 
-        self._deploy_info = QLabel("Modell noch nicht trainiert.")
+        self._deploy_info = QLabel(tr("fleet.model_not_trained"))
         self._deploy_info.setStyleSheet("color: #8B949E; font-size: 12px;")
         self._deploy_info.setWordWrap(True)
         lay.addWidget(self._deploy_info)
 
         thr_row = QHBoxLayout()
-        thr_row.addWidget(QLabel("Schwellwert:"))
+        thr_row.addWidget(QLabel(tr("fleet.threshold_label")))
         self._thr_spin = QDoubleSpinBox()
         self._thr_spin.setDecimals(6)
         self._thr_spin.setRange(0.0, 100.0)
@@ -339,13 +342,15 @@ class _RemoteTrainDialog(QDialog):
                 req.add_header("X-Api-Key", self._api_key)
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode())
+            from utils.i18n import tr
             fc    = data.get("frame_count", 0)
             model = data.get("model_name", "—")
             self._status_label.setText(
-                f"Gerät erreichbar  |  {fc} Frames im Puffer  |  Modell: {model}")
+                tr("fleet.device_ok", fc=fc, model=model))
             self._status_label.setStyleSheet("color: #2ECC71; font-size: 11px;")
         except Exception as exc:
-            self._status_label.setText(f"Gerät nicht erreichbar: {exc}")
+            from utils.i18n import tr
+            self._status_label.setText(tr("fleet.device_unreachable", exc=exc))
             self._status_label.setStyleSheet("color: #E74C3C; font-size: 11px;")
 
     # ── Tab 1: Frames & Training ───────────────────────────────────────────────
@@ -359,14 +364,18 @@ class _RemoteTrainDialog(QDialog):
                 from core.anomaly_detector import AnomalyDetector
                 self._detector = AnomalyDetector()
             except Exception as exc:
-                QMessageBox.critical(self, "Fehler",
-                                     f"AnomalyDetector konnte nicht erstellt werden:\n{exc}")
+                from utils.i18n import tr
+                QMessageBox.critical(
+                    self, tr("common.error"),
+                    tr("fleet.detector_fail", exc=exc),
+                )
                 return
 
+        from utils.i18n import tr
         count = self._frame_count_spin.value()
         self._dl_btn.setEnabled(False)
         self._dl_progress.setValue(0)
-        self._dl_label.setText("Lade Frames herunter…")
+        self._dl_label.setText(tr("fleet.downloading"))
 
         self._dl_thread = _FrameDownloadThread(
             device_url=self._device_url,
@@ -384,14 +393,16 @@ class _RemoteTrainDialog(QDialog):
         self._dl_progress.setValue(pct)
 
     def _on_dl_finished(self, count: int) -> None:
-        self._dl_label.setText(f"{count} Frames geladen.")
+        from utils.i18n import tr
+        self._dl_label.setText(tr("fleet.frames_loaded", n=count))
         self._dl_btn.setEnabled(True)
         if count >= 30:
             self._train_btn.setEnabled(True)
-            self._train_status_label.setText(f"{count} Frames bereit — Training möglich.")
+            self._train_status_label.setText(tr("fleet.frames_ready", n=count))
 
     def _on_dl_error(self, msg: str) -> None:
-        self._dl_label.setText(f"Fehler: {msg}")
+        from utils.i18n import tr
+        self._dl_label.setText(tr("fleet.error_msg", msg=msg))
         self._dl_btn.setEnabled(True)
 
     def _start_training(self) -> None:
@@ -408,25 +419,28 @@ class _RemoteTrainDialog(QDialog):
         self._train_thread.start()
 
     def _on_train_progress(self, epoch: int, total: int, loss: float) -> None:
+        from utils.i18n import tr
         pct = int(epoch / max(total, 1) * 100)
         self._train_progress.setValue(pct)
-        self._train_status_label.setText(f"Epoch {epoch}/{total} — Loss: {loss:.6f}")
+        self._train_status_label.setText(
+            tr("fleet.epoch_status", epoch=epoch, total=total, loss=loss))
 
     def _on_train_finished(self, threshold: float) -> None:
+        from utils.i18n import tr
         self._trained_threshold = threshold
         self._train_progress.setValue(100)
-        self._train_status_label.setText(
-            f"Training abgeschlossen. Schwellwert: {threshold:.6f}")
+        self._train_status_label.setText(tr("fleet.train_done", thr=threshold))
         self._thr_spin.setValue(threshold)
-        self._deploy_info.setText(f"Modell trainiert.\nAuto-Schwellwert: {threshold:.6f}")
+        self._deploy_info.setText(tr("fleet.model_trained", thr=threshold))
         self._deploy_btn.setEnabled(True)
         self._tabs.setTabEnabled(1, True)
         self._tabs.setCurrentIndex(1)
 
     def _on_train_error(self, msg: str) -> None:
+        from utils.i18n import tr
         self._train_btn.setEnabled(True)
-        self._train_status_label.setText(f"Fehler: {msg}")
-        QMessageBox.critical(self, "Trainingsfehler", msg)
+        self._train_status_label.setText(tr("fleet.error_msg", msg=msg))
+        QMessageBox.critical(self, tr("fleet.train_error_title"), msg)
 
     # ── Tab 2: Deploy ─────────────────────────────────────────────────────────
 
@@ -444,7 +458,8 @@ class _RemoteTrainDialog(QDialog):
                 model_data = fh.read()
             os.unlink(tmp_path)
         except Exception as exc:
-            self._deploy_result.setText(f"Fehler beim Speichern: {exc}")
+            from utils.i18n import tr
+            self._deploy_result.setText(tr("fleet.save_error", exc=exc))
             self._deploy_result.setStyleSheet("color: #E74C3C;")
             return
 

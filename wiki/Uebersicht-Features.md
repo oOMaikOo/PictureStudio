@@ -10,17 +10,17 @@
 |---|---|
 | Projektverwaltung | Versionierte JSON-Projekte, atomares Speichern, automatische Backups, Projekttypen (Klassifikation / Videoanalyse) |
 | ROI-Editor | Rechteck, Ellipse, Polygon; Kopieren/Einfügen; Tastenkürzel; Label-Schnellzuweisung 1–9; Segmentierungsmaske |
-| Labeling | Label-Hierarchien, Statistiken, Label-Filter, Review-Modus, Multi-Label, Audit-Trail |
-| Datensatz-Analyse | MD5-Duplikaterkennung, Klassenungleichgewicht, COCO/YOLO/CSV-Export, Video-Frame-Import |
+| Labeling | Label-Hierarchien, Statistiken, Label-Filter, Review-Modus, Multi-Label, Bulk-Label nach Dateiname, Undo/Redo, Audit-Trail |
+| Datensatz-Analyse | MD5-Duplikaterkennung, Klassenungleichgewicht, COCO/YOLO/CSV-Export, Ground-Truth-CSV, Video-Frame-Import |
 | Training | ResNet18/50, MobileNetV2, EfficientNet-B0, SimpleCNN; Early Stopping; Mixed Precision; GPU/CPU/MPS; Klassenausgleich |
 | SSH-Ferntraining | Verbindungsprofile, Live-Log-Streaming, conda/venv-Unterstützung, automatischer Download |
 | Modellbibliothek | Versioniertes Registry, ONNX/TorchScript-Export, Accuracy/F1-Vergleich, Run-History |
-| Inferenz | Batch-Inferenz, Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling |
+| Inferenz | Batch-Inferenz mit Confidence-Histogramm (10 %-Buckets), Top-K-Anzeige, TTA, Ensemble, Konfidenz-Farbkodierung, Auto-Labeling |
 | Excel-Export | Konfigurierbare Spalten, Anhängen/Überschreiben, rote Markierung unter Schwellwert |
 | REST-API | HTTP-Server (Port konfigurierbar), optionaler API-Key-Schutz, Label zuweisen per POST, Live-Dashboard im Browser, Per-Kanal-Endpunkte für Multi-Kamera |
 | MQTT-Alarm | JSON-Events bei Anomalie-Alarm an beliebigen Broker (paho-mqtt), auth-fähig |
 | Kamera / Video | USB-Kamera, IP-Kamera (RTSP/HTTP), Video-Datei direkt im Live-Monitor, Auto-Reconnect, Live-Aufzeichnung (MP4), Burst-Modus |
-| Multi-Kamera | 1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG-Saving pro Kanal, per-Kanal REST-API |
+| Multi-Kamera | 1–9 Kanäle gleichzeitig (Selector im Toolbar), dynamisches 2×2-Grid, Seitenblättern bei >4 Kanälen, Alarm-JPEG + CSV-Protokoll mit Export, per-Kanal REST-API |
 | Anomalie-Erkennung | Conv-Autoencoder, ROI-Bereich, Bewegungsfilter, Schwellwert-Kalibrierung, Heatmap, Bounding-Box, Alarm-Pause, Audit-Log, False-Positive-Markierung |
 | Batch-Analyse | Ordner oder Dateien auf Anomalien prüfen, CSV-Export der Ergebnisse |
 | Datensatz-Statistiken | Klassenverteilung, Format-/Größenstatistiken, Label-Rate, perceptual-hash Duplikaterkennung |

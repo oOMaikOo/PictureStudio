@@ -17,6 +17,14 @@ from utils.i18n import init_i18n
 init_i18n("de")
 
 
+@pytest.fixture(autouse=True)
+def _suppress_product_line_dialog():
+    """Avoid modal Studio/Monitor dialog during automated MainWindow tests."""
+    from utils.settings import AppSettings
+    AppSettings().mark_product_line_chosen()
+    yield
+
+
 @pytest.fixture
 def tmp_dir():
     with tempfile.TemporaryDirectory() as d:

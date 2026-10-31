@@ -15,6 +15,8 @@
 | Strg+S | Projekt speichern |
 | Strg+Umschalt+S | Speichern unter… |
 | Strg+L | Labels verwalten |
+| Strg+Z | Rückgängig (Labeling: Labels & ROIs) |
+| Strg+Y / Strg+Umschalt+Z | Wiederherstellen |
 | Strg+K | Kamera aufnehmen |
 | Strg+Q | Beenden |
 | F1 | Hilfe für aktuelle Seite |

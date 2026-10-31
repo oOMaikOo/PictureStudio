@@ -4,6 +4,34 @@ All notable changes to PictureStudio are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Edit-Menü mit Undo/Redo (BACKLOG G)** — `Bearbeiten → Rückgängig / Wiederholen` in `gui/main_window.py`, gebunden an `LabelingPage._undo_stack` via `createUndoAction` / `createRedoAction`. Shortcuts: Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z (plus StandardKey). Page-level QShortcuts entfernt, damit der Stack nicht doppelt ausgelöst wird. i18n: `menu.edit` / `menu.edit.undo` / `menu.edit.redo`. Tests: `tests/test_edit_menu.py`.
+
+- **i18n Labeling ROI/AL/Sort/Pre-Label (BACKLOG A)** — hartkodierte DE-Strings in `_ROIMixin`, `_ALMixin`, `_PrelabelMixin` sowie Sort-Combo und AL-Panel-Buttons/Tooltips laufen über `tr()`. ~50 neue `labeling.*`-Schlüssel in DE und EN (Locale-Dateien 1156/1156, weiterhin deckungsgleich). Tests: `tests/test_labeling_i18n_a.py`. Restliche UI-Strings der Labeling-Seite (rechte Spalte, Shortcuts-Hilfe, Kontextmenüs) bleiben für Folge-Runden.
+
+- **i18n Inference-Seite (BACKLOG B)** — GroupBox „Inferenz-Steuerung“, Tabellen-Header, Ensemble-Texte, Filter-„Alle“, Tooltips, Dialoge (ROI-Fallback, Excel, Umbenennen, Grad-CAM) und Statusmeldungen über `tr()`. Label-Filter vergleicht Index 0 statt hartkodiertem „Alle“, damit EN funktioniert. Neue `inference.*`-Schlüssel in DE/EN. Tests: `tests/test_inference_i18n_b.py`.
+
+- **i18n Models / Data / Fleet (BACKLOG C–E)** — `models_page` (Tooltips, Compare/Edge-Labels, History-Header/Spalten, Detailpanel, Kalibrier-/Export-Dialoge), `data_page` (Lade-/Export-/Prüf-Tooltips, Analyse-Status, Datei-Prüfung) und `fleet_page._RemoteTrainDialog` (Gruppen, Labels, Status-/Fehlertexte, Download-Thread) über `tr()`. Locales weiterhin deckungsgleich. Tests: `tests/test_i18n_cde.py`.
+
+- **Ground-Truth-CSV-Export (BACKLOG H)** — `core/export.export_ground_truth_csv` schreibt `image_path, label, uncertain`; Button auf der Daten-Seite. Läuft über denselben `ExportThread` wie COCO/YOLO/CSV.
+
+- **DatasetStatsWorker (BACKLOG I)** — Größen-Sample und Duplikatsuche laufen in `DatasetStatsWorker(QThread)` statt auf dem UI-Thread; Duplikat-Button wird während der Suche gesperrt.
+
+- **Bulk-Label nach Dateiname (BACKLOG J)** — Labeling-Seite: fnmatch-Muster + Label-Combo, Undo via `BulkSetImageLabelCommand`. Tests: `tests/test_backlog_hij.py`.
+
+- **Batch Confidence-Histogramm (BACKLOG K)** — `BatchInferencePage` zeigt über der Ergebnistabelle ein QPainter-Balkendiagramm mit 10 %-Confidence-Buckets (Anteil der gefilterten Ergebnisse).
+
+- **Multi-Cam Alarm-Protokoll-Export (BACKLOG L)** — Alarme werden nach `monitor_logs/multi_cam/multi_cam_events.csv` geschrieben; Button „Protokoll exportieren…“ kopiert die CSV via `QFileDialog`. Tests: `tests/test_backlog_kl.py`.
+
+- **Tour & Hilfe an H–L / Undo angeglichen** — `guide_tour` und `help_dialog`: Ground-Truth-CSV, Muster-Bulk-Label, Confidence-Histogramm, Multi-Cam Protokoll-Export, Bearbeiten→Rückgängig/Wiederherstellen (inkl. Tastenkürzel).
+
+- **Product reshape** — Update-Check + What’s-new-Banner; Review-Queue-Seite (unsichere Flags / AL / Batch-low-conf); Studio vs Monitor Product Line; Erweiterte Funktionen (Data Drift, Edge, SSH/HPT) hinter Ansicht→Erweitert; Anomalie: Training vs Live-Scoring getrennt; Windows `build_windows.bat` + Inno-Skript. Tests: `tests/test_product_reshape.py`.
+
+---
+
 ## [2.5.2] – 2026-09-25
 
 ### Added

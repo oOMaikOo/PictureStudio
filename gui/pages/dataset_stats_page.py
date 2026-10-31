@@ -1,16 +1,95 @@
 from __future__ import annotations
 import logging
 import os
-from typing import Optional
+from typing import Optional, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QProgressBar, QListWidget, QScrollArea, QFrame,
-    QSplitter, QFormLayout, QMessageBox,
+    QFormLayout, QMessageBox,
 )
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtGui import QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, Slot, QThread, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 
 log = logging.getLogger(__name__)
+
+
+class DatasetStatsWorker(QThread):
+    """Background worker for PIL-heavy dataset stats (sizes / duplicates).
+
+    Analogous to ``AnalysisThread`` on the Data page — keeps the UI responsive
+    when sampling image dimensions or computing perceptual hashes.
+    """
+
+    finished = Signal(str, object)  # kind ("sizes"|"dups"), payload
+    error = Signal(str)
+
+    def __init__(self, images: List[str], kind: str, parent=None) -> None:
+        super().__init__(parent)
+        self._images = list(images)
+        self._kind = kind  # "sizes" | "dups"
+
+    def run(self) -> None:
+        try:
+            if self._kind == "sizes":
+                self.finished.emit("sizes", self._compute_sizes())
+            elif self._kind == "dups":
+                self.finished.emit("dups", self._compute_dups())
+            else:
+                self.error.emit(f"Unknown kind: {self._kind}")
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+    def _compute_sizes(self) -> dict:
+        import random
+        images = self._images
+        if not images:
+            return {"text": "–", "ok": False}
+        sample = random.sample(images, min(200, len(images)))
+        widths, heights = [], []
+        for p in sample:
+            if not os.path.isfile(p):
+                continue
+            try:
+                from PIL import Image as _PIL
+                with _PIL.open(p) as img:
+                    w, h = img.size
+                widths.append(w)
+                heights.append(h)
+            except Exception:
+                log.debug("Could not read image dimensions for %s", p)
+        if not widths:
+            return {"text": "", "ok": False}
+        return {
+            "ok": True,
+            "avg_w": sum(widths) // len(widths),
+            "avg_h": sum(heights) // len(heights),
+            "n": len(widths),
+        }
+
+    def _compute_dups(self) -> dict:
+        import imagehash
+        from PIL import Image as _PIL
+
+        hash_map: dict = {}
+        for p in self._images:
+            if not os.path.isfile(p):
+                continue
+            try:
+                with _PIL.open(p) as img:
+                    h = str(imagehash.average_hash(img))
+                hash_map.setdefault(h, []).append(p)
+            except Exception:
+                log.debug("Could not hash image %s", p)
+
+        groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
+        return {
+            "groups": [
+                [os.path.basename(p) for p in paths]
+                for paths in groups.values()
+            ],
+            "n_groups": len(groups),
+            "n_images": sum(len(v) for v in groups.values()),
+        }
 
 
 class DatasetStatsPage(QWidget):
@@ -22,6 +101,7 @@ class DatasetStatsPage(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.project = None
+        self._worker: Optional[DatasetStatsWorker] = None
         self._build_ui()
         QShortcut(QKeySequence("F5"), self, activated=self.refresh)
 
@@ -37,11 +117,17 @@ class DatasetStatsPage(QWidget):
                 return
             self._update_label_distribution()
             self._update_format_stats()
-            self._update_size_stats()
             self._update_label_rate()
             self._dup_list.clear()
             from utils.i18n import tr as _tr
             self._dup_status_lbl.setText(_tr("dataset_stats.dups_not_searched"))
+            # Size stats (PIL) off the UI thread — skip when nothing is on disk
+            # (avoids QThread teardown races in tests with fake paths).
+            if any(os.path.isfile(p) for p in self.project.images[:50]):
+                self._size_lbl.setText("…")
+                self._start_worker("sizes")
+            else:
+                self._size_lbl.setText("–")
         except Exception as exc:
             log.error("Fehler in DatasetStatsPage.refresh: %s", exc)
 
@@ -180,35 +266,6 @@ class DatasetStatsPage(QWidget):
         parts = [f"{ext}: {n}" for ext, n in sorted(fmt_counts.items(), key=lambda x: -x[1])]
         self._format_lbl.setText("  ".join(parts) or "–")
 
-    def _update_size_stats(self) -> None:
-        """Sample max 200 Bilder für Performance."""
-        images = self.project.images
-        if not images:
-            self._size_lbl.setText("–")
-            return
-        import random
-        sample = random.sample(images, min(200, len(images)))
-        widths, heights = [], []
-        for p in sample:
-            if not os.path.isfile(p):
-                continue
-            try:
-                from PIL import Image as _PIL
-                with _PIL.open(p) as img:
-                    w, h = img.size
-                widths.append(w)
-                heights.append(h)
-            except Exception:
-                log.debug("Could not read image dimensions for %s", p)
-        if widths:
-            self._size_lbl.setText(
-                f"Ø {sum(widths)//len(widths)} × {sum(heights)//len(heights)} px "
-                f"(Sample: {len(widths)} Bilder)"
-            )
-        else:
-            from utils.i18n import tr
-            self._size_lbl.setText(tr("dataset_stats.not_readable"))
-
     def _update_label_rate(self) -> None:
         total = len(self.project.images)
         labeled = sum(1 for p in self.project.images if self.project.image_labels.get(p))
@@ -217,6 +274,59 @@ class DatasetStatsPage(QWidget):
         rate = labeled / total * 100 if total else 0
         self._label_rate_lbl.setText(f"{rate:.1f}%")
 
+    def _start_worker(self, kind: str) -> None:
+        if not self.project:
+            return
+        if self._worker and self._worker.isRunning():
+            # One worker at a time — avoid dropping the running reference.
+            return
+        worker = DatasetStatsWorker(self.project.images, kind, parent=self)
+        self._worker = worker
+        worker.finished.connect(self._on_worker_finished)
+        worker.error.connect(self._on_worker_error)
+        worker.start()
+
+    @Slot(str, object)
+    def _on_worker_finished(self, kind: str, payload: object) -> None:
+        from utils.i18n import tr
+        self._worker = None
+        if kind == "sizes":
+            data = payload or {}
+            if data.get("ok"):
+                self._size_lbl.setText(
+                    tr("dataset_stats.size_sample",
+                       w=data["avg_w"], h=data["avg_h"], n=data["n"])
+                )
+            else:
+                self._size_lbl.setText(tr("dataset_stats.not_readable"))
+            return
+
+        if kind == "dups":
+            self._dup_btn.setEnabled(True)
+            data = payload or {}
+            groups = data.get("groups", [])
+            self._dup_list.clear()
+            if not groups:
+                self._dup_status_lbl.setText(tr("dataset_stats.no_dups"))
+                return
+            self._dup_status_lbl.setText(
+                tr("dataset_stats.dups_found",
+                   groups=data.get("n_groups", 0),
+                   images=data.get("n_images", 0))
+            )
+            for i, names in enumerate(groups, 1):
+                self._dup_list.addItem(
+                    tr("dataset_stats.dup_group_row", i=i, names=", ".join(names))
+                )
+
+    @Slot(str)
+    def _on_worker_error(self, msg: str) -> None:
+        from utils.i18n import tr
+        self._worker = None
+        self._dup_btn.setEnabled(True)
+        self._size_lbl.setText(tr("dataset_stats.not_readable"))
+        log.error("DatasetStatsWorker: %s", msg)
+
     @Slot()
     def _find_duplicates(self) -> None:
         from utils.i18n import tr
@@ -224,31 +334,38 @@ class DatasetStatsPage(QWidget):
             QMessageBox.information(self, tr("common.info"), tr("common.no_project"))
             return
         try:
-            import imagehash
-            from PIL import Image as _PIL
+            import imagehash  # noqa: F401
+            from PIL import Image as _PIL  # noqa: F401
         except ImportError:
             self._dup_btn.setText(tr("dataset_stats.imagehash_missing"))
             self._dup_btn.setEnabled(False)
             return
 
         self._dup_status_lbl.setText(tr("dataset_stats.search_running"))
-        hash_map: dict = {}
-        for p in self.project.images:
-            if not os.path.isfile(p):
-                continue
-            try:
-                with _PIL.open(p) as img:
-                    h = str(imagehash.average_hash(img))
-                hash_map.setdefault(h, []).append(p)
-            except Exception:
-                log.debug("Could not hash image %s", p)
-
-        groups = {h: paths for h, paths in hash_map.items() if len(paths) > 1}
+        self._dup_btn.setEnabled(False)
         self._dup_list.clear()
-        if not groups:
-            self._dup_status_lbl.setText(tr("dataset_stats.no_dups"))
+        self._start_worker("dups")
+
+    def hideEvent(self, event) -> None:
+        self._stop_worker()
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        self._stop_worker()
+        super().closeEvent(event)
+
+    def _stop_worker(self) -> None:
+        w = self._worker
+        self._worker = None
+        if w is None:
             return
-        total_dups = sum(len(v) for v in groups.values())
-        self._dup_status_lbl.setText(tr("dataset_stats.dups_found", groups=len(groups), images=total_dups))
-        for i, (h, paths) in enumerate(groups.items(), 1):
-            self._dup_list.addItem(f"Gruppe {i}: " + ", ".join(os.path.basename(p) for p in paths))
+        try:
+            w.finished.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            w.error.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        if w.isRunning():
+            w.wait(3000)
